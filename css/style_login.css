@@ -1,0 +1,91 @@
+body {
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-image: url('../images/9gac.jpg'); /* Caminho relativo ao diretório do arquivo CSS */
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+}
+
+.page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+    padding: 20px; /* Adicionado espaçamento interno */
+}
+
+.formLogin {
+    background-color: #f9f9f9;
+    border-radius: 10px;
+    padding: 40px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    max-width: 400px;
+    width: 100%;
+}
+
+.formLogin h1 {
+    margin-bottom: 20px;
+}
+
+.formLogin h1 img {
+    height: 80px; /* Altura ajustada para uma visualização mais proporcional */
+}
+
+.formLogin p {
+    font-size: 16px;
+    color: #555;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.formLogin label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    margin-bottom: 5px;
+}
+
+.formLogin input {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+    border: 1px solid #ddd;
+    margin-bottom: 20px;
+    border-radius: 6px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.formLogin input:focus {
+    border-color: #f72585;
+    box-shadow: 0 0 10px rgba(247, 37, 133, 0.4);
+}
+
+.formLogin .error-message {
+    color: #e74c3c;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.formLogin .btn {
+    background-color: #f72585;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 14px;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.formLogin .btn:hover {
+    background-color: #c7206b;
+    transform: scale(1.05);
+}
