@@ -1,0 +1,50 @@
+<table border="1" cellpadding="5">
+    <tr>
+        <th>ID</th>
+        <th>Nome do Usuário</th>
+        <th>Telefone de Contato</th>
+        <th>Motivo da Saída</th>
+        <th>Local de Destino</th>
+        <th>Endereço</th>
+        <th>Data de Saída</th>
+        <th>Data de Retorno</th>
+        <th>Data do Registro</th>
+    </tr><tr>
+        <td>58</td>
+
+        <td>gerson</td>
+
+        <td>67 996202782</td>
+
+        <td>ferias</td>
+
+        <td>nioaque</td>
+
+        <td>rua tal</td>
+
+        <td>09/01/2024</td>
+
+        <td>31/01/2024</td>
+
+        <td>07/01/2024 15:10:20</td>
+
+    </tr><tr>
+        <td>59</td>
+
+        <td>gerson</td>
+
+        <td>67 996202782</td>
+
+        <td>ferias</td>
+
+        <td>campo Grande</td>
+
+        <td>rua tal</td>
+
+        <td>18/01/2024</td>
+
+        <td>31/01/2024</td>
+
+        <td>07/01/2024 15:24:06</td>
+
+    </tr></table>

@@ -25,27 +25,25 @@ if ($conexao->connect_error) {
 function obterSaidas($conexao) {
     $cpf_usuario = $_SESSION['cpf'];
     $query = "SELECT * FROM registros WHERE cpf_usuario = ?";
-    
+
     $stmt = $conexao->prepare($query);
     $stmt->bind_param("s", $cpf_usuario);
     $stmt->execute();
-    
-    $result = $stmt->get_result();
-    
-    $saidas = $result->fetch_all(MYSQLI_ASSOC);
 
-    return $saidas;
+    $result = $stmt->get_result();
+
+    return $result->fetch_all(MYSQLI_ASSOC);
 }
 
 // Lógica para excluir saída
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
     $idToDelete = $_POST['delete'];
     $deleteSql = "DELETE FROM registros WHERE id = ?";
-    
+
     $stmt = $conexao->prepare($deleteSql);
     $stmt->bind_param("i", $idToDelete);
     $stmt->execute();
-    
+
     // Redireciona após a exclusão para evitar reenvio do formulário ao atualizar a página
     header("Location: processar_saida.php");
     exit();
@@ -53,14 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
 
 // Lógica para registrar nova saída
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['local'])) {
+    $cpf_usuario = $_SESSION['cpf'];
     $local = mysqli_real_escape_string($conexao, $_POST['local']);
     $motivo = mysqli_real_escape_string($conexao, $_POST['motivo']);
     $data_saida = mysqli_real_escape_string($conexao, $_POST['data_saida']);
     $data_retorno = isset($_POST['data_retorno']) ? mysqli_real_escape_string($conexao, $_POST['data_retorno']) : null;
     $telefone_contato = mysqli_real_escape_string($conexao, $_POST['telefone_contato']);
     $endereco_destino = mysqli_real_escape_string($conexao, $_POST['endereco_destino']);
-
-    $cpf_usuario = $_SESSION['cpf'];
 
     // Validar datas
     $dataAtual = date('Y-m-d');
@@ -69,17 +66,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['local'])) {
     } elseif ($data_retorno && $data_retorno < $data_saida) {
         $mensagemErro = "A data de retorno não pode ser anterior à data de saída.";
     } else {
-        // Continuar com o registro
-        $insertSql = "INSERT INTO registros (cpf_usuario, local, motivo, data_saida, data_retorno, telefone_contato, endereco_destino, data_registro) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
-    
-        $stmt = $conexao->prepare($insertSql);
-        $stmt->bind_param("sssssss", $cpf_usuario, $local, $motivo, $data_saida, $data_retorno, $telefone_contato, $endereco_destino);
-        $result = $stmt->execute();
-    
-        if ($result) {
-            $mensagemSucesso = "Saída registrada com sucesso!";
+        // Verificar se o registro já existe antes de inserir
+        $verificarDuplicidadeSql = "SELECT id FROM registros WHERE cpf_usuario = ? AND local = ? AND data_saida = ?";
+        $verificarDuplicidadeStmt = $conexao->prepare($verificarDuplicidadeSql);
+        $verificarDuplicidadeStmt->bind_param("sss", $cpf_usuario, $local, $data_saida);
+        $verificarDuplicidadeStmt->execute();
+        $verificarDuplicidadeResult = $verificarDuplicidadeStmt->get_result();
+
+        if ($verificarDuplicidadeResult->num_rows > 0) {
+            $mensagemErro = "Você já registrou uma saída para este local e data. Por favor, verifique suas saídas.";
         } else {
-            $mensagemErro = "Erro ao registrar saída: " . $stmt->error;
+            // Continuar com o registro
+            $insertSql = "INSERT INTO registros (cpf_usuario, local, motivo, data_saida, data_retorno, telefone_contato, endereco_destino, data_registro) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
+
+            $stmt = $conexao->prepare($insertSql);
+            $stmt->bind_param("sssssss", $cpf_usuario, $local, $motivo, $data_saida, $data_retorno, $telefone_contato, $endereco_destino);
+            $result = $stmt->execute();
+
+            if ($result) {
+                $mensagemSucesso = "Saída registrada com sucesso!";
+            } else {
+                $mensagemErro = "Erro ao registrar saída. Por favor, tente novamente.";
+            }
         }
     }
 }
@@ -148,7 +156,6 @@ if (isset($_SESSION['cpf'])) {
         <button type="submit">Registrar Saída</button>
     </form>
 
-    <!-- Exibição de saídas cadastradas -->
     <h2>Saídas Cadastradas</h2>
     <table>
         <tr>
@@ -181,7 +188,6 @@ if (isset($_SESSION['cpf'])) {
                         <button type="submit" class="delete-btn" onclick="return confirm('Tem certeza que deseja excluir a saída?')">Excluir</button>
                     </form>
                 </td>
-
             </tr>
         <?php endforeach; ?>
     </table>

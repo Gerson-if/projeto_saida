@@ -14,7 +14,8 @@ form {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     padding: 20px;
     border-radius: 8px;
-    width: 400px;
+    width: 80%; /* Utilizei porcentagem para tornar o formulário mais responsivo */
+    max-width: 400px; /* Adicionei uma largura máxima para evitar que o formulário se estenda demais */
     margin-top: 20px;
     position: relative;
 }
@@ -47,25 +48,29 @@ select {
 button {
     background-color: #4caf50;
     color: #fff;
-    padding: 10px;
+    padding: 12px 20px; /* Aumentei o padding para um botão mais espaçoso e elegante */
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-size: 16px;
+    transition: background-color 0.3s ease; /* Adicionei um efeito de transição suave */
 }
 
 button:hover {
     background-color: #45a049;
 }
 
+.error-msg,
+.success-msg {
+    margin-top: 10px;
+}
+
 .error-msg {
     color: #ff3333;
-    margin-top: 10px;
 }
 
 .success-msg {
     color: #4caf50;
-    margin-top: 10px;
 }
 
 .back-button {
@@ -74,9 +79,10 @@ button:hover {
     right: 20px;
     background-color: #333;
     color: #fff;
-    padding: 10px 20px;
+    padding: 12px 20px; /* Ajustei o padding para manter a consistência com o botão principal */
     border-radius: 5px;
     text-decoration: none;
+    transition: background-color 0.3s ease; /* Efeito de transição suave adicionado */
 }
 
 .back-button:hover {
