@@ -46,17 +46,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_usuario'])) {
 
     if ($row_existencia['total'] == 0) {
         // O CPF ou nome não existem (exceto para o próprio usuário), podemos realizar a atualização
-        $query_atualizar = "UPDATE usuarios SET cpf = '$novo_cpf', nome = '$novo_nome', senha = '$novo_senha', tipo = '$novo_tipo' WHERE id = $id_usuario";
-        $result_atualizar = $conexao->query($query_atualizar);
-
-        if ($result_atualizar) {
-            $mensagemEdicao = "Usuário atualizado com sucesso!";
+        if (empty($novo_senha)) {
+            echo "<script>alert('Erro ao atualizar usuário: A senha não pode ser nula.');</script>";
         } else {
-            $erroEdicao = "Erro ao atualizar usuário: " . $conexao->error;
+            $query_atualizar = "UPDATE usuarios SET cpf = '$novo_cpf', nome = '$novo_nome', senha = '$novo_senha', tipo = '$novo_tipo' WHERE id = $id_usuario";
+            $result_atualizar = $conexao->query($query_atualizar);
+
+            if ($result_atualizar) {
+                echo "<script>alert('Usuário atualizado com sucesso!');</script>";
+            } else {
+                echo "<script>alert('Erro ao atualizar usuário: " . $conexao->error . "');</script>";
+            }
         }
     } else {
         // O CPF ou nome já existem (exceto para o próprio usuário), exibir mensagem de erro
-        $erroEdicao = "Erro ao atualizar usuário: CPF ou nome já cadastrado.";
+        echo "<script>alert('Erro ao atualizar usuário: CPF ou nome já cadastrado.');</script>";
     }
 }
 ?>
@@ -91,14 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['editar_usuario'])) {
             
             <button type="submit" name="editar_usuario">Salvar Edição</button>
         </form>
-
-        <?php
-        if (isset($mensagemEdicao)) {
-            echo "<p class='success-message'>$mensagemEdicao</p>";
-        } elseif (isset($erroEdicao)) {
-            echo "<p class='error-message'>$erroEdicao</p>";
-        }
-        ?>
 
         <a href="dashboard_admin.php" class="back-button">Voltar e Continuar</a>
     </div>
