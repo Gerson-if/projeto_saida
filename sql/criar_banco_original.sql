@@ -6,7 +6,7 @@
 -- Tempo de geração: 04/01/2024 às 16:58
 -- Versão do servidor: 10.4.28-MariaDB
 -- Versão do PHP: 8.2.4
---antes de executar crie o banco de daos execute esse script no banco de dados 
+-- antes de executar crie o banco de daos execute esse script no banco de dados 
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
