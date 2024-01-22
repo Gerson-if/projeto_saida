@@ -1,5 +1,7 @@
 <?php
-require_once('tcpdf/tcpdf.php');
+require 'vendor/autoload.php'; // Supondo que dompdf está instalado via Composer
+use Dompdf\Dompdf;
+use Dompdf\Options;
 require 'conexao.php';
 
 // Função para obter saídas com filtro de datas
@@ -27,60 +29,58 @@ $dataInicio = isset($_POST['data_inicio']) ? $_POST['data_inicio'] : '';
 $dataFim = isset($_POST['data_fim']) ? $_POST['data_fim'] : '';
 $nomeUsuario = isset($_POST['nome_usuario']) ? $_POST['nome_usuario'] : '';
 
+// Obter saídas filtradas com base nas datas
 $saidasFiltradas = obterSaidasFiltradas($conexao, $dataInicio, $dataFim);
 
-// Criação do arquivo PDF
-$pdf = new TCPDF('L', 'mm', 'A4');
-$pdf->SetMargins(10, 10, 10);
-$pdf->AddPage();
+// Configurar dompdf
+$options = new Options();
+$options->set('isHtml5ParserEnabled', true);
+$options->set('isPhpEnabled', true);
 
-$pdf->SetFont('helvetica', 'B', 18);
-$pdf->Cell(0, 10, 'Relatório de Saídas', 0, 1, 'C');
+$dompdf = new Dompdf($options);
+$dompdf->setPaper('A4', 'landscape');
+$dompdf->loadHtml('<html><body>' .
+    '<h1>Relatório de Saídas</h1>' .
+    '<p>De Guarnição: ' . $nomeUsuario . '</p>' .
+    '<table border="1" cellpadding="5" style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="background-color: #f2f2f2;">
+                <th>ID</th>
+                <th>Nome do Usuário</th>
+                <th>Telefone de Contato</th>
+                <th>Motivo da Saída</th>
+                <th>Local de Destino</th>
+                <th>Endereço</th>
+                <th>Data de Saída</th>
+                <th>Data de Retorno</th>
+                <th>Data do Registro</th>
+            </tr>
+        </thead>' .
+    '<tbody>' .
+    implode('', array_map(function ($saida) {
+        return '<tr>
+            <td>' . $saida['id'] . '</td>
+            <td>' . $saida['nome_usuario'] . '</td>
+            <td>' . $saida['telefone_contato'] . '</td>
+            <td>' . nl2br($saida['motivo']) . '</td>
+            <td>' . $saida['local'] . '</td>
+            <td>' . nl2br($saida['endereco_destino']) . '</td>
+            <td>' . date('d/m/Y', strtotime($saida['data_saida'])) . '</td>
+            <td>' . date('d/m/Y', strtotime($saida['data_retorno'])) . '</td>
+            <td>' . date('d/m/Y H:i:s', strtotime($saida['data_registro'])) . '</td>
+        </tr>';
+    }, $saidasFiltradas)) .
+    '</tbody></table></body></html>');
 
-$pdf->SetFont('helvetica', '', 14);
-$pdf->Cell(0, 10, 'De Guarnição: ' . $nomeUsuario, 0, 1, 'C');
+$dompdf->render();
 
-// Monta a tabela HTML
-$html = '<table border="1" cellpadding="5">
-    <tr>
-        <th>ID</th>
-        <th>Nome do Usuário</th>
-        <th>Telefone de Contato</th>
-        <th>Motivo da Saída</th>
-        <th>Local de Destino</th>
-        <th>Endereço</th>
-        <th>Data de Saída</th>
-        <th>Data de Retorno</th>
-        <th>Data do Registro</th>
-    </tr>';
-
-foreach ($saidasFiltradas as $saida) {
-    $html .= '<tr>
-        <td>' . $saida['id'] . '</td>
-        <td>' . $saida['nome_usuario'] . '</td>
-        <td>' . $saida['telefone_contato'] . '</td>
-        <td>' . nl2br($saida['motivo']) . '</td>
-        <td>' . $saida['local'] . '</td>
-        <td>' . nl2br($saida['endereco_destino']) . '</td>
-        <td>' . date('d/m/Y', strtotime($saida['data_saida'])) . '</td>
-        <td>' . date('d/m/Y', strtotime($saida['data_retorno'])) . '</td>
-        <td>' . date('d/m/Y H:i:s', strtotime($saida['data_registro'])) . '</td>
-    </tr>';
-}
-
-$html .= '</table>';
-
-$pdf->writeHTML($html, true, false, true, false, '');
-
-$pdf->Ln(10);
-
-// Caminho local para salvar o PDF
+// Salvar o PDF em um arquivo
 $pdfFileName = 'relatorio_saidas.pdf';
-$pdf->Output($_SERVER['DOCUMENT_ROOT'] . '/saida/' . $pdfFileName, 'F');
+file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/saida/' . $pdfFileName, $dompdf->output());
 
-// Caminho local para salvar a planilha (Excel)
+// Salvar o HTML em um arquivo Excel (opcional, pois o dompdf gera principalmente PDF)
 $excelFileName = 'relatorio_saidas.xls';
-$htmlToExcel = str_replace('</td>', "</td>\n", $html);
+$htmlToExcel = str_replace('</td>', "</td>\n", $dompdf->outputHtml());
 file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/saida/' . $excelFileName, $htmlToExcel);
 ?>
 
@@ -88,63 +88,7 @@ file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/saida/' . $excelFileName, $htmlT
 <html lang="pt-br">
 <head>
     <title>Relatório de Saídas</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f0f0f0;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            text-align: center;
-        }
-
-        .container {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-            max-width: 800px;
-            width: 100%;
-        }
-
-        h2 {
-            color: #333;
-        }
-
-        p {
-            color: #4caf50;
-            font-weight: bold;
-        }
-
-        a {
-            color: #007bff;
-            text-decoration: none;
-            font-weight: bold;
-            margin-top: 10px;
-            display: inline-block;
-        }
-
-        .download-buttons {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 20px;
-        }
-
-        .download-buttons a {
-            padding: 10px 20px;
-            border-radius: 5px;
-            background-color: #007bff;
-            color: #fff;
-            transition: background-color 0.3s ease;
-        }
-
-        .download-buttons a:hover {
-            background-color: #0056b3;
-        }
-    </style>
+    <link rel="stylesheet" href="css/gerar_pdf.css">
     <script>
         // Verificar se o usuário é um administrador ao pressionar o botão Voltar no navegador
         window.onbeforeunload = function () {
