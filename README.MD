@@ -1,25 +1,31 @@
 # Sistema de Controle de Registros - Relatório de Saídas
 
-Este projeto é um sistema de controle de registros de saídas desenvolvido em PHP, HTML e CSS. Ele permite que administradores gerem relatórios de saídas filtrados por data, exportem esses relatórios em formato PDF e planilha Excel, além de realizar o cadastro e exclusão de usuários.
+Este projeto é um sistema robusto de controle de registros de saídas, desenvolvido em PHP, HTML e CSS, que oferece diversas funcionalidades para facilitar a gestão e análise de informações. Com foco na praticidade e eficiência, o sistema é destinado a administradores responsáveis pelo controle e geração de relatórios de saídas.
 
 ## Funcionalidades
 
-- **Cadastro de Usuários:** Adiciona usuários ao sistema com informações como CPF, nome, senha e tipo de usuário (Super Admin ou Usuário Convencional).
+### Cadastro de Usuários
 
-- **Exclusão de Usuários:** Permite a exclusão de usuários do sistema.
+- **Adição de Usuários:** Registra usuários no sistema, incluindo informações cruciais como CPF, nome, senha e tipo de usuário (Super Admin ou Usuário Convencional).
 
-- **Geração de Relatórios de Saídas:** Administradores podem gerar relatórios de saídas filtrados por data de início e fim. Esses relatórios podem ser visualizados no navegador, baixados em formato PDF e planilha Excel.
+- **Exclusão de Usuários:** Facilita a remoção de usuários do sistema, mantendo o controle sobre as contas ativas.
 
-- **Exportação em PDF:** Possibilidade de exportar os relatórios de saídas em formato PDF para armazenamento ou compartilhamento.
+### Geração de Relatórios de Saídas
 
-- **Exportação em Planilha Excel:** Gera uma versão dos relatórios de saídas em planilha Excel para facilitar análises e manipulações adicionais.
+- **Filtragem por Data:** Possibilita a geração de relatórios de saídas filtrados por data de início e fim, proporcionando maior flexibilidade na análise de registros.
+
+- **Visualização no Navegador:** Permite a visualização imediata dos relatórios no navegador, simplificando o processo de verificação.
+
+- **Exportação em PDF:** Oferece a opção de exportar os relatórios de saídas em formato PDF, facilitando o compartilhamento e armazenamento.
+
+- **Exportação em Planilha Excel:** Gera versões dos relatórios em planilhas Excel, proporcionando uma visão tabular dos dados para análises mais avançadas.
 
 ## Requisitos
 
-- PHP 7.0 ou superior
-- MySQL ou outro banco de dados compatível
-- Navegador Web moderno
-- Servidor Web (por exemplo, Apache, Nginx)
+- **PHP 7.0 ou superior**
+- **MySQL ou outro banco de dados compatível**
+- **Navegador Web moderno**
+- **Servidor Web (por exemplo, Apache, Nginx)**
 
 ## Instalação
 
@@ -65,4 +71,6 @@ Contribuições são bem-vindas! Sinta-se à vontade para abrir problemas (issue
 
 ## Licença
 
-Este projeto está licenciado sob a Licença MIT - consulte o arquivo [LICENSE](LICENSE) para obter detalhes.
+Este projeto está licenciado sob a Licença MIT - consulte o arquivo [LICENSE](LICENSE) para obter detalhes. 
+
+Se precisar de mais ajustes ou tiver outras solicitações, estou à disposição!

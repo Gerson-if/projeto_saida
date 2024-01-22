@@ -69,9 +69,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_usuario'])) {
 
 // Função para obter saídas com filtro de datas
 function obterSaidasFiltradas($conexao, $dataInicio, $dataFim) {
-    $query = "SELECT * FROM registros WHERE data_saida BETWEEN ? AND ?";
+    $query = "SELECT * FROM registros WHERE (data_saida >= ? AND data_saida <= ?) OR (data_retorno >= ? AND data_retorno <= ?)";
     $stmt = $conexao->prepare($query);
-    $stmt->bind_param("ss", $dataInicio, $dataFim);
+    $stmt->bind_param("ssss", $dataInicio, $dataFim, $dataInicio, $dataFim);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -84,6 +84,7 @@ function obterSaidasFiltradas($conexao, $dataInicio, $dataFim) {
 
     return $saidas;
 }
+
 ?>
 
 <!DOCTYPE html>
