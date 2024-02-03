@@ -1,3 +1,4 @@
+/* Estilos Gerais */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f0f0f0;
@@ -6,7 +7,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    min-height: 100vh;
     text-align: center;
 }
 
@@ -19,24 +20,75 @@ body {
     width: 100%;
 }
 
+/* Estilos do Título "Relatório de Saídas" */
 h2 {
     color: #333;
-    
 }
 
-p {
+/* Estilos do Formulário */
+form {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+form label {
+    font-size: 18px;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+form input {
+    padding: 12px;
+    margin-bottom: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 16px;
+}
+
+/* Estilos do Botão "Gerar Relatório" */
+form button {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 5px;
+    background-color: #007bff;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    font-size: 18px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+form button:hover {
+    background-color: #0056b3;
+}
+
+/* Estilos do Link "Voltar para o Dashboard" */
+.back-to-dashboard {
+    display: inline-block;
+    margin-top: 20px;
+    color: #007bff;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+
+.back-to-dashboard:hover {
+    color: #0056b3;
+    text-decoration: underline;
+}
+
+/* Estilos da Mensagem de Sucesso */
+p.success-message {
     color: #4caf50;
     font-weight: bold;
 }
 
-a {
-    color: #007bff;
-    text-decoration: none;
-    font-weight: bold;
-    margin-top: 10px;
-    display: inline-block;
-}
-
+/* Estilos dos Botões de Download */
 .download-buttons {
     display: flex;
     justify-content: space-around;
@@ -48,6 +100,7 @@ a {
     border-radius: 5px;
     background-color: #007bff;
     color: #fff;
+    text-decoration: none;
     transition: background-color 0.3s ease;
 }
 

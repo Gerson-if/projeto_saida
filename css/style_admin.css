@@ -1,6 +1,6 @@
-  /* Estilos Gerais */
-  body {
-    font-family: Arial, sans-serif;
+/* Estilos Gerais */
+body {
+    font-family: 'Arial', sans-serif;
     background-color: #f4f4f4;
     margin: 0;
     padding: 0;
@@ -13,7 +13,7 @@
     border-radius: 10px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     max-width: 800px;
-    width: 100%;
+    width: 90%;
     margin: auto;
     position: relative;
 }
@@ -21,12 +21,14 @@
 h2 {
     color: #333;
     margin-bottom: 20px;
+    font-size: 24px; /* Aumentando o tamanho do título */
 }
 
 p {
     color: #4caf50;
     font-weight: bold;
     margin-top: 10px;
+    font-size: 18px; /* Aumentando o tamanho do texto de sucesso */
 }
 
 a {
@@ -35,6 +37,11 @@ a {
     font-weight: bold;
     margin-top: 10px;
     display: inline-block;
+    transition: color 0.3s ease;
+}
+
+a:hover {
+    color: #004080;
 }
 
 table {
@@ -48,45 +55,57 @@ table, th, td {
 }
 
 th, td {
-    padding: 10px;
+    padding: 15px;
     text-align: left;
 }
 
 button {
     background-color: #4caf50;
     color: white;
-    padding: 10px;
+    padding: 12px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
 }
 
 button:hover {
     background-color: #45a049;
+    transform: scale(1.1);
 }
 
 /* Estilos do Formulário */
 .form-container {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 10px;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px; /* Aumentando o espaço entre os elementos */
     margin-top: 20px;
 }
 
 .form-container input,
-.form-container select,
-.form-container button {
-    width: calc(48% - 5px); /* 48% para permitir algum espaço entre os elementos */
-    padding: 10px;
+.form-container select {
+    width: calc(100% - 24px);
+    padding: 12px;
     box-sizing: border-box;
     border: 1px solid #ccc;
     border-radius: 5px;
+    transition: border-color 0.3s ease;
 }
 
-.form-container button {
-    width: 100%;
-    margin-top: 10px;
+.form-container button.btn-cadastrar {
+    background-color: #4caf50;
+    color: white;
+    padding: 12px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.form-container button.btn-cadastrar:hover {
+    background-color: #45a049;
+    transform: scale(1.1);
 }
 
 /* Estilos da Barra de Pesquisa */
@@ -99,24 +118,27 @@ button:hover {
 
 .search-bar input {
     flex: 1;
-    padding: 10px;
+    padding: 12px;
     box-sizing: border-box;
     border: 1px solid #ccc;
     border-radius: 5px;
+    transition: border-color 0.3s ease;
 }
 
 .search-bar button {
-    background-color: #007bff;
+    background-color: #4caf50;
     color: white;
-    padding: 10px;
+    padding: 12px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     margin-left: 10px;
+    transition: background-color 0.3s ease, transform 0.3s ease;
 }
 
 .search-bar button:hover {
-    background-color: #0056b3;
+    background-color: #45a049;
+    transform: scale(1.1);
 }
 
 /* Mensagens de Sucesso e Erro */
@@ -124,19 +146,21 @@ button:hover {
     color: #4caf50;
     font-weight: bold;
     margin-top: 10px;
+    font-size: 18px; /* Aumentando o tamanho do texto de sucesso */
 }
 
 .error-message {
     color: red;
     font-weight: bold;
     margin-top: 10px;
+    font-size: 18px; /* Aumentando o tamanho do texto de erro */
 }
 
 /* Botão de Sair */
 .logout-button {
     background-color: #dc3545;
     color: #fff;
-    padding: 10px 20px;
+    padding: 12px 24px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
@@ -145,15 +169,21 @@ button:hover {
     top: 10px;
     right: 10px;
     z-index: 999;
+    transition: background-color 0.3s ease, transform 0.3s ease;
 }
 
 .logout-button:hover {
     background-color: #bd2130;
+    transform: scale(1.1);
 }
 
 /* Estilo responsivo para o botão de Sair */
 @media only screen and (max-width: 600px) {
-    .logout-button {
+    .form-container input,
+    .form-container select,
+    .form-container button,
+    .search-bar input,
+    .search-bar button {
         width: 100%;
     }
 }

@@ -67,24 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_usuario'])) {
     $result_usuarios = $conexao->query($query_usuarios);
 }
 
-// Função para obter saídas com filtro de datas
-function obterSaidasFiltradas($conexao, $dataInicio, $dataFim) {
-    $query = "SELECT * FROM registros WHERE (data_saida >= ? AND data_saida <= ?) OR (data_retorno >= ? AND data_retorno <= ?)";
-    $stmt = $conexao->prepare($query);
-    $stmt->bind_param("ssss", $dataInicio, $dataFim, $dataInicio, $dataFim);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    $saidas = [];
-    if ($result->num_rows > 0) {
-        while ($row = $result->fetch_assoc()) {
-            $saidas[] = $row;
-        }
-    }
-
-    return $saidas;
-}
-
 ?>
 
 <!DOCTYPE html>
@@ -94,7 +76,7 @@ function obterSaidasFiltradas($conexao, $dataInicio, $dataFim) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Administração</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/style_admin.css"> <!-- Substitua com o caminho correto -->
+    <link rel="stylesheet" href="css/style_admin.css">
 </head>
 <body>
 
@@ -108,9 +90,10 @@ function obterSaidasFiltradas($conexao, $dataInicio, $dataFim) {
                 <option value="admin">Super Admin</option>
                 <option value="usuario">Usuário Convencional</option>
             </select>
-            <button type="submit">Cadastrar Usuário</button>
+            <br><br>
+            <button type="submit" class="btn-cadastrar">Cadastrar Usuário</button>
         </form>
-        
+        <hr>
 
         <?php
         if (isset($mensagemCadastro)) {
@@ -120,40 +103,26 @@ function obterSaidasFiltradas($conexao, $dataInicio, $dataFim) {
         }
         ?>
 
-        <h2>Relatório de Saídas</h2>
-        <!-- Filtros de data para relatório -->
-        <form method="post" action="">
-            <label>Data de Início:</label>
-            <input type="date" name="data_inicio" required>
-            <label>Data de Fim:</label>
-            <input type="date" name="data_fim" required>
-            <button type="submit">Gerar Relatório</button>
-        </form>
+        <h2>Relatório de Saídas Por Periodo</h2>
 
-   <!-- Exibição do relatório de saídas -->
-<?php
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['data_inicio'], $_POST['data_fim'])) {
-    $dataInicio = $_POST['data_inicio'];
-    $dataFim = $_POST['data_fim'];
+         <!-- Botão para gerar PDF -->
+        <a href="gerar_pdf.php" target="_self">
+            <button>Gerar PDF ou Planilha Por Periodo</button>
+        </a>
 
-    $saidasFiltradas = obterSaidasFiltradas($conexao, $dataInicio, $dataFim);
-    $quantidadeSaidas = count($saidasFiltradas);
+        <br>
+        <br>
+        <hr>
+        
+        <h2>Relatório de Saída Por Data Exata</h2>
 
-    if ($quantidadeSaidas > 0) {
-        echo "<p>Quantidade de saídas encontradas: $quantidadeSaidas</p>";
-
-        // Adicionar botão para salvar em PDF
-        echo "<form method='post' action='gerar_pdf.php'>
-                <input type='hidden' name='data_inicio' value='$dataInicio'>
-                <input type='hidden' name='data_fim' value='$dataFim'>
-                <button type='submit'>Salvar Relatório</button>
-              </form>";
-    } else {
-        echo "<p>Nenhuma saída encontrada no período selecionado.</p>";
-    }
-}
-?>
-
+         <!-- Botão para gerar PDF -->
+        <a href="busca_exata.php" target="_self">
+            <button>Gerar PDF ou Planilha Data Exata</button>
+        </a>
+        <br>
+        <br>
+        <hr>
         <h2>Excluir e Editar Usuário</h2>
         <!-- Lista de usuários com opção para excluir -->
         <div class="search-bar">
@@ -187,36 +156,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['data_inicio'], $_POST
                     searchUsersLive();
                 });
             </script>
-<table>
-    <tr>
-        <th>ID</th>
-        <th>CPF</th>
-        <th>Nome</th>
-        <th>Tipo</th>
-        <th>Ações</th>
-    </tr>
-    <?php
-    while ($row = $result_usuarios->fetch_assoc()) {
-        echo "<tr>
-                <td>{$row['id']}</td>
-                <td>{$row['cpf']}</td>
-                <td>{$row['nome']}</td>
-                <td>{$row['tipo']}</td>
-                <td>
-                    <a href='editar_usuario.php?id={$row['id']}'>Editar</a> |
-                    <form method='post' style='display:inline;'>
-                        <input type='hidden' name='delete_usuario' value='{$row['id']}'>
-                        <button type='submit' onclick=\"return confirm('Tem certeza que deseja excluir o usuário?')\">Excluir</button>
-                    </form>
-                </td>
-            </tr>";
-    }
-    ?>
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>CPF</th>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Ações</th>
+            </tr>
+            <?php
+            while ($row = $result_usuarios->fetch_assoc()) {
+                echo "<tr>
+                        <td>{$row['id']}</td>
+                        <td>{$row['cpf']}</td>
+                        <td>{$row['nome']}</td>
+                        <td>{$row['tipo']}</td>
+                        <td>
+                            <a href='editar_usuario.php?id={$row['id']}'>Editar</a> |
+                            <form method='post' style='display:inline;'>
+                                <input type='hidden' name='delete_usuario' value='{$row['id']}'>
+                                <button type='submit' onclick=\"return confirm('Tem certeza que deseja excluir o usuário?')\">Excluir</button>
+                            </form>
+                        </td>
+                    </tr>";
+            }
+            ?>
+        </table>
+        <br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 
-</table>
-
-    <!-- Formulário de logout -->
-    <button class="logout-button" onclick="document.querySelector('.container form[name=logoutForm]').submit()">Sair</button>
+        <!-- Formulário de logout -->
+        <button class="logout-button" onclick="document.querySelector('.container form[name=logoutForm]').submit()">Sair</button>
         <form method="post" action="" name="logoutForm">
             <input type="hidden" name="logout" value="1">
         </form>
@@ -246,3 +215,4 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['data_inicio'], $_POST
     </script>
 </body>
 </html>
+

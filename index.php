@@ -37,27 +37,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <title>Login Saida de Guarnição</title>
     <link rel="stylesheet" href="css/style_login.css">
     <style>
-        /* Adicione isso ao seu arquivo de estilo (style_login.css) ou crie um novo arquivo CSS */
-        .popup-container {
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .notification-bar {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            justify-content: center;
-            align-items: center;
-            z-index: 999;
+            background: #4caf50;
+            color: #fff;
+            padding: 15px;
+            text-align: center;
+            z-index: 1000;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            animation: slideIn 0.5s ease-out;
         }
 
-        .popup-content {
-            background: #fff;
-            padding: 20px;
-            border-radius: 5px;
-            text-align: center;
-            max-width: 400px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        .notification-bar.show {
+            opacity: 1;
         }
 
         .error-message {
@@ -65,7 +68,43 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             margin-top: 10px;
         }
 
-        .btn-popup {
+        @keyframes slideIn {
+            from {
+                transform: translateY(-100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+
+        .page {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        form {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .btn {
             background-color: #4caf50;
             color: #fff;
             padding: 10px 20px;
@@ -76,6 +115,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </style>
 </head>
 <body>
+    <div class="notification-bar" id="notificationBar">
+        Seu login e senha são os últimos 10 dígitos do seu CPF, sem o zero inicial.
+    </div>
+
     <div class="page">
         <form method="POST" class="formLogin">
             <h1>
@@ -92,31 +135,32 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             <input type="submit" value="Entrar" class="btn">
         </form>
-
-        <div class="popup-container" id="popupContainer">
-            <div class="popup-content">
-                <span class="close-popup" onclick="closePopup()">&times;</span>
-                <p>Seu login e senha são os últimos 10 dígitos do seu CPF, sem o zero inicial.</p>
-                <button class="btn-popup" onclick="closePopup()">OK</button>
-            </div>
-        </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            var popupContainer = document.getElementById('popupContainer');
+            var notificationBar = document.getElementById('notificationBar');
 
             setTimeout(function () {
-                showPopup();
+                showNotification();
+                setTimeout(function () {
+                    hideNotification();
+                }, 5000); // Oculta a notificação após 5 segundos
             }, 1000);
 
-            function showPopup() {
-                popupContainer.style.display = 'flex';
+            function showNotification() {
+                notificationBar.style.display = 'block';
+                setTimeout(function () {
+                    notificationBar.classList.add('show');
+                }, 10); // Adiciona a classe 'show' após um pequeno atraso
             }
 
-            window.closePopup = function () {
-                popupContainer.style.display = 'none';
-            };
+            function hideNotification() {
+                notificationBar.classList.remove('show');
+                setTimeout(function () {
+                    notificationBar.style.display = 'none';
+                }, 500); // Oculta a notificação após a transição de fechamento
+            }
         });
     </script>
 </body>
