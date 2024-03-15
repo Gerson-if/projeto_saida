@@ -72,5 +72,3 @@ Contribuições são bem-vindas! Sinta-se à vontade para abrir problemas (issue
 ## Licença
 
 Este projeto está licenciado sob a Licença MIT - consulte o arquivo [LICENSE](LICENSE) para obter detalhes. 
-
-Se precisar de mais ajustes ou tiver outras solicitações, estou à disposição!
