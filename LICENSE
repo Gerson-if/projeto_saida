@@ -1,31 +1,21 @@
-# Sistema de Controle de Registros - Relatório de Saídas
+MIT License
 
-Este é um sistema simples para geração, exibição e exclusão de QR codes. Ele permite que os usuários insiram informações, gerem QR codes correspondentes e os visualizem na página. Além disso, os usuários podem excluir os QR codes conforme necessário.
+Copyright (c) 2024 
 
-## Funcionalidades
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-- Geração de QR codes a partir das informações inseridas pelo usuário.
-- Exibição dos QR codes gerados na página.
-- Exclusão de QR codes selecionados pelo usuário.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-## Pré-requisitos
-
-- Servidor web (por exemplo, Apache) e servidor de banco de dados (por exemplo, MySQL) configurados.
-- PHP instalado no servidor.
-- Permissões adequadas no servidor para manipulação de arquivos.
-
-## Instalação
-
-1. Clone ou baixe este repositório para o diretório raiz do seu servidor web.
-2. Importe o arquivo `database.sql` para criar a estrutura do banco de dados.
-3. Verifique e atualize os detalhes da conexão com o banco de dados no arquivo `db_connection.php`.
-4. Certifique-se de que o PHP esteja configurado corretamente no seu servidor.
-5. Acesse a página `index.php` no seu navegador para começar a utilizar o sistema.
-
-## Autor
-
-- **Gerson Ferreira de Castro** - 2024
-
-## Licença
-
-Este projeto está licenciado sob a Licença MIT - consulte o arquivo [LICENSE](LICENSE) para mais detalhes.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
