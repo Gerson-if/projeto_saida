@@ -1,4 +1,4 @@
-# Sistema de Geração de QR Code
+# Sistema de Controle de Registros - Relatório de Saídas
 
 Este é um sistema simples para geração, exibição e exclusão de QR codes. Ele permite que os usuários insiram informações, gerem QR codes correspondentes e os visualizem na página. Além disso, os usuários podem excluir os QR codes conforme necessário.
 
