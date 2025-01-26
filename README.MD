@@ -54,10 +54,7 @@ Este projeto é um sistema robusto de controle de registros de saídas, desenvol
    ```bash
    http://localhost/saida
    ```
-```markdown
-Aqui está o texto reescrito em Markdown, mais organizado e visualmente atrativo, ideal para o seu GitHub:  
 
-```markdown
 # 🐧 Guia de Instalação no Linux
 
 ## ⚠️ Avisos Importantes
@@ -197,8 +194,6 @@ Em caso de problemas, confira os logs do Apache:
 
 ✨ **Pronto!** Seu ambiente Linux está configurado para rodar o sistema com Apache, MariaDB e uma interface web para gerenciamento do banco de dados. Se precisar de ajuda, fique à vontade para perguntar!  
 ```
-
-Essa versão usa ícones e divisões claras para deixar o documento mais atraente no GitHub. Fica mais fácil de entender e navegar! O que achou?
 ## Estrutura do Projeto
 
 - `index.php`: Página de login.
