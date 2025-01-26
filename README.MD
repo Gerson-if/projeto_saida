@@ -58,8 +58,13 @@ Este projeto é um sistema robusto de controle de registros de saídas, desenvol
 # Guia de Instalação no Linux
 
 **⚠️ Aviso Importante:**  
-- Este script **não deve ser utilizado em ambientes de produção**. Ele foi desenvolvido para fins de testes ou ambientes de desenvolvimento. O uso em servidores de produção pode representar riscos de segurança, especialmente devido às permissões e configurações padrão aplicadas pelo script.  
-- O script foi **testado exclusivamente no Ubuntu 20.04**. Seu funcionamento em outras versões ou distribuições Linux não está garantido.
+- Este script **não deve ser utilizado em ambientes de produção**. 
+Ele foi desenvolvido para fins de testes ou ambientes de desenvolvimento. 
+O uso em servidores de produção pode representar riscos de segurança, 
+especialmente devido às permissões e configurações padrão aplicadas pelo script.  
+
+- O script foi **testado exclusivamente no Ubuntu 20.04**. 
+Seu funcionamento em outras versões ou distribuições Linux não está garantido.
 
 ---
 
