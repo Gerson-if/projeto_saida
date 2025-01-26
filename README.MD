@@ -112,7 +112,7 @@ Comando para executar o script:
 ### 5️⃣ Acessar o Sistema
 Após a instalação, abra o navegador e acesse o sistema em:  
 ```
-http://localhost
+http://localhost/saida
 ```
 
 Use as credenciais padrão para login:  
