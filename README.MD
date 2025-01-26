@@ -190,10 +190,7 @@ Em caso de problemas, confira os logs do Apache:
 - **Contribuições:**  
   Caso identifique algo que possa ser melhorado, sinta-se à vontade para enviar um **Pull Request** ou abrir uma **Issue**.
 
----
 
-✨ **Pronto!** Seu ambiente Linux está configurado para rodar o sistema com Apache, MariaDB e uma interface web para gerenciamento do banco de dados. Se precisar de ajuda, fique à vontade para perguntar!  
-```
 ## Estrutura do Projeto
 
 - `index.php`: Página de login.
