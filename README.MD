@@ -32,15 +32,15 @@ Este projeto é um sistema robusto de controle de registros de saídas, desenvol
 1. Clone este repositório para o diretório do seu servidor web.
 
    ```bash
-   git clone https://github.com/seu-usuario/seu-repositorio.git
+   git clone https://github.com/Gerson-if/projeto_saida.git
    ```
 
 2. Configure o banco de dados no arquivo `conexao.php`. Insira as informações corretas para se conectar ao seu banco de dados.
 
-3. Importe o arquivo `schema.sql` para criar a estrutura do banco de dados.
+3. Importe o arquivo `banco_original.sql` para criar a estrutura do banco de dados.
 
    ```bash
-   mysql -u seu-usuario -p sua-senha seu-banco-de-dados < schema.sql
+   mysql -u seu-usuario -p sua-senha seu-banco-de-dados < banco_orignal.sql
    ```
 
 4. Certifique-se de que o PHP e o TCPDF estão instalados no seu servidor.
@@ -52,8 +52,121 @@ Este projeto é um sistema robusto de controle de registros de saídas, desenvol
 5. Abra o sistema em um navegador e inicie a administração dos usuários e registros de saídas.
 
    ```bash
-   http://localhost/seu-diretorio
+   http://localhost/saida
    ```
+```markdown
+# Guia de Instalação no Linux
+
+**⚠️ Aviso Importante:**  
+- Este script **não deve ser utilizado em ambientes de produção**. Ele foi desenvolvido para fins de testes ou ambientes de desenvolvimento. O uso em servidores de produção pode representar riscos de segurança, especialmente devido às permissões e configurações padrão aplicadas pelo script.  
+- O script foi **testado exclusivamente no Ubuntu 20.04**. Seu funcionamento em outras versões ou distribuições Linux não está garantido.
+
+---
+
+## Passo a Passo da Instalação
+
+### 1. Baixar o Script
+Faça o download do arquivo `linux_saida.zip`.
+
+---
+
+### 2. Descompactar o Arquivo
+Use o comando abaixo para descompactar o arquivo:  
+```bash
+unzip linux_saida.zip
+```
+
+---
+
+### 3. Configurar Permissões
+Após descompactar, aplique as permissões adequadas para a pasta extraída de forma recursiva:  
+```bash
+chmod 777 -R pasta_descompactada
+```
+
+---
+
+### 4. Executar o Script de Instalação
+Execute o script de instalação para configurar automaticamente os seguintes componentes:  
+- **Apache**  
+- **MariaDB**  
+- Configuração completa do banco de dados  
+
+Comando para rodar o script:  
+```bash
+./linux_saida_update.sh
+```
+
+> **⚠️ Atenção:** Certifique-se de que o script não seja executado em servidores de produção. Ele pode alterar configurações críticas e aplicar permissões amplas que não são seguras em ambientes públicos.
+
+---
+
+### 5. Acessar o Sistema
+Após a instalação, acesse o sistema pelo navegador:  
+```
+http://localhost
+```
+Utilize as seguintes credenciais padrão para login:  
+- **Usuário:** `admin`  
+- **Senha:** `admin_123`
+
+---
+
+### 6. Resolver Problemas de Permissão
+Caso encontre problemas relacionados à escrita de relatórios, ajuste as permissões da pasta de saída com o seguinte comando:  
+```bash
+chmod 777 -R /var/www/saida/saida
+```
+
+---
+
+### 7. Configuração do Diretório Web
+O script altera o diretório padrão do Apache (`/var/www/html`) para o novo diretório `/var/www/saida/saida`.  
+Certifique-se de que este diretório tenha as permissões corretas para funcionamento.
+
+---
+
+### 8. Instalar Interface Web para Gerenciamento do Banco de Dados
+Caso deseje uma interface web para gerenciar o banco de dados, siga os passos abaixo:  
+1. Baixe o **Adminer** (ou outra ferramenta similar).  
+2. Copie o arquivo para a pasta `/var/www/saida/saida`:  
+   ```bash
+   cp adminer.php /var/www/saida/saida
+   ```
+3. Renomeie o arquivo, se preferir, para algo mais amigável:  
+   ```bash
+   mv /var/www/saida/saida/adminer.php /var/www/saida/saida/admin.php
+   ```
+4. Ajuste as permissões do arquivo:  
+   ```bash
+   chmod 777 -R /var/www/saida/saida/admin.php
+   ```
+
+---
+
+### 9. Acessar o Gerenciador de Banco de Dados
+Após a configuração, acesse o gerenciador no navegador:  
+```
+http://localhost/admin.php
+```
+Utilize as credenciais padrão do banco de dados configurado pelo script:  
+- **Usuário:** `root`  
+- **Senha:** `root`
+
+---
+
+## Considerações Finais
+- **Segurança:** Não use o script em servidores expostos publicamente ou ambientes de produção. Revise as permissões e credenciais antes de qualquer uso.  
+- **Compatibilidade:** Este script foi testado apenas no Ubuntu 20.04. Para outras versões ou distribuições, ajustes podem ser necessários.  
+- **Logs e Debugging:** Em caso de problemas, verifique os logs do Apache em:  
+  ```
+  /var/log/apache2/error.log
+  ```
+
+---
+
+Pronto! Seu ambiente Linux está configurado para rodar o sistema com Apache, MariaDB e a interface web para administração. Se tiver dúvidas ou encontrar problemas, revise as permissões ou as configurações aplicadas pelo script.
+```
 
 ## Estrutura do Projeto
 
