@@ -155,7 +155,9 @@ Se encontrar problemas, verifique os logs do Apache:
 
 ## 📜 Licença
 
-Este projeto é distribuído sob a licença **MIT**. Sinta-se à vontade para modificá-lo e distribuí-lo conforme necessário.
+Este projeto é distribuído sob a licença **MIT**, Sinta-se à vontade para modificá-lo e distribuí-lo conforme necessário.
+Para mais detalhes, consulte o arquivo [LICENSE](LICENSE).
+
 
 ---
 
