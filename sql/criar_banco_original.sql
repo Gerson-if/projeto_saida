@@ -45,8 +45,8 @@ CREATE TABLE `registros` (
 --
 
 INSERT INTO `registros` (`id`, `cpf_usuario`, `local`, `motivo`, `data_saida`, `data_retorno`, `telefone_contato`, `endereco_destino`, `data_registro`) VALUES
-(34, '123', 'campo grande', 'ferias ', '2024-01-04 00:00:00', '2024-01-18 00:00:00', '67996202782', 'rua sem fim buraco', '2024-01-04 14:50:59'),
-(38, '123', 'dsfdsf', 'fdsfds', '2024-01-04 00:00:00', '2024-01-04 00:00:00', '67996202782', 'sem ', '2024-01-04 15:07:04');
+(34, '123', 'campo grande', 'ferias ', '2024-01-04 00:00:00', '2024-01-18 00:00:00', '645454545', 'rua sem fim buraco', '2024-01-04 14:50:59'),
+(38, '123', 'dsfdsf', 'fdsfds', '2024-01-04 00:00:00', '2024-01-04 00:00:00', '54545454545', 'sem ', '2024-01-04 15:07:04');
 
 -- --------------------------------------------------------
 
@@ -68,8 +68,8 @@ CREATE TABLE `usuarios` (
 
 INSERT INTO `usuarios` (`id`, `cpf`, `senha`, `tipo`, `nome`) VALUES
 (1, 'admin', 'admin_123', 'admin', 'Super_User'),
-(14, '04579847164', '1234', 'usuario', 'SD DANIEL'),
-(15, '123', '123', 'usuario', '3 Sgt filipe ');
+(14, '5454548488', '1234', 'usuario', 'DANIEL'),
+(15, '123', '123', 'usuario', 'felipe ');
 
 --
 -- Índices para tabelas despejadas
