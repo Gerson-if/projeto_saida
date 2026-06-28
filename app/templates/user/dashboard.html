@@ -3,27 +3,91 @@
 
 {% block extra_css %}
 <style>
-.dica-card {
-    background: linear-gradient(135deg, #e8f4fd, #dbeafe);
-    border: 1px solid #bfdbfe;
-    border-radius: 12px;
-    padding: 0.9rem 1.1rem;
-    font-size: 0.85rem;
-    color: #1e40af;
-    transition: transform 0.15s;
-}
-.dica-card:hover { transform: translateY(-1px); }
-.dica-card i { font-size: 1.1rem; flex-shrink: 0; }
+/* --- ESTILIZAÇÃO PREMIUM DA DASHBOARD --- */
 
+/* Seção de Dicas Rotativas Modificadas apenas no Visual */
+.dicas-banner {
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 1.2rem 1.5rem;
+    position: relative;
+    min-height: 75px;
+    display: flex;
+    align-items: center;
+    box-shadow: inset 0 1px 2px rgba(255,255,255,0.8), 0 4px 12px rgba(0,0,0,0.02);
+}
+
+/* Container que envolve cada dica individual */
+.dica-item-animado {
+    display: none; /* JS controla a exibição */
+    opacity: 0;
+    transform: translateX(15px);
+    transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 100%;
+}
+
+/* Classe aplicada via JS para disparar a animação sutil e bonita */
+.dica-item-animado.active {
+    display: flex !important;
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Ícone de lâmpada flutuando suavemente */
+.floating-lamp {
+    animation: floating 3s ease-in-out infinite;
+    background: #fff;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+@keyframes floating {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+/* Cards de Métricas Modernizados */
 .metric-mini {
     background: #fff;
-    border-radius: 10px;
-    padding: 0.85rem 1rem;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+    border-radius: 14px;
+    padding: 1.2rem 1rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 4px 12px rgba(0,0,0,0.03);
+    border: 1px solid #f1f5f9;
     text-align: center;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.metric-mini .num { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
-.metric-mini .lbl { font-size: 0.72rem; color: #6c757d; margin-top: 2px; }
+.metric-mini:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.06);
+    border-color: #e2e8f0;
+}
+.metric-mini .num { font-size: 1.9rem; font-weight: 800; line-height: 1; letter-spacing: -0.5px; }
+.metric-mini .lbl { font-size: 0.75rem; color: #64748b; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+
+/* Cards de Gráficos Clean */
+.card-clean {
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.02);
+    background: #fff;
+}
+.card-header-clean {
+    background: transparent !important;
+    border-bottom: none !important;
+    padding: 1.25rem 1.25rem 0 1.25rem;
+}
+
+/* Listagem de Saídas */
+.card-saida {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    transition: all 0.2s ease-in-out;
+    background: #fff;
+}
+.card-saida:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+}
 
 .chart-wrap { position: relative; height: 200px; }
 </style>
@@ -31,23 +95,54 @@
 
 {% block content %}
 <!-- Header -->
-<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
     <div>
-        <h4 class="mb-0 fw-bold">
+        <h4 class="mb-0 fw-bold tracking-tight" style="color: #0f172a;">
             <i class="bi bi-house me-2" style="color:var(--cor-secundaria);"></i>
             Minhas Saídas
         </h4>
-        <small class="text-muted">{{ current_user.nome }}
-            {% if current_user.subunidade %}<span class="badge bg-secondary ms-1">{{ current_user.subunidade.sigla or current_user.subunidade.nome }}</span>{% endif %}
+        <small class="text-muted fw-medium">{{ current_user.nome }}
+            {% if current_user.subunidade %}<span class="badge bg-slate-100 text-secondary border ms-1" style="background:#f1f5f9; color:#475569;">{{ current_user.subunidade.sigla or current_user.subunidade.nome }}</span>{% endif %}
         </small>
     </div>
-    <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-primary">
+    <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-primary px-3 py-2 fw-semibold shadow-sm rounded-3">
         <i class="bi bi-plus-circle me-1"></i> Nova Saída
     </a>
 </div>
 
+<!-- Dicas do Super Admin colocadas no INÍCIO e Dinâmicas -->
+{% set dicas = [] %}
+{% if config_sistema.get('dica_1') %}{% set _ = dicas.append(config_sistema.get('dica_1')) %}{% endif %}
+{% if config_sistema.get('dica_2') %}{% set _ = dicas.append(config_sistema.get('dica_2')) %}{% endif %}
+{% if config_sistema.get('dica_3') %}{% set _ = dicas.append(config_sistema.get('dica_3')) %}{% endif %}
+{% if config_sistema.get('dica_4') %}{% set _ = dicas.append(config_sistema.get('dica_4')) %}{% endif %}
+
+{% if dicas %}
+<div class="mb-4">
+    <div class="dicas-banner">
+        <div class="d-flex align-items-center gap-3 w-100">
+            <div class="rounded-circle p-2 d-flex align-items-center justify-content-center floating-lamp" style="width: 40px; height: 40px; flex-shrink: 0;">
+                <i class="bi bi-lightbulb-fill text-warning fs-5"></i>
+            </div>
+            
+            <div class="position-relative flex-grow-1 overflow-hidden d-flex align-items-center" style="min-height: 45px;">
+                {% set icons = ['bi-info-circle-fill text-primary','bi-check-circle-fill text-success','bi-star-fill text-warning','bi-bell-fill text-danger'] %}
+                
+                {# Mantém sua estrutura de loop intacta para renderizar as dicas na árvore do HTML #}
+                {% for dica in dicas %}
+                <div class="dica-item-animado align-items-start gap-2" data-dica-index="{{ loop.index0 }}">
+                    <i class="bi {{ icons[loop.index0] if loop.index0 < icons|length else 'bi-info-circle-fill text-primary' }} mt-0.5"></i>
+                    <span class="fw-medium text-secondary" style="font-size: 0.88rem; line-height: 1.4;">{{ dica }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Métricas rápidas -->
-<div class="row g-3 mb-3">
+<div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
         <div class="metric-mini">
             <div class="num text-primary">{{ stats.total }}</div>
@@ -74,14 +169,13 @@
     </div>
 </div>
 
-<!-- Gráficos + Dicas -->
-<div class="row g-3 mb-3">
-
+<!-- Gráficos -->
+<div class="row g-3 mb-4">
     <!-- Gráfico de status -->
     <div class="col-md-5">
-        <div class="card h-100">
-            <div class="card-header">
-                <h6 class="mb-0 fw-semibold" style="font-size:0.85rem;">
+        <div class="card h-100 card-clean">
+            <div class="card-header card-header-clean">
+                <h6 class="mb-0 fw-bold text-secondary" style="font-size:0.85rem;">
                     <i class="bi bi-pie-chart me-2"></i>Distribuição por Status
                 </h6>
             </div>
@@ -102,9 +196,9 @@
 
     <!-- Gráfico mensal -->
     <div class="col-md-7">
-        <div class="card h-100">
-            <div class="card-header">
-                <h6 class="mb-0 fw-semibold" style="font-size:0.85rem;">
+        <div class="card h-100 card-clean">
+            <div class="card-header card-header-clean">
+                <h6 class="mb-0 fw-bold text-secondary" style="font-size:0.85rem;">
                     <i class="bi bi-bar-chart me-2"></i>Saídas por Mês (últimos 6 meses)
                 </h6>
             </div>
@@ -122,49 +216,18 @@
             </div>
         </div>
     </div>
-
 </div>
-
-<!-- Dicas do Super Admin -->
-{% set dicas = [] %}
-{% if config_sistema.get('dica_1') %}{% set _ = dicas.append(config_sistema.get('dica_1')) %}{% endif %}
-{% if config_sistema.get('dica_2') %}{% set _ = dicas.append(config_sistema.get('dica_2')) %}{% endif %}
-{% if config_sistema.get('dica_3') %}{% set _ = dicas.append(config_sistema.get('dica_3')) %}{% endif %}
-{% if config_sistema.get('dica_4') %}{% set _ = dicas.append(config_sistema.get('dica_4')) %}{% endif %}
-
-{% if dicas %}
-<div class="card mb-3">
-    <div class="card-header">
-        <h6 class="mb-0 fw-semibold" style="font-size:0.85rem;">
-            <i class="bi bi-lightbulb-fill text-warning me-2"></i>Dicas e Orientações
-        </h6>
-    </div>
-    <div class="card-body">
-        <div class="row g-2">
-            {% set icons = ['bi-info-circle-fill','bi-check-circle-fill','bi-star-fill','bi-bell-fill'] %}
-            {% for dica in dicas %}
-            <div class="col-md-6">
-                <div class="dica-card d-flex align-items-start gap-2">
-                    <i class="bi {{ icons[loop.index0] if loop.index0 < icons|length else 'bi-info-circle-fill' }}"></i>
-                    <span>{{ dica }}</span>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-</div>
-{% endif %}
 
 <!-- Filtros de status -->
 <div class="mb-3 d-flex flex-wrap gap-2">
-    <a href="{{ url_for('user.dashboard') }}" class="btn btn-sm {% if not status_filtro and not ver_historico %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+    <a href="{{ url_for('user.dashboard') }}" class="btn btn-sm {% if not status_filtro and not ver_historico %}btn-primary{% else %}btn-outline-secondary{% endif %} rounded-2">
         Recentes
     </a>
-    <a href="?historico=1" class="btn btn-sm {% if ver_historico and not status_filtro %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+    <a href="?historico=1" class="btn btn-sm {% if ver_historico and not status_filtro %}btn-secondary{% else %}btn-outline-secondary{% endif %} rounded-2">
         <i class="bi bi-clock-history me-1"></i>Todo o Histórico
     </a>
     {% for s in StatusSaida.TODOS %}
-    <a href="?status={{ s }}" class="btn btn-sm {% if status_filtro == s %}btn-{{ StatusSaida.BADGES[s] }}{% else %}btn-outline-secondary{% endif %}">
+    <a href="?status={{ s }}" class="btn btn-sm {% if status_filtro == s %}btn-{{ StatusSaida.BADGES[s] }}{% else %}btn-outline-secondary{% endif %} rounded-2">
         {{ StatusSaida.LABELS[s] }}
     </a>
     {% endfor %}
@@ -175,40 +238,41 @@
 <div class="row g-3">
     {% for saida in saidas %}
     <div class="col-md-6 col-xl-4">
-        <div class="card h-100 border-start border-4 border-{{ saida.status_badge }}">
+        <div class="card h-100 border-0 border-start border-4 border-{{ saida.status_badge }} card-saida">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <span class="badge bg-{{ saida.status_badge }}">{{ saida.status_label }}</span>
-                    <small class="text-muted">{{ saida.data_registro.strftime('%d/%m/%Y') }}</small>
+                    <small class="text-muted fw-medium">{{ saida.data_registro.strftime('%d/%m/%Y') }}</small>
                 </div>
-                <h6 class="fw-bold mb-1">{{ saida.local }}</h6>
-                <p class="text-muted mb-2" style="font-size:0.85rem;">{{ saida.motivo }}</p>
-                <div class="d-flex gap-3 mb-2" style="font-size:0.82rem;">
-                    <div>
+                <h6 class="fw-bold mb-1" style="color: #1e293b; font-size:0.95rem;">{{ saida.local }}</h6>
+                <p class="text-muted mb-3" style="font-size:0.85rem; line-height: 1.4;">{{ saida.motivo }}</p>
+                
+                <div class="row g-2 mb-2 border-top pt-2" style="font-size:0.8rem; color: #475569;">
+                    <div class="col-6">
                         <i class="bi bi-calendar-event text-primary me-1"></i>
-                        <strong>Saída:</strong> {{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '—' }}
+                        <strong>Saída:</strong> <span class="d-block text-secondary mt-0.5">{{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '—' }}</span>
                     </div>
                     {% if saida.data_retorno %}
-                    <div>
+                    <div class="col-6">
                         <i class="bi bi-calendar-check text-success me-1"></i>
-                        <strong>Retorno:</strong> {{ saida.data_retorno.strftime('%d/%m/%Y') }}
+                        <strong>Retorno:</strong> <span class="d-block text-secondary mt-0.5">{{ saida.data_retorno.strftime('%d/%m/%Y') }}</span>
                     </div>
                     {% endif %}
                 </div>
 
                 {% if saida.status == 'cancelado' and saida.motivo_cancelamento %}
-                <div class="alert alert-secondary py-1 px-2 mb-2" style="font-size:0.78rem;">
+                <div class="alert alert-secondary py-1 px-2 mb-2 rounded-2" style="font-size:0.78rem;">
                     <i class="bi bi-x-circle me-1"></i><strong>Cancelado:</strong> {{ saida.motivo_cancelamento }}
                 </div>
                 {% endif %}
 
-                {% if saida.editavel %}
-                <div class="d-flex gap-2 mt-2">
+                {% if saidable or saida.editavel %}
+                <div class="d-flex gap-2 mt-3">
                     <a href="{{ url_for('user.editar_saida', id=saida.id) }}"
-                       class="btn btn-sm btn-outline-primary flex-grow-1">
+                       class="btn btn-sm btn-outline-primary flex-grow-1 rounded-2">
                         <i class="bi bi-pencil me-1"></i>Editar
                     </a>
-                    <button class="btn btn-sm btn-outline-danger"
+                    <button class="btn btn-sm btn-outline-danger rounded-2"
                             data-bs-toggle="modal"
                             data-bs-target="#modalCancelar"
                             data-id="{{ saida.id }}"
@@ -225,18 +289,18 @@
 
 {% if mostrar_botao_historico %}
 <div class="text-center mt-4">
-    <a href="?historico=1" class="btn btn-outline-secondary">
+    <a href="?historico=1" class="btn btn-outline-secondary px-4 rounded-3">
         <i class="bi bi-clock-history me-2"></i>Visualizar histórico completo
     </a>
 </div>
 {% endif %}
 
 {% else %}
-<div class="text-center py-5 text-muted">
-    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+<div class="text-center py-5 text-muted card card-clean m-1">
+    <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
     Nenhuma saída encontrada.
     <br>
-    <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-primary mt-3">
+    <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-primary mt-3 rounded-3">
         <i class="bi bi-plus-circle me-1"></i> Registrar Saída
     </a>
 </div>
@@ -245,23 +309,23 @@
 <!-- Modal Cancelamento -->
 <div class="modal fade" id="modalCancelar" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:16px;">
             <div class="modal-header border-0">
-                <h5 class="modal-title"><i class="bi bi-x-circle text-danger me-2"></i>Cancelar Saída</h5>
+                <h5 class="modal-title fw-bold"><i class="bi bi-x-circle text-danger me-2"></i>Cancelar Saída</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" id="formCancelar">
-                <div class="modal-body">
-                    <p class="text-muted">Cancelando saída para: <strong id="cancelarLocal"></strong></p>
+                <div class="modal-body pt-0">
+                    <p class="text-muted">Cancelando saída para: <strong id="cancelarLocal" class="text-dark"></strong></p>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Motivo do cancelamento <span class="text-danger">*</span></label>
-                        <textarea name="motivo_cancelamento" class="form-control" rows="3"
-                                  placeholder="Descreva o motivo..." required maxlength="500"></textarea>
+                        <label class="form-label fw-semibold" style="font-size:0.85rem;">Motivo do cancelamento <span class="text-danger">*</span></label>
+                        <textarea name="motivo_cancelamento" class="form-control rounded-3" rows="3"
+                                  placeholder="Descreva o motivo de forma detalhada..." required maxlength="500"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                    <button type="submit" class="btn btn-danger"><i class="bi bi-x-circle me-1"></i>Confirmar</button>
+                    <button type="button" class="btn btn-light rounded-3" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" class="btn btn-danger rounded-3"><i class="bi bi-x-circle me-1"></i>Confirmar</button>
                 </div>
             </form>
         </div>
@@ -271,6 +335,41 @@
 
 {% block extra_js %}
 <script>
+// --- MOTOR DE ANIMAÇÃO E SORTEIO DAS DICAS ---
+document.addEventListener('DOMContentLoaded', function() {
+    const items = document.querySelectorAll('.dica-item-animado');
+    if (items.length > 0) {
+        // 1. Sorteia o index inicial da primeira dica a ser exibida
+        let currentIndex = Math.floor(Math.random() * items.length);
+        
+        // Função responsável pela transição sutil
+        function showDica(index) {
+            // Remove a classe ativa de todos
+            items.forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Ativa o item sorteado/atual com um micro delay para a transição do CSS fluir melhor
+            setTimeout(() => {
+                if(items[index]) {
+                    items[index].classList.add('active');
+                }
+            }, 50);
+        }
+        
+        // Exibe a primeira dica sorteada imediatamente
+        showDica(currentIndex);
+        
+        // 2. Se houver mais de uma dica, roda o carrossel a cada 7 segundos
+        if (items.length > 1) {
+            setInterval(() => {
+                currentIndex = (currentIndex + 1) % items.length;
+                showDica(currentIndex);
+            }, 7000); // 7 segundos é o tempo ideal de leitura sutil
+        }
+    }
+});
+
 document.getElementById('modalCancelar').addEventListener('show.bs.modal', function(e) {
     const btn = e.relatedTarget;
     document.getElementById('cancelarLocal').textContent = btn.dataset.local;
