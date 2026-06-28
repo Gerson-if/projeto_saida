@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% block title %}Configurações — Admin{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h4 class="mb-0 fw-bold">
+        <i class="bi bi-gear me-2" style="color:var(--cor-secundaria);"></i>
+        Configurações do Sistema
+    </h4>
+    <small class="text-muted">Identidade visual, textos e ícones</small>
+</div>
+
+<form method="POST" enctype="multipart/form-data" id="formConfig">
+<div class="row g-4">
+
+    <!-- Textos -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0 fw-semibold"><i class="bi bi-type me-2"></i>Textos do Sistema</h6></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Nome do Sistema</label>
+                    <input type="text" name="nome_sistema" class="form-control form-control-sm"
+                           value="{{ configs.get('nome_sistema','') }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Subtítulo / Dica de Login</label>
+                    <input type="text" name="subtitulo" class="form-control form-control-sm"
+                           value="{{ configs.get('subtitulo','') }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Nome da Organização</label>
+                    <input type="text" name="organizacao" class="form-control form-control-sm"
+                           value="{{ configs.get('organizacao','') }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Rodapé (PDF e Sistema)</label>
+                    <input type="text" name="rodape" class="form-control form-control-sm"
+                           value="{{ configs.get('rodape','') }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dicas para usuários -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0 fw-semibold"><i class="bi bi-lightbulb me-2"></i>Dicas para Usuários (Dashboard)</h6></div>
+            <div class="card-body">
+                <small class="text-muted d-block mb-2">Essas dicas aparecem no painel de todos os usuários. Separe cada dica com uma linha em branco.</small>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Dica 1</label>
+                    <input type="text" name="dica_1" class="form-control form-control-sm"
+                           placeholder="Ex: Registre sua saída com antecedência..." value="{{ configs.get('dica_1','') }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Dica 2</label>
+                    <input type="text" name="dica_2" class="form-control form-control-sm"
+                           placeholder="Ex: Mantenha seu telefone de contato atualizado..." value="{{ configs.get('dica_2','') }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Dica 3</label>
+                    <input type="text" name="dica_3" class="form-control form-control-sm"
+                           placeholder="Ex: Em caso de dúvidas, procure a administração..." value="{{ configs.get('dica_3','') }}">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-semibold small">Dica 4 (opcional)</label>
+                    <input type="text" name="dica_4" class="form-control form-control-sm"
+                           placeholder="Dica adicional..." value="{{ configs.get('dica_4','') }}">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cores -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0 fw-semibold"><i class="bi bi-palette me-2"></i>Cores</h6></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold small">Cor Primária (Sidebar)</label>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input type="color" name="cor_primaria" id="cor_primaria" class="form-control form-control-color"
+                               value="{{ configs.get('cor_primaria','#1a3a5c') }}">
+                        <input type="text" id="cor_primaria_hex" class="form-control form-control-sm"
+                               value="{{ configs.get('cor_primaria','#1a3a5c') }}" readonly>
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-semibold small">Cor Secundária (Destaque)</label>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input type="color" name="cor_secundaria" id="cor_secundaria" class="form-control form-control-color"
+                               value="{{ configs.get('cor_secundaria','#2980b9') }}">
+                        <input type="text" id="cor_secundaria_hex" class="form-control form-control-sm"
+                               value="{{ configs.get('cor_secundaria','#2980b9') }}" readonly>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Imagens -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0 fw-semibold"><i class="bi bi-image me-2"></i>Imagens e Ícones</h6></div>
+            <div class="card-body">
+                <div class="row g-4">
+                    {% set imgs = [
+                        ('logo',           'Logo (sidebar)',           'Exibida na barra lateral. Recomendado: 200×200px PNG.'),
+                        ('favicon',        'Favicon (aba do browser)', 'Ícone exibido na aba do navegador. Recomendado: 32×32px ICO/PNG.'),
+                        ('brasao',         'Brasão / Emblema',         'Usado nos relatórios PDF. Recomendado: PNG transparente.'),
+                        ('logo_relatorio', 'Logo Relatório',           'Logo principal nos cabeçalhos de PDF.'),
+                    ] %}
+                    {% for campo, label, dica in imgs %}
+                    <div class="col-sm-6 col-lg-3">
+                        <label class="form-label fw-semibold small">{{ label }}</label>
+
+                        <!-- Preview atual -->
+                        <div id="preview-atual-{{ campo }}" class="mb-2 p-2 border rounded text-center {% if not configs.get(campo) %}d-none{% endif %}" style="background:#f8f9fa;position:relative;">
+                            <img id="img-atual-{{ campo }}"
+                                 src="{% if configs.get(campo) %}{{ url_for('static', filename='uploads/' + configs.get(campo)) }}{% endif %}"
+                                 style="max-height:70px;max-width:100%;object-fit:contain;" alt="{{ label }}">
+                            <div class="text-muted mt-1" style="font-size:0.7rem;" id="nome-atual-{{ campo }}">
+                                {% if configs.get(campo) %}{{ configs.get(campo) }}{% endif %}
+                            </div>
+                            <button type="button" class="btn btn-sm btn-danger mt-1" style="font-size:0.7rem;padding:2px 8px;"
+                                    onclick="removerImagem('{{ campo }}')">
+                                <i class="bi bi-trash me-1"></i>Remover
+                            </button>
+                            <input type="hidden" name="remover_{{ campo }}" id="remover_{{ campo }}" value="">
+                        </div>
+
+                        <!-- Preview novo (antes de salvar) -->
+                        <div id="preview-novo-{{ campo }}" class="mb-2 p-2 border rounded text-center d-none" style="background:#e8f4fd;border-color:#bee3f8!important;">
+                            <img id="img-novo-{{ campo }}" src="" style="max-height:70px;max-width:100%;object-fit:contain;" alt="">
+                            <div class="text-muted mt-1" style="font-size:0.68rem;">Pré-visualização (não salvo ainda)</div>
+                        </div>
+
+                        <input type="file" name="{{ campo }}" id="file-{{ campo }}" class="form-control form-control-sm"
+                               accept="image/*,.ico" onchange="previewImagem('{{ campo }}', this)">
+                        <small class="text-muted">{{ dica }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="mt-4 d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-circle me-1"></i>Salvar Configurações
+    </button>
+    <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-secondary">Cancelar</a>
+</div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Sync color pickers
+document.querySelectorAll('input[type="color"]').forEach(el => {
+    const hexInput = document.getElementById(el.id + '_hex');
+    el.addEventListener('input', () => { if (hexInput) hexInput.value = el.value; });
+});
+
+// Preview de nova imagem
+function previewImagem(campo, input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('img-novo-' + campo).src = e.target.result;
+        document.getElementById('preview-novo-' + campo).classList.remove('d-none');
+    };
+    reader.readAsDataURL(file);
+    // Cancelar remoção se o usuário escolheu novo arquivo
+    document.getElementById('remover_' + campo).value = '';
+}
+
+// Remover imagem existente
+function removerImagem(campo) {
+    if (!confirm('Remover esta imagem?')) return;
+    document.getElementById('preview-atual-' + campo).classList.add('d-none');
+    document.getElementById('remover_' + campo).value = '1';
+    // Limpar também input de arquivo para não reenviar
+    document.getElementById('file-' + campo).value = '';
+    document.getElementById('preview-novo-' + campo).classList.add('d-none');
+}
+</script>
+{% endblock %}

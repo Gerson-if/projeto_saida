@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Nova Saída{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h4 class="mb-0 fw-bold">
+        <i class="bi bi-plus-circle me-2" style="color:var(--cor-secundaria);"></i>
+        Registrar Saída
+    </h4>
+    <small class="text-muted">Preencha os dados da sua saída</small>
+</div>
+
+<div class="row justify-content-center">
+<div class="col-lg-8">
+<div class="card">
+<div class="card-body p-4">
+<form method="POST">
+    <!-- Local -->
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Local de Destino <span class="text-danger">*</span></label>
+        <input type="text" name="local" class="form-control"
+               value="{{ form_data.get('local','') }}"
+               placeholder="Ex: Campo Grande/MS — Rua das Palmeiras, 500"
+               maxlength="255" required>
+    </div>
+
+    <!-- Motivo com sugestões -->
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Motivo <span class="text-danger">*</span></label>
+
+        {% if motivos_sugeridos %}
+        <div class="mb-2 d-flex flex-wrap gap-2">
+            {% for m in motivos_sugeridos %}
+            <button type="button" class="btn btn-sm btn-outline-secondary sugestao-motivo"
+                    onclick="selecionarMotivo(this, '{{ m }}')">
+                {{ m }}
+            </button>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <textarea name="motivo" id="motivo" class="form-control"
+                  rows="3" maxlength="{{ motivo_max }}"
+                  placeholder="Descreva o motivo da saída ou clique em uma sugestão acima..."
+                  required>{{ form_data.get('motivo','') }}</textarea>
+        <div class="d-flex justify-content-between">
+            <small class="text-muted">Você pode usar uma sugestão ou escrever livremente.</small>
+            <small class="text-muted" id="contador-motivo">0/{{ motivo_max }}</small>
+        </div>
+    </div>
+
+    <!-- Datas -->
+    <div class="row g-3 mb-3">
+        <div class="col-sm-6">
+            <label class="form-label fw-semibold">Data de Saída <span class="text-danger">*</span></label>
+            <input type="date" name="data_saida" class="form-control"
+                   value="{{ form_data.get('data_saida','') }}" required>
+            <small class="text-muted">O status muda para <strong>Em Trânsito</strong> nesta data.</small>
+        </div>
+        <div class="col-sm-6">
+            <label class="form-label fw-semibold">Previsão de Retorno</label>
+            <input type="date" name="data_retorno" class="form-control"
+                   value="{{ form_data.get('data_retorno','') }}">
+            <small class="text-muted">Ao expirar, o status muda para <strong>Retornado</strong>.</small>
+        </div>
+    </div>
+
+    <!-- Contato e endereço -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6">
+            <label class="form-label fw-semibold">Telefone de Contato</label>
+            <input type="text" name="telefone_contato" class="form-control"
+                   value="{{ form_data.get('telefone_contato','') }}"
+                   placeholder="(XX) 9XXXX-XXXX" maxlength="20">
+        </div>
+        <div class="col-sm-6">
+            <label class="form-label fw-semibold">Endereço no Destino</label>
+            <input type="text" name="endereco_destino" class="form-control"
+                   value="{{ form_data.get('endereco_destino','') }}"
+                   placeholder="Rua, número, bairro">
+        </div>
+    </div>
+
+    <!-- Info sobre automação -->
+    <div class="alert alert-info d-flex gap-2 mb-4" style="font-size:0.85rem;">
+        <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+        <div>
+            <strong>Status automático:</strong> O sistema atualiza o status automaticamente.
+            Você não precisa fazer nada após registrar — na data de saída o status vai para
+            <strong>Em Trânsito</strong>, e ao retornar para <strong>Retornado</strong>.
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-circle me-1"></i> Registrar Saída
+        </button>
+        <a href="{{ url_for('user.dashboard') }}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+</form>
+</div>
+</div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function selecionarMotivo(btn, texto) {
+    document.getElementById('motivo').value = texto;
+    document.querySelectorAll('.sugestao-motivo').forEach(b => b.classList.remove('active','btn-secondary'));
+    btn.classList.add('active','btn-secondary');
+    btn.classList.remove('btn-outline-secondary');
+    atualizarContador();
+}
+
+function atualizarContador() {
+    const el = document.getElementById('motivo');
+    const max = {{ motivo_max }};
+    document.getElementById('contador-motivo').textContent = `${el.value.length}/${max}`;
+}
+
+document.getElementById('motivo').addEventListener('input', function() {
+    atualizarContador();
+    // Remove destaque de sugestão se o usuário editou manualmente
+    document.querySelectorAll('.sugestao-motivo').forEach(b => {
+        b.classList.remove('active','btn-secondary');
+        b.classList.add('btn-outline-secondary');
+    });
+});
+atualizarContador();
+
+// Define data mínima = hoje
+const hoje = new Date().toISOString().split('T')[0];
+document.querySelector('input[name="data_saida"]').min = hoje;
+document.querySelector('input[name="data_saida"]').addEventListener('change', function() {
+    document.querySelector('input[name="data_retorno"]').min = this.value;
+});
+</script>
+{% endblock %}

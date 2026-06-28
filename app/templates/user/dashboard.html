@@ -1,0 +1,338 @@
+{% extends 'base.html' %}
+{% block title %}Minhas Saídas{% endblock %}
+
+{% block extra_css %}
+<style>
+.dica-card {
+    background: linear-gradient(135deg, #e8f4fd, #dbeafe);
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    padding: 0.9rem 1.1rem;
+    font-size: 0.85rem;
+    color: #1e40af;
+    transition: transform 0.15s;
+}
+.dica-card:hover { transform: translateY(-1px); }
+.dica-card i { font-size: 1.1rem; flex-shrink: 0; }
+
+.metric-mini {
+    background: #fff;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+    text-align: center;
+}
+.metric-mini .num { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.metric-mini .lbl { font-size: 0.72rem; color: #6c757d; margin-top: 2px; }
+
+.chart-wrap { position: relative; height: 200px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+        <h4 class="mb-0 fw-bold">
+            <i class="bi bi-house me-2" style="color:var(--cor-secundaria);"></i>
+            Minhas Saídas
+        </h4>
+        <small class="text-muted">{{ current_user.nome }}
+            {% if current_user.subunidade %}<span class="badge bg-secondary ms-1">{{ current_user.subunidade.sigla or current_user.subunidade.nome }}</span>{% endif %}
+        </small>
+    </div>
+    <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-1"></i> Nova Saída
+    </a>
+</div>
+
+<!-- Métricas rápidas -->
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="metric-mini">
+            <div class="num text-primary">{{ stats.total }}</div>
+            <div class="lbl">Total de Saídas</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-mini">
+            <div class="num text-warning">{{ stats.agendadas }}</div>
+            <div class="lbl">Agendadas</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-mini">
+            <div class="num" style="color:#0d6efd;">{{ stats.em_transito }}</div>
+            <div class="lbl">Em Trânsito</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="metric-mini">
+            <div class="num text-success">{{ stats.retornadas }}</div>
+            <div class="lbl">Retornadas</div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos + Dicas -->
+<div class="row g-3 mb-3">
+
+    <!-- Gráfico de status -->
+    <div class="col-md-5">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0 fw-semibold" style="font-size:0.85rem;">
+                    <i class="bi bi-pie-chart me-2"></i>Distribuição por Status
+                </h6>
+            </div>
+            <div class="card-body d-flex align-items-center justify-content-center">
+                {% if stats.total > 0 %}
+                <div class="chart-wrap w-100">
+                    <canvas id="chartStatus"></canvas>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-3">
+                    <i class="bi bi-pie-chart display-6 d-block mb-2 opacity-25"></i>
+                    <small>Nenhum dado ainda</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico mensal -->
+    <div class="col-md-7">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0 fw-semibold" style="font-size:0.85rem;">
+                    <i class="bi bi-bar-chart me-2"></i>Saídas por Mês (últimos 6 meses)
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if stats.total > 0 %}
+                <div class="chart-wrap">
+                    <canvas id="chartMensal"></canvas>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-bar-chart display-6 d-block mb-2 opacity-25"></i>
+                    <small>Nenhum dado ainda</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Dicas do Super Admin -->
+{% set dicas = [] %}
+{% if config_sistema.get('dica_1') %}{% set _ = dicas.append(config_sistema.get('dica_1')) %}{% endif %}
+{% if config_sistema.get('dica_2') %}{% set _ = dicas.append(config_sistema.get('dica_2')) %}{% endif %}
+{% if config_sistema.get('dica_3') %}{% set _ = dicas.append(config_sistema.get('dica_3')) %}{% endif %}
+{% if config_sistema.get('dica_4') %}{% set _ = dicas.append(config_sistema.get('dica_4')) %}{% endif %}
+
+{% if dicas %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h6 class="mb-0 fw-semibold" style="font-size:0.85rem;">
+            <i class="bi bi-lightbulb-fill text-warning me-2"></i>Dicas e Orientações
+        </h6>
+    </div>
+    <div class="card-body">
+        <div class="row g-2">
+            {% set icons = ['bi-info-circle-fill','bi-check-circle-fill','bi-star-fill','bi-bell-fill'] %}
+            {% for dica in dicas %}
+            <div class="col-md-6">
+                <div class="dica-card d-flex align-items-start gap-2">
+                    <i class="bi {{ icons[loop.index0] if loop.index0 < icons|length else 'bi-info-circle-fill' }}"></i>
+                    <span>{{ dica }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Filtros de status -->
+<div class="mb-3 d-flex flex-wrap gap-2">
+    <a href="{{ url_for('user.dashboard') }}" class="btn btn-sm {% if not status_filtro and not ver_historico %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        Recentes
+    </a>
+    <a href="?historico=1" class="btn btn-sm {% if ver_historico and not status_filtro %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-clock-history me-1"></i>Todo o Histórico
+    </a>
+    {% for s in StatusSaida.TODOS %}
+    <a href="?status={{ s }}" class="btn btn-sm {% if status_filtro == s %}btn-{{ StatusSaida.BADGES[s] }}{% else %}btn-outline-secondary{% endif %}">
+        {{ StatusSaida.LABELS[s] }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- Listagem -->
+{% if saidas %}
+<div class="row g-3">
+    {% for saida in saidas %}
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100 border-start border-4 border-{{ saida.status_badge }}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <span class="badge bg-{{ saida.status_badge }}">{{ saida.status_label }}</span>
+                    <small class="text-muted">{{ saida.data_registro.strftime('%d/%m/%Y') }}</small>
+                </div>
+                <h6 class="fw-bold mb-1">{{ saida.local }}</h6>
+                <p class="text-muted mb-2" style="font-size:0.85rem;">{{ saida.motivo }}</p>
+                <div class="d-flex gap-3 mb-2" style="font-size:0.82rem;">
+                    <div>
+                        <i class="bi bi-calendar-event text-primary me-1"></i>
+                        <strong>Saída:</strong> {{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '—' }}
+                    </div>
+                    {% if saida.data_retorno %}
+                    <div>
+                        <i class="bi bi-calendar-check text-success me-1"></i>
+                        <strong>Retorno:</strong> {{ saida.data_retorno.strftime('%d/%m/%Y') }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if saida.status == 'cancelado' and saida.motivo_cancelamento %}
+                <div class="alert alert-secondary py-1 px-2 mb-2" style="font-size:0.78rem;">
+                    <i class="bi bi-x-circle me-1"></i><strong>Cancelado:</strong> {{ saida.motivo_cancelamento }}
+                </div>
+                {% endif %}
+
+                {% if saida.editavel %}
+                <div class="d-flex gap-2 mt-2">
+                    <a href="{{ url_for('user.editar_saida', id=saida.id) }}"
+                       class="btn btn-sm btn-outline-primary flex-grow-1">
+                        <i class="bi bi-pencil me-1"></i>Editar
+                    </a>
+                    <button class="btn btn-sm btn-outline-danger"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modalCancelar"
+                            data-id="{{ saida.id }}"
+                            data-local="{{ saida.local }}">
+                        <i class="bi bi-x-circle"></i>
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if mostrar_botao_historico %}
+<div class="text-center mt-4">
+    <a href="?historico=1" class="btn btn-outline-secondary">
+        <i class="bi bi-clock-history me-2"></i>Visualizar histórico completo
+    </a>
+</div>
+{% endif %}
+
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+    Nenhuma saída encontrada.
+    <br>
+    <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-primary mt-3">
+        <i class="bi bi-plus-circle me-1"></i> Registrar Saída
+    </a>
+</div>
+{% endif %}
+
+<!-- Modal Cancelamento -->
+<div class="modal fade" id="modalCancelar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title"><i class="bi bi-x-circle text-danger me-2"></i>Cancelar Saída</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="formCancelar">
+                <div class="modal-body">
+                    <p class="text-muted">Cancelando saída para: <strong id="cancelarLocal"></strong></p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Motivo do cancelamento <span class="text-danger">*</span></label>
+                        <textarea name="motivo_cancelamento" class="form-control" rows="3"
+                                  placeholder="Descreva o motivo..." required maxlength="500"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" class="btn btn-danger"><i class="bi bi-x-circle me-1"></i>Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('modalCancelar').addEventListener('show.bs.modal', function(e) {
+    const btn = e.relatedTarget;
+    document.getElementById('cancelarLocal').textContent = btn.dataset.local;
+    document.getElementById('formCancelar').action = `/usuario/cancelar/${btn.dataset.id}`;
+    this.querySelector('textarea').value = '';
+});
+
+{% if stats.total > 0 %}
+// Gráfico de status (donut)
+const ctxStatus = document.getElementById('chartStatus');
+if (ctxStatus) {
+    new Chart(ctxStatus, {
+        type: 'doughnut',
+        data: {
+            labels: ['Agendadas', 'Em Trânsito', 'Retornadas', 'Canceladas'],
+            datasets: [{
+                data: [{{ stats.agendadas }}, {{ stats.em_transito }}, {{ stats.retornadas }}, {{ stats.canceladas }}],
+                backgroundColor: ['#ffc107','#0d6efd','#198754','#6c757d'],
+                borderWidth: 2,
+                borderColor: '#fff',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 10 } }
+            },
+            cutout: '65%',
+        }
+    });
+}
+
+// Gráfico mensal (barras)
+const ctxMensal = document.getElementById('chartMensal');
+if (ctxMensal) {
+    const meses = {{ stats.meses_labels | tojson }};
+    const qtds  = {{ stats.meses_qtd | tojson }};
+    new Chart(ctxMensal, {
+        type: 'bar',
+        data: {
+            labels: meses,
+            datasets: [{
+                label: 'Saídas',
+                data: qtds,
+                backgroundColor: 'rgba(41, 128, 185, 0.7)',
+                borderColor: 'rgba(41, 128, 185, 1)',
+                borderWidth: 1,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f0f0f0' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+{% endif %}
+</script>
+{% endblock %}

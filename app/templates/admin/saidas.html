@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block title %}Saídas — Admin{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+        <h4 class="mb-0 fw-bold">
+            <i class="bi bi-journal-text me-2" style="color:var(--cor-secundaria);"></i>
+            Controle de Saídas
+        </h4>
+        <small class="text-muted">Visualização e filtros — status atualizado automaticamente</small>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-sm-4 col-md-3">
+                <label class="form-label small fw-semibold">Busca</label>
+                <input type="text" name="busca" class="form-control form-control-sm"
+                       value="{{ busca }}" placeholder="Nome, local ou motivo">
+            </div>
+            <div class="col-sm-4 col-md-2">
+                <label class="form-label small fw-semibold">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    {% for s in StatusSaida.TODOS %}
+                    <option value="{{ s }}" {% if status_filtro == s %}selected{% endif %}>
+                        {{ StatusSaida.LABELS[s] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-4 col-md-2">
+                <label class="form-label small fw-semibold">Data início</label>
+                <input type="date" name="data_inicio" class="form-control form-control-sm" value="{{ data_inicio }}">
+            </div>
+            <div class="col-sm-4 col-md-2">
+                <label class="form-label small fw-semibold">Data fim</label>
+                <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ data_fim }}">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="bi bi-search me-1"></i>Filtrar
+                </button>
+                <a href="{{ url_for('admin.listar_saidas') }}" class="btn btn-outline-secondary btn-sm ms-1">Limpar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Legenda de status automático -->
+<div class="alert alert-light border mb-3 d-flex flex-wrap gap-3 align-items-center" style="font-size:0.82rem;">
+    <i class="bi bi-robot text-primary"></i>
+    <strong>Status automáticos:</strong>
+    <span class="badge bg-warning text-dark">Agendada</span> → saída futura &nbsp;|&nbsp;
+    <span class="badge bg-primary">Em Trânsito</span> → saída iniciada &nbsp;|&nbsp;
+    <span class="badge bg-success">Retornado</span> → data de retorno expirou
+    <span class="ms-auto text-muted">Atualizado a cada 10 min (ou via <code>flask atualizar-status</code>)</span>
+</div>
+
+<!-- Tabela -->
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">#</th>
+                        <th>Militar</th>
+                        <th>Destino</th>
+                        <th>Motivo</th>
+                        <th>Saída</th>
+                        <th>Retorno</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for saida in saidas %}
+                    <tr>
+                        <td class="ps-3 text-muted" style="font-size:0.8rem;">{{ saida.id }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="user-avatar-placeholder" style="width:28px;height:28px;font-size:0.7rem;">
+                                    {{ saida.usuario.nome[0].upper() if saida.usuario else '?' }}
+                                </div>
+                                <div>
+                                    <div style="font-size:0.85rem;font-weight:500;">{{ saida.usuario.nome if saida.usuario else '—' }}</div>
+                                    <div class="text-muted" style="font-size:0.72rem;">{{ saida.cpf_usuario }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="font-size:0.85rem;">{{ saida.local }}</td>
+                        <td style="font-size:0.82rem;max-width:200px;">
+                            <span class="text-truncate d-inline-block" style="max-width:180px;" title="{{ saida.motivo }}">
+                                {{ saida.motivo }}
+                            </span>
+                        </td>
+                        <td style="font-size:0.85rem;">{{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '—' }}</td>
+                        <td style="font-size:0.85rem;">{{ saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else '—' }}</td>
+                        <td>
+                            <span class="badge bg-{{ saida.status_badge }}">{{ saida.status_label }}</span>
+                            {% if saida.status_atualizado_em %}
+                            <div class="text-muted" style="font-size:0.68rem;" title="Atualizado em {{ saida.status_atualizado_em.strftime('%d/%m %H:%M') }}">
+                                <i class="bi bi-robot"></i> {{ saida.status_atualizado_em.strftime('%d/%m') }}
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7" class="text-center py-4 text-muted">Nenhuma saída encontrada.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if saidas %}
+    <div class="card-footer text-muted small py-2 px-3">
+        {{ saidas|length }} registro(s) encontrado(s)
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
