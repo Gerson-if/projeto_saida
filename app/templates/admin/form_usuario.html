@@ -49,9 +49,9 @@
                             </button>
                             {% endif %}
                         </div>
-                        <input type="file" name="foto" id="fotoInput" class="d-none" accept="image/*" onchange="previewFoto(this)">
+                        <input type="file" name="foto" id="fotoInput" class="d-none" accept="image/png,image/jpeg,image/gif,image/webp" onchange="previewFoto(this)">
                         <input type="hidden" name="remover_foto" id="removerFoto" value="">
-                        <small class="text-muted d-block mt-1" style="font-size:0.72rem;">PNG, JPG. Máximo 5MB.</small>
+                        <small class="text-muted d-block mt-1" style="font-size:0.72rem;">PNG, JPG, GIF ou WEBP. Máximo 5MB.</small>
                     </div>
 
                     <div class="mb-3">
@@ -60,7 +60,8 @@
                         </label>
                         <input type="text" name="nome" class="form-control"
                                value="{{ usuario.nome if usuario else '' }}"
-                               placeholder="Nome completo do usuário" required>
+                               placeholder="Nome completo do usuário"
+                               maxlength="100" minlength="2" required>
                     </div>
 
                     <div class="mb-3">
@@ -69,7 +70,8 @@
                         </label>
                         <input type="text" name="cpf" class="form-control"
                                value="{{ usuario.cpf if usuario else '' }}"
-                               placeholder="CPF ou identificação" required>
+                               placeholder="CPF ou identificação"
+                               maxlength="14" required>
                         <div class="form-text">Este será o login de acesso ao sistema.</div>
                     </div>
 
@@ -83,6 +85,7 @@
                                 <input type="password" name="{{ 'senha' if acao == 'novo' else 'nova_senha' }}"
                                        id="senhaInput" class="form-control"
                                        placeholder="{{ 'Mínimo 4 caracteres' if acao == 'novo' else 'Deixe em branco para não alterar' }}"
+                                       minlength="4" maxlength="72"
                                        {{ 'required' if acao == 'novo' else '' }}>
                                 <button type="button" class="btn btn-outline-secondary" onclick="toggleSenha()">
                                     <i class="bi bi-eye" id="senhaIcon"></i>
@@ -149,6 +152,14 @@
 function previewFoto(input) {
     const file = input.files[0];
     if (!file) return;
+
+    const TAMANHO_MAXIMO = 5 * 1024 * 1024; // 5 MB — mesmo limite validado no servidor
+    if (file.size > TAMANHO_MAXIMO) {
+        alert('A imagem excede o tamanho máximo permitido (5 MB). Escolha um arquivo menor.');
+        input.value = '';
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = function(e) {
         const img = document.getElementById('avatar-img');

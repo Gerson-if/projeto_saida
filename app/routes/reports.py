@@ -7,6 +7,7 @@ from flask_login import login_required, current_user
 from functools import wraps
 from app.models import Registro, Usuario, ConfigSistema, Subunidade
 from app import db
+from app.validators import validar_data, parse_int_seguro
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -31,29 +32,35 @@ def get_saidas_filtradas(data_inicio=None, data_fim=None, usuario_id=None,
                           status=None, busca_exata=None, subunidade_id=None):
     query = Registro.query.join(Usuario, Registro.cpf_usuario == Usuario.cpf)
 
-    if data_inicio and data_fim:
-        di = datetime.strptime(data_inicio, '%Y-%m-%d')
-        df = datetime.strptime(data_fim, '%Y-%m-%d')
+    di_dt, _ = validar_data(data_inicio or "", campo="data de início") if data_inicio else (None, [])
+    df_dt, _ = validar_data(data_fim or "", campo="data de fim") if data_fim else (None, [])
+
+    if di_dt and df_dt:
         query = query.filter(
-            ((Registro.data_saida >= di) & (Registro.data_saida <= df)) |
-            ((Registro.data_retorno >= di) & (Registro.data_retorno <= df)) |
-            ((Registro.data_saida <= di) & (Registro.data_retorno >= df))
+            ((Registro.data_saida >= di_dt) & (Registro.data_saida <= df_dt)) |
+            ((Registro.data_retorno >= di_dt) & (Registro.data_retorno <= df_dt)) |
+            ((Registro.data_saida <= di_dt) & (Registro.data_retorno >= df_dt))
         )
     elif busca_exata:
-        data_exata = datetime.strptime(busca_exata, '%Y-%m-%d')
-        query = query.filter(
-            db.func.date(Registro.data_saida) == data_exata.date()
-        )
+        data_exata_dt, _ = validar_data(busca_exata, campo="data exata")
+        if data_exata_dt:
+            query = query.filter(
+                db.func.date(Registro.data_saida) == data_exata_dt.date()
+            )
 
-    if subunidade_id:
-        query = query.filter(Usuario.subunidade_id == int(subunidade_id))
+    subunidade_id_valida = parse_int_seguro(subunidade_id, minimo=1) if subunidade_id else None
+    if subunidade_id_valida is not None:
+        query = query.filter(Usuario.subunidade_id == subunidade_id_valida)
 
-    if usuario_id:
-        usuario = Usuario.query.get(usuario_id)
+    usuario_id_valido = parse_int_seguro(usuario_id, minimo=1) if usuario_id else None
+    if usuario_id_valido is not None:
+        usuario = db.session.get(Usuario, usuario_id_valido)
         if usuario:
             query = query.filter(Registro.cpf_usuario == usuario.cpf)
 
-    if status:
+    if status and status in (
+        "agendada", "em_transito", "retornado", "cancelado", "finalizado"
+    ):
         query = query.filter(Registro.status == status)
 
     return query.order_by(Registro.data_saida.desc()).all()
@@ -82,6 +89,14 @@ def _load_image_safe(filepath, max_w_cm, max_h_cm):
 
 
 def gerar_pdf_relatorio(saidas, titulo="Relatório de Saídas", subtitulo=""):
+    from xml.sax.saxutils import escape as _xml_escape
+
+    def _p(texto: str, estilo) -> Paragraph:
+        """Constrói um Paragraph do ReportLab escapando XML (Paragraph
+        interpreta o texto como markup; sem escape, caracteres como
+        & < > poderiam quebrar a renderização ou alterar a formatação)."""
+        return Paragraph(_xml_escape(texto or ''), estilo)
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
                             rightMargin=1.5*cm, leftMargin=1.5*cm,
@@ -90,14 +105,14 @@ def gerar_pdf_relatorio(saidas, titulo="Relatório de Saídas", subtitulo=""):
     story = []
 
     # Config
-    nome_sistema = ConfigSistema.get('nome_sistema', 'Sistema de Controle de Saídas')
-    organizacao  = ConfigSistema.get('organizacao', 'Organização Militar')
+    nome_sistema = ConfigSistema.get('nome_sistema', 'Sistema de Controle de Saídas') or 'Sistema de Controle de Saídas'
+    organizacao  = ConfigSistema.get('organizacao', 'Organização Militar') or 'Organização Militar'
     logo_rel     = ConfigSistema.get('logo_relatorio')
     brasao       = ConfigSistema.get('brasao')
-    rodape_texto = ConfigSistema.get('rodape', f'Documento gerado em {datetime.now().strftime("%d/%m/%Y %H:%M")}')
+    rodape_texto = ConfigSistema.get('rodape') or f'Documento gerado em {datetime.now().strftime("%d/%m/%Y %H:%M")}'
 
     # Cor primária
-    cor_hex = ConfigSistema.get('cor_primaria', '#2c3e50').lstrip('#')
+    cor_hex = (ConfigSistema.get('cor_primaria', '#2c3e50') or '#2c3e50').lstrip('#')
     try:
         cor_r = int(cor_hex[0:2], 16) / 255
         cor_g = int(cor_hex[2:4], 16) / 255
@@ -135,14 +150,14 @@ def gerar_pdf_relatorio(saidas, titulo="Relatório de Saídas", subtitulo=""):
                                    fontSize=10, alignment=TA_CENTER, textColor=colors.grey)
 
     centro = [
-        Paragraph(organizacao.upper(), ParagraphStyle('Org', fontName='Helvetica-Bold',
-                  fontSize=10, alignment=TA_CENTER, textColor=colors.grey)),
-        Paragraph(nome_sistema, titulo_style),
-        Paragraph(titulo, ParagraphStyle('TitSub', fontName='Helvetica-Bold',
-                  fontSize=11, alignment=TA_CENTER, textColor=cor_primaria)),
+        _p(organizacao.upper(), ParagraphStyle('Org', fontName='Helvetica-Bold',
+           fontSize=10, alignment=TA_CENTER, textColor=colors.grey)),
+        _p(nome_sistema, titulo_style),
+        _p(titulo, ParagraphStyle('TitSub', fontName='Helvetica-Bold',
+           fontSize=11, alignment=TA_CENTER, textColor=cor_primaria)),
     ]
     if subtitulo:
-        centro.append(Paragraph(subtitulo, sub_style))
+        centro.append(_p(subtitulo, sub_style))
 
     # Altura fixa da linha de cabeçalho para não distorcer layout
     header_table_data = [[brasao_cell or '', centro, logo_cell or '']]
@@ -177,7 +192,7 @@ def gerar_pdf_relatorio(saidas, titulo="Relatório de Saídas", subtitulo=""):
                                  alignment=TA_CENTER, leading=9)
 
     headers    = ['#', 'Nome', 'CPF', 'Subunidade', 'Telefone', 'Motivo', 'Local', 'Saída', 'Retorno', 'Status']
-    header_row = [Paragraph(h, col_style) for h in headers]
+    header_row = [_p(h, col_style) for h in headers]
     data_rows  = [header_row]
 
     status_colors_map = {
@@ -193,17 +208,19 @@ def gerar_pdf_relatorio(saidas, titulo="Relatório de Saídas", subtitulo=""):
         if saida.usuario and saida.usuario.subunidade:
             sub_nome = saida.usuario.subunidade.sigla or saida.usuario.subunidade.nome
 
+        motivo_txt = saida.motivo or ''
+        local_txt = saida.local or ''
         row = [
-            Paragraph(str(i), ctr_style),
-            Paragraph(saida.usuario.nome if saida.usuario else '-', cell_style),
-            Paragraph(saida.cpf_usuario or '-', ctr_style),
-            Paragraph(sub_nome or '-', ctr_style),
-            Paragraph(saida.telefone_contato or '-', ctr_style),
-            Paragraph((saida.motivo[:55] + '…') if len(saida.motivo) > 55 else saida.motivo, cell_style),
-            Paragraph((saida.local[:40] + '…') if len(saida.local) > 40 else saida.local, cell_style),
-            Paragraph(saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '-', ctr_style),
-            Paragraph(saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else '-', ctr_style),
-            Paragraph(saida.status_label, st_style),
+            _p(str(i), ctr_style),
+            _p(saida.usuario.nome if saida.usuario else '-', cell_style),
+            _p(saida.cpf_usuario or '-', ctr_style),
+            _p(sub_nome or '-', ctr_style),
+            _p(saida.telefone_contato or '-', ctr_style),
+            _p((motivo_txt[:55] + '…') if len(motivo_txt) > 55 else motivo_txt, cell_style),
+            _p((local_txt[:40] + '…') if len(local_txt) > 40 else local_txt, cell_style),
+            _p(saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '-', ctr_style),
+            _p(saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else '-', ctr_style),
+            _p(saida.status_label, st_style),
         ]
         data_rows.append(row)
 
@@ -234,7 +251,7 @@ def gerar_pdf_relatorio(saidas, titulo="Relatório de Saídas", subtitulo=""):
     story.append(Spacer(1, 0.15*cm))
     rodape_style = ParagraphStyle('Rodape', fontName='Helvetica', fontSize=8,
                                    textColor=colors.grey, alignment=TA_CENTER)
-    story.append(Paragraph(rodape_texto, rodape_style))
+    story.append(_p(rodape_texto, rodape_style))
 
     doc.build(story)
     buffer.seek(0)
@@ -272,6 +289,16 @@ def por_periodo():
             'subunidade_id': subunidade_id,
         }
 
+        data_inicio_dt, erros_data_inicio = validar_data(data_inicio, campo="data de início") if data_inicio else (None, [])
+        data_fim_dt, erros_data_fim = validar_data(data_fim, campo="data de fim") if data_fim else (None, [])
+
+        if erros_data_inicio or erros_data_fim:
+            for e in (*erros_data_inicio, *erros_data_fim):
+                flash(e, "danger")
+            return render_template('reports/periodo.html',
+                                   usuarios=usuarios, subunidades=subunidades,
+                                   saidas=saidas, filtros=filtros)
+
         saidas = get_saidas_filtradas(
             data_inicio=data_inicio, data_fim=data_fim,
             usuario_id=usuario_id, status=status,
@@ -279,10 +306,13 @@ def por_periodo():
         )
 
         partes = []
-        if data_inicio and data_fim:
-            partes.append(f'Período: {datetime.strptime(data_inicio, "%Y-%m-%d").strftime("%d/%m/%Y")} a {datetime.strptime(data_fim, "%Y-%m-%d").strftime("%d/%m/%Y")}')
-        if subunidade_id:
-            sub = Subunidade.query.get(subunidade_id)
+        if data_inicio_dt and data_fim_dt:
+            partes.append(
+                f'Período: {data_inicio_dt.strftime("%d/%m/%Y")} a {data_fim_dt.strftime("%d/%m/%Y")}'
+            )
+        sub_id_valida = parse_int_seguro(subunidade_id, minimo=1) if subunidade_id else None
+        if sub_id_valida is not None:
+            sub = db.session.get(Subunidade, sub_id_valida)
             if sub:
                 partes.append(f'Subunidade: {sub.sigla or sub.nome}')
         subtitulo = ' | '.join(partes)
@@ -336,13 +366,29 @@ def data_exata():
         formato       = request.form.get('formato', 'visualizar')
 
         filtros = {'data_exata': data, 'usuario_id': usuario_id, 'status': status, 'subunidade_id': subunidade_id}
-        saidas  = get_saidas_filtradas(busca_exata=data, usuario_id=usuario_id, status=status, subunidade_id=subunidade_id)
+
+        data_dt, erros_data = validar_data(data, campo="data") if data else (None, [])
+        if erros_data:
+            for e in erros_data:
+                flash(e, "danger")
+            return render_template('reports/data_exata.html',
+                                   usuarios=usuarios, subunidades=subunidades,
+                                   saidas=saidas, filtros=filtros)
+
+        saidas = get_saidas_filtradas(busca_exata=data, usuario_id=usuario_id, status=status, subunidade_id=subunidade_id)
+
+        # Nome de arquivo seguro para o download (a data já validada só contém
+        # dígitos e hífens no formato YYYY-MM-DD, então é segura por si só;
+        # ainda assim normalizamos explicitamente para nunca depender da
+        # string crua do usuário no nome do arquivo).
+        data_arquivo = data_dt.strftime('%Y%m%d') if data_dt else datetime.now().strftime('%Y%m%d')
 
         partes = []
-        if data:
-            partes.append(f'Data: {datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")}')
-        if subunidade_id:
-            sub = Subunidade.query.get(subunidade_id)
+        if data_dt:
+            partes.append(f'Data: {data_dt.strftime("%d/%m/%Y")}')
+        sub_id_valida = parse_int_seguro(subunidade_id, minimo=1) if subunidade_id else None
+        if sub_id_valida is not None:
+            sub = db.session.get(Subunidade, sub_id_valida)
             if sub:
                 partes.append(f'Subunidade: {sub.sigla or sub.nome}')
         subtitulo = ' | '.join(partes)
@@ -350,7 +396,7 @@ def data_exata():
         if formato == 'pdf':
             buffer = gerar_pdf_relatorio(saidas, titulo='Relatório de Saídas por Data', subtitulo=subtitulo)
             return send_file(buffer, as_attachment=True,
-                             download_name=f'relatorio_data_{data}.pdf',
+                             download_name=f'relatorio_data_{data_arquivo}.pdf',
                              mimetype='application/pdf')
 
         elif formato == 'csv':
@@ -370,7 +416,7 @@ def data_exata():
             output.seek(0)
             return send_file(io.BytesIO(output.getvalue().encode('utf-8-sig')),
                              as_attachment=True,
-                             download_name=f'relatorio_data_{data}.csv',
+                             download_name=f'relatorio_data_{data_arquivo}.csv',
                              mimetype='text/csv')
 
     return render_template('reports/data_exata.html',

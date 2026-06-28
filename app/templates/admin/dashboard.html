@@ -1,87 +1,208 @@
 {% extends 'base.html' %}
 {% block title %}Dashboard Admin — Controle de Saídas{% endblock %}
 
+{% block extra_css %}
+<style>
+/* --- CONFIGURAÇÃO DE CORES E COMBATE AO EXCESSO DE BRANCO --- */
+body {
+    background-color: #f1f5f9; /* Fundo ligeiramente mais escuro e fosco */
+    color: #0f172a;
+}
+
+/* Painel de Dicas Premium no Topo */
+.dicas-banner-topo {
+    background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+    border: 1px solid #94a3b8;
+    border-radius: 12px;
+    padding: 0.8rem 1.2rem;
+    position: relative;
+    min-height: 55px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+
+.dica-item-animado {
+    display: none;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    width: 100%;
+}
+
+.dica-item-animado.active {
+    display: flex !important;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.floating-lamp {
+    animation: floating 3s ease-in-out infinite;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+@keyframes floating {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+/* Cards de Métricas Estilizados */
+.metric-mini {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 1.2rem 1rem;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+    border: 1px solid #cbd5e1;
+    transition: all 0.2s ease-in-out;
+}
+.metric-mini:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+    background: #f8fafc;
+}
+.metric-mini .num { font-size: 1.9rem; font-weight: 800; line-height: 1; letter-spacing: -0.5px; }
+.metric-mini .lbl { font-size: 0.75rem; color: #334155; margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+.metric-sub { font-size: 0.75rem; margin-top: 4px; font-weight: 500; }
+
+/* Content Cards Modificados */
+.card-clean {
+    border: 1px solid #cbd5e1;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+    background: #ffffff;
+    overflow: hidden;
+}
+.card-header-clean {
+    background: #e2e8f0 !important; /* Header mais escuro para melhor contraste */
+    border-bottom: 1px solid #cbd5e1 !important;
+    padding: 0.9rem 1.25rem;
+}
+
+/* Correção de Visibilidade e Efeito Hover nas Tabelas */
+.table-custom-hover tbody tr {
+    transition: background-color 0.15s ease;
+}
+.table-custom-hover tbody tr:hover {
+    background-color: #e2e8f0 !important; /* Garante que a linha não fique branca ou suma */
+}
+.table-custom-hover tbody tr:hover td {
+    color: #0f172a !important; /* Mantém o texto bem escuro e legível no hover */
+}
+
+/* Correção Definitiva dos Botões Laterais de Ações Rápidas */
+.btn-acao-lateral {
+    background-color: #f8fafc !important;
+    color: #334155 !important;
+    border: 1px solid #cbd5e1 !important;
+    transition: all 0.2s ease;
+}
+.btn-acao-lateral:hover {
+    background-color: #e2e8f0 !important; /* Escurece sutilmente sem sumir o texto */
+    color: #0f172a !important;
+    border-color: #94a3b8 !important;
+}
+
+.chart-wrap { position: relative; height: 190px; width: 100%; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+<!-- Header -->
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
     <div>
-        <h4 class="mb-0 fw-bold">
+        <h4 class="mb-0 fw-bold tracking-tight" style="color: #0f172a;">
             <i class="bi bi-speedometer2 me-2" style="color:var(--cor-secundaria);"></i>
             Dashboard Administrativo
         </h4>
-        <small class="text-muted">Visão geral e indicadores operacionais — {{ now.strftime('%d/%m/%Y %H:%M') }}</small>
+        <small class="text-muted fw-medium">Visão geral e indicadores operacionais — {{ now.strftime('%d/%m/%Y %H:%M') }}</small>
     </div>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('admin.novo_usuario') }}" class="btn btn-primary btn-sm">
+        <a href="{{ url_for('admin.novo_usuario') }}" class="btn btn-outline-primary px-3 py-2 fw-semibold shadow-sm rounded-3 btn-sm">
             <i class="bi bi-person-plus me-1"></i> Novo Usuário
         </a>
-        <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-outline-primary btn-sm">
+        <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-primary px-3 py-2 fw-semibold shadow-sm rounded-3 btn-sm">
             <i class="bi bi-plus-circle me-1"></i> Registrar Saída
         </a>
     </div>
 </div>
 
-<!-- ── Indicadores ── -->
+<!-- ── Seção de Dicas Integrada ao Topo ── -->
+{% if dicas %}
+<div class="mb-4">
+    <div class="dicas-banner-topo">
+        <div class="d-flex align-items-center gap-3 w-100">
+            <div class="rounded-circle p-2 d-flex align-items-center justify-content-center floating-lamp" style="width: 36px; height: 36px; flex-shrink: 0;">
+                <i class="bi bi-lightbulb-fill text-warning fs-6"></i>
+            </div>
+            
+            <div class="position-relative flex-grow-1 overflow-hidden d-flex align-items-center" style="min-height: 38px;">
+                {% set icons = ['bi-info-circle-fill text-primary','bi-check-circle-fill text-success','bi-star-fill text-warning','bi-bell-fill text-danger'] %}
+                {% for dica in dicas %}
+                <div class="dica-item-animado align-items-center gap-2" data-dica-index="{{ loop.index0 }}">
+                    <i class="bi {{ icons[loop.index0] if loop.index0 < icons|length else 'bi-info-circle-fill text-primary' }}"></i>
+                    <span class="fw-semibold text-dark" style="font-size: 0.85rem; line-height: 1.3;">{{ dica }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ── Indicadores Operacionais ── -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-xl-3">
-        <div class="card stat-card h-100">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="stat-icon" style="background:#dbeafe;">
-                    <i class="bi bi-people" style="color:#1d4ed8;"></i>
-                </div>
-                <div>
-                    <div class="text-muted" style="font-size:0.78rem;">Total Militares</div>
-                    <div class="fw-bold fs-4">{{ total_militares }}</div>
-                    <div class="text-success" style="font-size:0.72rem;">
-                        <i class="bi bi-check-circle-fill me-1"></i>{{ militares_presentes }} presentes
-                    </div>
+        <div class="metric-mini d-flex align-items-center gap-3 text-start">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="background:#dbeafe; width:48px; height:48px;">
+                <i class="bi bi-people fs-4" style="color:#1d4ed8;"></i>
+            </div>
+            <div>
+                <div class="num text-dark">{{ total_militares }}</div>
+                <div class="lbl">Total Militares</div>
+                <div class="metric-sub text-success">
+                    <i class="bi bi-check-circle-fill me-1"></i>{{ militares_presentes }} presentes
                 </div>
             </div>
         </div>
     </div>
     <div class="col-6 col-xl-3">
-        <div class="card stat-card h-100">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="stat-icon" style="background:#fce7f3;">
-                    <i class="bi bi-person-walking" style="color:#be185d;"></i>
-                </div>
-                <div>
-                    <div class="text-muted" style="font-size:0.78rem;">Em Trânsito</div>
-                    <div class="fw-bold fs-4">{{ em_transito }}</div>
-                    <div class="text-warning" style="font-size:0.72rem;">
-                        <i class="bi bi-clock me-1"></i>{{ agendadas }} agendadas
-                    </div>
+        <div class="metric-mini d-flex align-items-center gap-3 text-start">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="background:#fce7f3; width:48px; height:48px;">
+                <i class="bi bi-person-walking fs-4" style="color:#be185d;"></i>
+            </div>
+            <div>
+                <div class="num text-danger">{{ em_transito }}</div>
+                <div class="lbl">Em Trânsito</div>
+                <div class="metric-sub text-warning">
+                    <i class="bi bi-clock me-1"></i>{{ agendadas }} agendadas
                 </div>
             </div>
         </div>
     </div>
     <div class="col-6 col-xl-3">
-        <div class="card stat-card h-100">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="stat-icon" style="background:#dcfce7;">
-                    <i class="bi bi-house-check" style="color:#15803d;"></i>
-                </div>
-                <div>
-                    <div class="text-muted" style="font-size:0.78rem;">Retornados/Finalizados Hoje</div>
-                    <div class="fw-bold fs-4">{{ retornados_hoje }}</div>
-                    <div class="text-muted" style="font-size:0.72rem;">
-                        <i class="bi bi-calendar-day me-1"></i>{{ saidas_hoje }} saídas hoje
-                    </div>
+        <div class="metric-mini d-flex align-items-center gap-3 text-start">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="background:#dcfce7; width:48px; height:48px;">
+                <i class="bi bi-house-check fs-4" style="color:#15803d;"></i>
+            </div>
+            <div>
+                <div class="num text-success">{{ retornados_hoje }}</div>
+                <div class="lbl">Retornados Hoje</div>
+                <div class="metric-sub text-muted">
+                    <i class="bi bi-calendar-day me-1"></i>{{ saidas_hoje }} hoje
                 </div>
             </div>
         </div>
     </div>
     <div class="col-6 col-xl-3">
-        <div class="card stat-card h-100">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="stat-icon" style="background:#fef3c7;">
-                    <i class="bi bi-journal-text" style="color:#d97706;"></i>
-                </div>
-                <div>
-                    <div class="text-muted" style="font-size:0.78rem;">Total de Saídas</div>
-                    <div class="fw-bold fs-4">{{ total_saidas }}</div>
-                    <div class="text-muted" style="font-size:0.72rem;">
-                        <i class="bi bi-shield-check me-1"></i>{{ total_admins }} admins
-                    </div>
+        <div class="metric-mini d-flex align-items-center gap-3 text-start">
+            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="background:#fef3c7; width:48px; height:48px;">
+                <i class="bi bi-journal-text fs-4" style="color:#d97706;"></i>
+            </div>
+            <div>
+                <div class="num text-primary">{{ total_saidas }}</div>
+                <div class="lbl">Total de Saídas</div>
+                <div class="metric-sub text-muted">
+                    <i class="bi bi-shield-check me-1"></i>{{ total_admins }} admins
                 </div>
             </div>
         </div>
@@ -91,38 +212,45 @@
 <!-- ── Gráfico + Próximas saídas ── -->
 <div class="row g-3 mb-4">
     <div class="col-md-5 col-lg-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-pie-chart me-2 text-primary"></i>Status das Saídas</h6>
+        <div class="card h-100 card-clean">
+            <div class="card-header card-header-clean">
+                <h6 class="mb-0 fw-bold text-dark" style="font-size:0.85rem;">
+                    <i class="bi bi-pie-chart-fill me-2 text-primary"></i>Status das Saídas
+                </h6>
             </div>
-            <div class="card-body d-flex flex-column align-items-center justify-content-center">
-                <canvas id="graficoPizza" style="max-height:200px;"></canvas>
-                <div class="mt-3 w-100">
+            <div class="card-body d-flex flex-column align-items-center justify-content-between bg-light bg-opacity-25 py-3">
+                <div class="chart-wrap">
+                    <canvas id="graficoPizza"></canvas>
+                </div>
+                <div class="mt-3 w-100 px-2">
                     {% for status, qtd in grafico_status.items() %}
                     <div class="d-flex align-items-center justify-content-between mb-1">
                         <span class="badge bg-{{ StatusSaida.BADGES[status] }}">{{ StatusSaida.LABELS[status] }}</span>
-                        <span class="fw-bold text-muted small">{{ qtd }}</span>
+                        <span class="fw-bold text-dark small" style="font-size: 0.8rem;">{{ qtd }}</span>
                     </div>
                     {% endfor %}
                 </div>
             </div>
         </div>
     </div>
+    
     <div class="col-md-7 col-lg-8">
-        <div class="card h-100">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-calendar-event me-2 text-warning"></i>Próximas Saídas (7 dias)</h6>
-                <a href="{{ url_for('admin.listar_saidas') }}?status=agendada" class="btn btn-sm btn-outline-warning">Ver agendadas</a>
+        <div class="card h-100 card-clean">
+            <div class="card-header card-header-clean d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-bold text-dark" style="font-size:0.85rem;">
+                    <i class="bi bi-calendar-event-fill me-2 text-warning"></i>Próximas Saídas (7 dias)
+                </h6>
+                <a href="{{ url_for('admin.listar_saidas') }}?status=agendada" class="btn btn-sm btn-link text-decoration-none text-secondary p-0 fw-semibold" style="font-size: 0.78rem;">Ver agendadas</a>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
+                    <table class="table table-custom-hover align-middle mb-0">
+                        <thead style="background: #cbd5e1; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.3px;">
                             <tr>
-                                <th class="ps-3">Militar</th>
-                                <th>Destino</th>
-                                <th>Saída</th>
-                                <th>Retorno</th>
+                                <th class="ps-3 text-dark py-2.5">Militar</th>
+                                <th class="text-dark py-2.5">Destino</th>
+                                <th class="text-dark py-2.5">Saída</th>
+                                <th class="text-dark py-2.5">Retorno</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -130,16 +258,16 @@
                             <tr>
                                 <td class="ps-3">
                                     <div class="d-flex align-items-center gap-2">
-                                        <div class="user-avatar-placeholder" style="width:28px;height:28px;font-size:0.7rem;">{{ s.usuario.nome[0].upper() if s.usuario else '?' }}</div>
-                                        <span style="font-size:0.85rem;">{{ s.usuario.nome if s.usuario else '—' }}</span>
+                                        <div class="user-avatar-placeholder bg-secondary bg-opacity-20 border border-secondary text-dark rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width:28px;height:28px;font-size:0.7rem;">{{ s.usuario.nome[0].upper() if s.usuario else '?' }}</div>
+                                        <span class="fw-semibold" style="font-size:0.85rem; color:#0f172a;">{{ s.usuario.nome if s.usuario else '—' }}</span>
                                     </div>
                                 </td>
-                                <td style="font-size:0.85rem;">{{ s.local }}</td>
-                                <td style="font-size:0.85rem;">{{ s.data_saida.strftime('%d/%m/%Y') }}</td>
-                                <td style="font-size:0.85rem;">{{ s.data_retorno.strftime('%d/%m/%Y') if s.data_retorno else '—' }}</td>
+                                <td style="font-size:0.85rem; color:#1e293b;">{{ s.local }}</td>
+                                <td style="font-size:0.85rem; color:#1e293b;">{{ s.data_saida.strftime('%d/%m/%Y') }}</td>
+                                <td style="font-size:0.85rem; color:#1e293b;">{{ s.data_retorno.strftime('%d/%m/%Y') if s.data_retorno else '—' }}</td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="4" class="text-center py-3 text-muted">Nenhuma saída agendada nos próximos 7 dias.</td></tr>
+                            <tr><td colspan="4" class="text-center py-4 text-muted" style="font-size: 0.85rem;">Nenhuma saída agendada nos próximos 7 dias.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -149,26 +277,28 @@
     </div>
 </div>
 
-<!-- ── Últimas saídas + Lateral ── -->
+<!-- ── Histórico + Lateral ── -->
 <div class="row g-3">
     <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-clock-history me-2 text-primary"></i>Últimas Saídas</h6>
-                <a href="{{ url_for('admin.listar_saidas') }}" class="btn btn-sm btn-outline-primary">
+        <div class="card card-clean">
+            <div class="card-header card-header-clean d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-bold text-dark" style="font-size:0.85rem;">
+                    <i class="bi bi-clock-history me-2 text-primary"></i>Histórico Recente de Saídas
+                </h6>
+                <a href="{{ url_for('admin.listar_saidas') }}" class="btn btn-sm btn-outline-secondary text-dark border-secondary rounded-2 fw-semibold" style="font-size:0.75rem; background:#f8fafc;">
                     Ver todas <i class="bi bi-arrow-right ms-1"></i>
                 </a>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
+                    <table class="table table-custom-hover align-middle mb-0">
+                        <thead style="background: #cbd5e1; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.3px;">
                             <tr>
-                                <th class="ps-3">Usuário</th>
-                                <th>Local</th>
-                                <th>Saída</th>
-                                <th>Retorno</th>
-                                <th>Status</th>
+                                <th class="ps-3 text-dark py-2.5">Usuário</th>
+                                <th class="text-dark py-2.5">Local</th>
+                                <th class="text-dark py-2.5">Saída</th>
+                                <th class="text-dark py-2.5">Retorno</th>
+                                <th class="text-dark py-2.5">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -176,31 +306,31 @@
                             <tr>
                                 <td class="ps-3">
                                     <div class="d-flex align-items-center gap-2">
-                                        <div class="user-avatar-placeholder" style="width:28px;height:28px;font-size:0.72rem;">{{ saida.usuario.nome[0].upper() if saida.usuario else '?' }}</div>
+                                        <div class="user-avatar-placeholder bg-secondary bg-opacity-20 border border-secondary text-dark rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width:28px;height:28px;font-size:0.72rem;">{{ saida.usuario.nome[0].upper() if saida.usuario else '?' }}</div>
                                         <div>
-                                            <span class="fw-medium" style="font-size:0.875rem;">{{ saida.usuario.nome if saida.usuario else '—' }}</span>
+                                            <span class="fw-bold d-block" style="font-size:0.85rem; color:#0f172a;">{{ saida.usuario.nome if saida.usuario else '—' }}</span>
                                             {% if saida.usuario and saida.usuario.subunidade %}
-                                            <div style="font-size:0.7rem;color:#6c757d;">{{ saida.usuario.subunidade.sigla or saida.usuario.subunidade.nome }}</div>
+                                            <div style="font-size:0.7rem;color:#334155; font-weight: 500;">{{ saida.usuario.subunidade.sigla or saida.usuario.subunidade.nome }}</div>
                                             {% endif %}
                                         </div>
                                     </div>
                                 </td>
-                                <td style="font-size:0.875rem;">{{ saida.local }}</td>
-                                <td style="font-size:0.875rem;">{{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '—' }}</td>
-                                <td style="font-size:0.875rem;">{{ saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else '—' }}</td>
+                                <td style="font-size:0.85rem; color:#1e293b;">{{ saida.local }}</td>
+                                <td style="font-size:0.85rem; color:#1e293b;">{{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '—' }}</td>
+                                <td style="font-size:0.85rem; color:#1e293b;">{{ saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else '—' }}</td>
                                 <td><span class="badge bg-{{ saida.status_badge }}">{{ saida.status_label }}</span></td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="5" class="text-center py-4 text-muted">Nenhuma saída registrada.</td></tr>
+                            <tr><td colspan="5" class="text-center py-4 text-muted" style="font-size: 0.85rem;">Nenhuma saída registrada.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </div>
             {% if total_registros > 4 %}
-            <div class="card-footer text-center bg-transparent border-top-0 pt-0 pb-3">
-                <a href="{{ url_for('admin.listar_saidas') }}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-clock-history me-1"></i>Visualizar histórico completo ({{ total_registros }} registros)
+            <div class="card-footer text-center bg-light bg-opacity-50 border-top py-2">
+                <a href="{{ url_for('admin.listar_saidas') }}" class="btn btn-sm btn-link text-decoration-none text-dark fw-bold" style="font-size:0.8rem;">
+                    Visualizar histórico completo ({{ total_registros }} registros)
                 </a>
             </div>
             {% endif %}
@@ -208,71 +338,54 @@
     </div>
 
     <div class="col-lg-4">
-        <!-- Ações rápidas -->
-        <div class="card mb-3">
-            <div class="card-header">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-lightning me-2 text-warning"></i>Ações Rápidas</h6>
+        <!-- Ações rápidas Corrigidas -->
+        <div class="card card-clean mb-3">
+            <div class="card-header card-header-clean">
+                <h6 class="mb-0 fw-bold text-dark" style="font-size:0.85rem;">
+                    <i class="bi bi-lightning-fill me-2 text-warning"></i>Ações Rápidas
+                </h6>
             </div>
-            <div class="card-body d-grid gap-2">
-                <a href="{{ url_for('admin.novo_usuario') }}" class="btn btn-outline-primary btn-sm text-start">
-                    <i class="bi bi-person-plus me-2"></i>Cadastrar Militar
+            <div class="card-body d-grid gap-2 bg-light bg-opacity-25">
+                <a href="{{ url_for('admin.novo_usuario') }}" class="btn btn-acao-lateral btn-sm text-start rounded-2 py-2 fw-semibold" style="font-size:0.82rem;">
+                    <i class="bi bi-person-plus me-2 text-primary"></i>Cadastrar Militar
                 </a>
-                <a href="{{ url_for('admin.listar_subunidades') }}" class="btn btn-outline-secondary btn-sm text-start">
-                    <i class="bi bi-diagram-3 me-2"></i>Gerenciar Subunidades
+                <a href="{{ url_for('admin.listar_subunidades') }}" class="btn btn-acao-lateral btn-sm text-start rounded-2 py-2 fw-semibold" style="font-size:0.82rem;">
+                    <i class="bi bi-diagram-3 me-2 text-secondary"></i>Gerenciar Subunidades
                 </a>
-                <a href="{{ url_for('reports.por_periodo') }}" class="btn btn-outline-success btn-sm text-start">
-                    <i class="bi bi-file-earmark-pdf me-2"></i>Relatório por Período
+                <a href="{{ url_for('reports.por_periodo') }}" class="btn btn-acao-lateral btn-sm text-start rounded-2 py-2 fw-semibold" style="font-size:0.82rem;">
+                    <i class="bi bi-file-earmark-pdf me-2 text-success"></i>Relatório por Período
                 </a>
-                <a href="{{ url_for('admin.listar_saidas') }}?status=em_transito" class="btn btn-outline-danger btn-sm text-start">
-                    <i class="bi bi-person-walking me-2"></i>Em Trânsito ({{ em_transito }})
+                <a href="{{ url_for('admin.listar_saidas') }}?status=em_transito" class="btn btn-acao-lateral btn-sm text-start rounded-2 py-2 fw-semibold" style="font-size:0.82rem;">
+                    <i class="bi bi-person-walking me-2 text-danger"></i>Em Trânsito ({{ em_transito }})
                 </a>
             </div>
         </div>
 
-        <!-- Dicas de viagem -->
-        {% if dicas %}
-        <div class="card mb-3">
-            <div class="card-header">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-lightbulb me-2 text-warning"></i>Dicas de Viagem Segura</h6>
-            </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
-                    {% for dica in dicas %}
-                    <li class="list-group-item d-flex align-items-start gap-2 py-2 px-3" style="font-size:0.82rem;">
-                        <i class="bi bi-shield-check text-success mt-1 flex-shrink-0"></i>
-                        {{ dica }}
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Militares -->
-        <div class="card">
-            <div class="card-header d-flex align-items-center justify-content-between">
-                <h6 class="mb-0 fw-semibold"><i class="bi bi-people me-2 text-primary"></i>Militares</h6>
-                <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-sm btn-outline-primary">Gerenciar</a>
+        <!-- Militares Lista compacta -->
+        <div class="card card-clean">
+            <div class="card-header card-header-clean d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-bold text-dark" style="font-size:0.85rem;">
+                    <i class="bi bi-people-fill me-2 text-primary"></i>Efetivo Recente
+                </h6>
+                <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-sm btn-link text-decoration-none text-dark p-0 fw-bold" style="font-size:0.75rem;">Gerenciar</a>
             </div>
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush">
                     {% for u in usuarios[:6] %}
-                    <li class="list-group-item d-flex align-items-center gap-2 py-2 px-3">
-                        <div class="user-avatar-placeholder" style="width:26px;height:26px;font-size:0.7rem;flex-shrink:0;">{{ u.nome[0].upper() }}</div>
+                    <li class="list-group-item d-flex align-items-center gap-2 py-2.5 px-3 border-0 border-bottom bg-transparent">
+                        <div class="user-avatar-placeholder bg-secondary bg-opacity-20 border border-secondary text-dark rounded-circle d-flex align-items-center justify-content-center fw-bold" style="width:26px;height:26px;font-size:0.7rem;flex-shrink:0;">{{ u.nome[0].upper() }}</div>
                         <div class="flex-grow-1 min-w-0">
-                            <div class="fw-medium text-truncate" style="font-size:0.82rem;">{{ u.nome }}</div>
-                            {% if u.subunidade %}<div style="font-size:0.68rem;color:#6c757d;">{{ u.subunidade.sigla or u.subunidade.nome }}</div>{% endif %}
+                            <div class="fw-bold text-truncate" style="font-size:0.82rem; color:#0f172a;">{{ u.nome }}</div>
+                            {% if u.subunidade %}<div style="font-size:0.68rem;color:#475569; font-weight: 500;">{{ u.subunidade.sigla or u.subunidade.nome }}</div>{% endif %}
                         </div>
                         {% if u.saidas_ativas > 0 %}
-                        <span class="badge bg-danger" style="font-size:0.68rem;" title="Em trânsito">
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-20" style="font-size:0.68rem;" title="Em trânsito">
                             <i class="bi bi-person-walking"></i> {{ u.saidas_ativas }}
                         </span>
                         {% else %}
-                        <span class="badge bg-success bg-opacity-10 text-success" style="font-size:0.68rem;">Presente</span>
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-20" style="font-size:0.68rem;">Presente</span>
                         {% endif %}
                     </li>
-                    {% else %}
-                    <li class="list-group-item text-center text-muted py-3" style="font-size:0.85rem;">Nenhum usuário.</li>
                     {% endfor %}
                 </ul>
             </div>
@@ -283,29 +396,69 @@
 
 {% block extra_js %}
 <script>
-(function() {
-    const ctx = document.getElementById('graficoPizza');
-    if (!ctx) return;
-    new Chart(ctx, {
+// --- MOTOR DE ANIMAÇÃO DAS DICAS NO TOPO ---
+document.addEventListener('DOMContentLoaded', function() {
+    const items = document.querySelectorAll('.dica-item-animado');
+    if (items.length > 0) {
+        let currentIndex = Math.floor(Math.random() * items.length);
+        
+        function showDica(index) {
+            items.forEach(item => { item.classList.remove('active'); });
+            setTimeout(() => {
+                if(items[index]) { items[index].classList.add('active'); }
+            }, 50);
+        }
+        
+        showDica(currentIndex);
+        
+        if (items.length > 1) {
+            setInterval(() => {
+                currentIndex = (currentIndex + 1) % items.length;
+                showDica(currentIndex);
+            }, 7500);
+        }
+    }
+});
+
+// --- GRÁFICO OPERACIONAL MANTIDO SEM ALTERAÇÃO ESTRUTURAL ---
+const ctxPizza = document.getElementById('graficoPizza');
+if (ctxPizza) {
+    const labelsStatus = [];
+    const dadosStatus = [];
+    const coresStatus = [];
+    
+    {% for status, qtd in grafico_status.items() %}
+        labelsStatus.push('{{ StatusSaida.LABELS[status] }}');
+        dadosStatus.push({{ qtd }});
+        
+        {% if status == 'agendada' %} coresStatus.push('#ffc107');
+        {% elif status == 'em_transito' %} coresStatus.push('#0d6efd');
+        {% elif status == 'retornada' %} coresStatus.push('#198754');
+        {% else %} coresStatus.push('#6c757d'); {% endif %}
+    {% endfor %}
+
+    new Chart(ctxPizza, {
         type: 'doughnut',
         data: {
-            labels: [{% for s, q in grafico_status.items() %}'{{ StatusSaida.LABELS[s] }}',{% endfor %}],
+            labels: labelsStatus,
             datasets: [{
-                data: [{% for s, q in grafico_status.items() %}{{ q }},{% endfor %}],
-                backgroundColor: ['#fbbf24','#3b82f6','#22c55e','#94a3b8','#374151'],
-                borderWidth: 2,
-                borderColor: '#fff',
+                data: dadosStatus,
+                backgroundColor: coresStatus,
+                borderWidth: 3,
+                borderColor: '#ffffff',
+                hoverOffset: 4
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
+            borderRadius: 4,
             plugins: {
-                legend: { display: false },
-                tooltip: { callbacks: { label: (c) => ` ${c.label}: ${c.parsed}` }}
+                legend: { display: false }
             },
-            cutout: '65%',
+            cutout: '73%',
         }
     });
-})();
+}
 </script>
 {% endblock %}

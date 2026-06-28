@@ -13,6 +13,7 @@ from flask_login import current_user, login_required
 
 from app import db
 from app.models import Registro, StatusSaida, ConfigSistema
+from app.validators import validar_texto_livre, validar_telefone, validar_data
 
 user_bp = Blueprint("user", __name__)
 
@@ -95,40 +96,40 @@ def registrar_saida():
     motivo_max = current_app.config.get("MOTIVO_MAX_LENGTH", 300)
 
     if request.method == "POST":
-        local            = request.form.get("local", "").strip()
-        motivo           = request.form.get("motivo", "").strip()
+        local, erros_local = validar_texto_livre(
+            request.form.get("local", ""), campo="local de destino",
+            max_len=255, obrigatorio=True,
+        )
+        motivo, erros_motivo = validar_texto_livre(
+            request.form.get("motivo", ""), campo="motivo",
+            max_len=motivo_max, obrigatorio=True, permitir_emoji=False,
+        )
+        telefone, erros_telefone = validar_telefone(request.form.get("telefone_contato", ""))
+        endereco, erros_endereco = validar_texto_livre(
+            request.form.get("endereco_destino", ""), campo="endereço no destino",
+            max_len=500, obrigatorio=False,
+        )
+
         data_saida_str   = request.form.get("data_saida", "")
         data_retorno_str = request.form.get("data_retorno", "")
-        telefone         = request.form.get("telefone_contato", "").strip()
-        endereco         = request.form.get("endereco_destino", "").strip()
 
-        errors = []
-        if not local:
-            errors.append("O local de destino é obrigatório.")
-        if not motivo:
-            errors.append("O motivo é obrigatório.")
-        elif len(motivo) > motivo_max:
-            errors.append(f"O motivo deve ter no máximo {motivo_max} caracteres.")
-        if not data_saida_str:
-            errors.append("A data de saída é obrigatória.")
+        data_saida, erros_data_saida = validar_data(
+            data_saida_str, campo="data de saída", obrigatoria=True
+        )
+        data_retorno, erros_data_retorno = validar_data(
+            data_retorno_str, campo="data de retorno", obrigatoria=False
+        )
 
-        data_saida = data_retorno = None
+        errors = [
+            *erros_local, *erros_motivo, *erros_telefone, *erros_endereco,
+            *erros_data_saida, *erros_data_retorno,
+        ]
 
-        if data_saida_str:
-            try:
-                data_saida = datetime.strptime(data_saida_str, "%Y-%m-%d")
-                if data_saida.date() < datetime.today().date():
-                    errors.append("A data de saída não pode ser anterior ao dia atual.")
-            except ValueError:
-                errors.append("Data de saída inválida.")
+        if data_saida and data_saida.date() < datetime.today().date():
+            errors.append("A data de saída não pode ser anterior ao dia atual.")
 
-        if data_retorno_str:
-            try:
-                data_retorno = datetime.strptime(data_retorno_str, "%Y-%m-%d")
-                if data_saida and data_retorno < data_saida:
-                    errors.append("A data de retorno não pode ser anterior à data de saída.")
-            except ValueError:
-                errors.append("Data de retorno inválida.")
+        if data_retorno and data_saida and data_retorno < data_saida:
+            errors.append("A data de retorno não pode ser anterior à data de saída.")
 
         if not errors and data_saida:
             duplicado = Registro.query.filter_by(
@@ -168,8 +169,19 @@ def registrar_saida():
             status=status_inicial,
             status_atualizado_em=datetime.utcnow(),
         )
-        db.session.add(registro)
-        db.session.commit()
+        try:
+            db.session.add(registro)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Não foi possível registrar a saída. Verifique os dados e tente novamente.", "danger")
+            return render_template(
+                "user/registrar.html",
+                form_data=request.form,
+                motivos_sugeridos=motivos_sugeridos,
+                motivo_max=motivo_max,
+            )
+
         flash("Saída registrada com sucesso!", "success")
         return redirect(url_for("user.dashboard"))
 
@@ -196,32 +208,33 @@ def editar_saida(id):
     motivo_max = current_app.config.get("MOTIVO_MAX_LENGTH", 300)
 
     if request.method == "POST":
-        local            = request.form.get("local", "").strip()
-        motivo           = request.form.get("motivo", "").strip()
+        local, erros_local = validar_texto_livre(
+            request.form.get("local", ""), campo="local de destino",
+            max_len=255, obrigatorio=True,
+        )
+        motivo, erros_motivo = validar_texto_livre(
+            request.form.get("motivo", ""), campo="motivo",
+            max_len=motivo_max, obrigatorio=True,
+        )
+        telefone, erros_telefone = validar_telefone(request.form.get("telefone_contato", ""))
+        endereco, erros_endereco = validar_texto_livre(
+            request.form.get("endereco_destino", ""), campo="endereço no destino",
+            max_len=500, obrigatorio=False,
+        )
+
         data_saida_str   = request.form.get("data_saida", "")
         data_retorno_str = request.form.get("data_retorno", "")
-        telefone         = request.form.get("telefone_contato", "").strip()
-        endereco         = request.form.get("endereco_destino", "").strip()
 
-        errors = []
-        data_saida = data_retorno = None
+        data_saida, erros_data_saida = validar_data(data_saida_str, campo="data de saída", obrigatoria=True)
+        data_retorno, erros_data_retorno = validar_data(data_retorno_str, campo="data de retorno")
 
-        if data_saida_str:
-            try:
-                data_saida = datetime.strptime(data_saida_str, "%Y-%m-%d")
-            except ValueError:
-                errors.append("Data de saída inválida.")
+        errors = [
+            *erros_local, *erros_motivo, *erros_telefone, *erros_endereco,
+            *erros_data_saida, *erros_data_retorno,
+        ]
 
-        if data_retorno_str:
-            try:
-                data_retorno = datetime.strptime(data_retorno_str, "%Y-%m-%d")
-                if data_saida and data_retorno < data_saida:
-                    errors.append("A data de retorno não pode ser anterior à data de saída.")
-            except ValueError:
-                errors.append("Data de retorno inválida.")
-
-        if motivo and len(motivo) > motivo_max:
-            errors.append(f"O motivo deve ter no máximo {motivo_max} caracteres.")
+        if data_retorno and data_saida and data_retorno < data_saida:
+            errors.append("A data de retorno não pode ser anterior à data de saída.")
 
         if errors:
             for e in errors:
@@ -239,7 +252,18 @@ def editar_saida(id):
         saida.data_retorno     = data_retorno
         saida.telefone_contato = telefone
         saida.endereco_destino = endereco
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Não foi possível salvar as alterações. Tente novamente.", "danger")
+            return render_template(
+                "user/editar.html",
+                saida=saida,
+                motivos_sugeridos=motivos_sugeridos,
+                motivo_max=motivo_max,
+            )
+
         flash("Saída atualizada com sucesso!", "success")
         return redirect(url_for("user.dashboard"))
 
@@ -262,15 +286,25 @@ def cancelar_saida(id):
         flash("Esta saída não pode mais ser cancelada.", "warning")
         return redirect(url_for("user.dashboard"))
 
-    motivo_cancelamento = request.form.get("motivo_cancelamento", "").strip()
-    if not motivo_cancelamento:
-        flash("Informe o motivo do cancelamento.", "danger")
+    motivo_cancelamento, erros = validar_texto_livre(
+        request.form.get("motivo_cancelamento", ""), campo="motivo do cancelamento",
+        max_len=500, obrigatorio=True,
+    )
+    if erros:
+        for e in erros:
+            flash(e, "danger")
         return redirect(url_for("user.dashboard"))
 
     saida.status = StatusSaida.CANCELADO
     saida.status_atualizado_em = datetime.utcnow()
     saida.motivo_cancelamento  = motivo_cancelamento
     saida.data_cancelamento    = datetime.utcnow()
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("Não foi possível cancelar a saída. Tente novamente.", "danger")
+        return redirect(url_for("user.dashboard"))
+
     flash("Saída cancelada com sucesso.", "info")
     return redirect(url_for("user.dashboard"))

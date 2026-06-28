@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ codigo }} — {{ config_sistema.get('nome_sistema', 'Controle de Saídas') if config_sistema else 'Controle de Saídas' }}</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --cor-primaria: {{ (config_sistema.get('cor_primaria') if config_sistema else None) or '#1a3a5c' }};
+            --cor-secundaria: {{ (config_sistema.get('cor_secundaria') if config_sistema else None) or '#2980b9' }};
+        }
+        *, *::before, *::after { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; width: 100%; min-height: 100vh;
+            background: linear-gradient(135deg, var(--cor-primaria) 0%, #0d2137 100%);
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .error-card {
+            background: #f7f9fc;
+            border-radius: 24px;
+            box-shadow: 0 20px 45px rgba(0,0,0,0.3);
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+            padding: 48px 32px;
+        }
+        .error-codigo {
+            font-size: 4rem;
+            font-weight: 700;
+            color: var(--cor-primaria);
+            line-height: 1;
+        }
+        .error-icone {
+            font-size: 2.5rem;
+            color: var(--cor-secundaria);
+            margin-bottom: 12px;
+        }
+        .error-titulo {
+            font-weight: 600;
+            color: #1f2937;
+            margin: 8px 0 4px;
+        }
+        .error-mensagem {
+            color: #6b7280;
+            margin-bottom: 28px;
+        }
+        .btn-voltar {
+            background: var(--cor-primaria);
+            border: none;
+            color: #fff;
+            padding: 10px 28px;
+            border-radius: 10px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            transition: opacity .2s;
+        }
+        .btn-voltar:hover { opacity: .9; color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="error-card">
+        <div class="error-icone"><i class="bi {{ icone }}"></i></div>
+        <div class="error-codigo">{{ codigo }}</div>
+        <h5 class="error-titulo">{{ titulo }}</h5>
+        <p class="error-mensagem">{{ mensagem }}</p>
+        <a href="{{ url_for('auth.login') }}" class="btn-voltar">
+            <i class="bi bi-house-door me-1"></i> Voltar ao início
+        </a>
+    </div>
+</body>
+</html>

@@ -35,7 +35,10 @@ def register_commands(app) -> None:
             ("rodape",        "© Sistema de Controle de Saídas — Gerado automaticamente", "Rodapé PDF"),
             ("cor_primaria",  "#1a3a5c",                                         "Cor primária"),
             ("cor_secundaria","#2980b9",                                         "Cor de destaque"),
-            ("dicas_viagem",  "Verifique documentos e comunicação antes de sair.\nMantenha contato com a unidade durante a viagem.\nRespeite os horários de retorno estabelecidos.\nEm caso de imprevisto, comunique imediatamente a unidade.", "Dicas de viagem segura"),
+            ("dica_1", "Verifique documentos e comunicação antes de sair.", "Dica de viagem segura 1"),
+            ("dica_2", "Mantenha contato com a unidade durante a viagem.", "Dica de viagem segura 2"),
+            ("dica_3", "Respeite os horários de retorno estabelecidos.", "Dica de viagem segura 3"),
+            ("dica_4", "Em caso de imprevisto, comunique imediatamente a unidade.", "Dica de viagem segura 4"),
         ]
         for chave, valor, desc in defaults:
             if not ConfigSistema.query.filter_by(chave=chave).first():
@@ -53,14 +56,30 @@ def register_commands(app) -> None:
     @with_appcontext
     def create_admin(nome, cpf, senha):
         """Cria um usuário administrador.\n\nUso: flask create-admin NOME CPF SENHA"""
-        if Usuario.query.filter_by(cpf=cpf).first():
-            click.echo(f"❌ Já existe um usuário com CPF {cpf}.")
+        from app.validators import validar_nome, validar_cpf_ou_identificacao
+
+        nome_limpo, erros_nome = validar_nome(nome, campo="nome")
+        cpf_limpo, erros_cpf = validar_cpf_ou_identificacao(cpf)
+        erros = [*erros_nome, *erros_cpf]
+
+        if not senha or len(senha) < 4:
+            erros.append("A senha deve ter no mínimo 4 caracteres.")
+        if len(senha) > 72:
+            erros.append("A senha deve ter no máximo 72 caracteres.")
+
+        if erros:
+            for e in erros:
+                click.echo(f"❌ {e}")
             return
-        admin = Usuario(nome=nome, cpf=cpf, tipo=TipoUsuario.ADMIN, ativo=True)
+
+        if Usuario.query.filter_by(cpf=cpf_limpo).first():
+            click.echo(f"❌ Já existe um usuário com CPF {cpf_limpo}.")
+            return
+        admin = Usuario(nome=nome_limpo, cpf=cpf_limpo, tipo=TipoUsuario.ADMIN, ativo=True)
         admin.set_senha(senha)
         db.session.add(admin)
         db.session.commit()
-        click.echo(f"✅ Admin '{nome}' criado com sucesso! CPF: {cpf}")
+        click.echo(f"✅ Admin '{nome_limpo}' criado com sucesso! CPF: {cpf_limpo}")
 
     # ── seed ───────────────────────────────────────────────────────────────
 

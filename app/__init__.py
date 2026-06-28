@@ -62,6 +62,10 @@ def create_app(config_name: str | None = None) -> Flask:
     from app.context_processors import register_context_processors
     register_context_processors(app)
 
+    # ── Registra tratadores de erro (páginas amigáveis para 400/403/404/413/500...)
+    from app.error_handlers import register_error_handlers
+    register_error_handlers(app)
+
     # ── Registra comandos CLI ──────────────────────────────────────────────
     from app.commands import register_commands
     register_commands(app)
@@ -121,15 +125,19 @@ def _job_atualizar_status(app: Flask) -> None:
     """
     with app.app_context():
         from app.models import Registro, StatusSaida
-        pendentes = Registro.query.filter(
-            Registro.status.in_([StatusSaida.AGENDADA, StatusSaida.EM_TRANSITO])
-        ).all()
+        try:
+            pendentes = Registro.query.filter(
+                Registro.status.in_([StatusSaida.AGENDADA, StatusSaida.EM_TRANSITO])
+            ).all()
 
-        atualizados = 0
-        for registro in pendentes:
-            if registro.atualizar_status_automatico():
-                atualizados += 1
+            atualizados = 0
+            for registro in pendentes:
+                if registro.atualizar_status_automatico():
+                    atualizados += 1
 
-        if atualizados:
-            db.session.commit()
-            app.logger.info(f"[scheduler] {atualizados} saída(s) atualizada(s) automaticamente.")
+            if atualizados:
+                db.session.commit()
+                app.logger.info(f"[scheduler] {atualizados} saída(s) atualizada(s) automaticamente.")
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("[scheduler] Falha ao atualizar status automático de saídas.")

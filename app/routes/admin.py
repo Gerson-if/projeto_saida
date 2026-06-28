@@ -2,7 +2,6 @@
 routes/admin.py — Rotas do painel administrativo.
 """
 
-import os
 from datetime import date, datetime, timedelta
 
 from flask import (
@@ -11,10 +10,19 @@ from flask import (
 )
 from flask_login import current_user, login_required
 from functools import wraps
-from werkzeug.utils import secure_filename
 
 from app import db
 from app.models import ConfigSistema, Registro, StatusSaida, Subunidade, TipoUsuario, Usuario
+from app.uploads import validar_e_salvar_imagem, remover_upload_seguro
+from app.validators import (
+    validar_nome,
+    validar_cpf_ou_identificacao,
+    validar_texto_livre,
+    validar_cor_hex,
+    validar_data,
+    parse_int_seguro,
+    sanitizar_texto,
+)
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -29,23 +37,21 @@ def admin_required(f):
     return decorated
 
 
-def _allowed_file(filename: str) -> bool:
-    return (
-        "." in filename
-        and filename.rsplit(".", 1)[1].lower()
-        in current_app.config["ALLOWED_EXTENSIONS"]
-    )
-
-
-def _save_upload(field_name: str, prefix: str) -> str | None:
+def _save_upload(field_name: str, prefix: str) -> tuple[str | None, str | None]:
+    """
+    Valida e salva um upload de imagem.
+    Retorna (nome_arquivo, erro). Se nenhum arquivo foi enviado, retorna
+    (None, None) — a rota deve então manter o valor anterior, se houver.
+    """
     file = request.files.get(field_name)
-    if not file or not file.filename or not _allowed_file(file.filename):
-        return None
-    filename = secure_filename(f"{prefix}_{file.filename}")
-    path = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    file.save(path)
-    return filename
+    resultado = validar_e_salvar_imagem(
+        file,
+        destino_dir=current_app.config["UPLOAD_FOLDER"],
+        prefixo=prefix,
+    )
+    if not resultado.ok:
+        return None, resultado.erro
+    return resultado.nome_arquivo, None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -109,14 +115,19 @@ def dashboard():
         StatusSaida.FINALIZADO:  Registro.query.filter_by(status=StatusSaida.FINALIZADO).count(),
     }
 
-    # Dicas de viagem configuráveis
-    dicas_raw = ConfigSistema.get("dicas_viagem", "")
-    dicas = [d.strip() for d in dicas_raw.split("\n") if d.strip()] if dicas_raw else [
-        "Verifique documentos e comunicação antes de sair.",
-        "Mantenha contato com a unidade durante a viagem.",
-        "Respeite os horários de retorno estabelecidos.",
-        "Em caso de imprevisto, comunique imediatamente a unidade.",
+    # Dicas de viagem configuráveis (salvas em Configurações como dica_1..dica_4)
+    dicas = [
+        (ConfigSistema.get(f"dica_{i}", "") or "").strip()
+        for i in range(1, 5)
     ]
+    dicas = [d for d in dicas if d]
+    if not dicas:
+        dicas = [
+            "Verifique documentos e comunicação antes de sair.",
+            "Mantenha contato com a unidade durante a viagem.",
+            "Respeite os horários de retorno estabelecidos.",
+            "Em caso de imprevisto, comunique imediatamente a unidade.",
+        ]
 
     return render_template(
         "admin/dashboard.html",
@@ -146,18 +157,16 @@ def dashboard():
 @login_required
 @admin_required
 def listar_usuarios():
-    busca = request.args.get("busca", "").strip()
+    busca = sanitizar_texto(request.args.get("busca", ""), max_len=100)
     subunidade_id = request.args.get("subunidade", "")
     query = Usuario.query
     if busca:
         query = query.filter(
             (Usuario.nome.ilike(f"%{busca}%")) | (Usuario.cpf.ilike(f"%{busca}%"))
         )
-    if subunidade_id:
-        try:
-            query = query.filter_by(subunidade_id=int(subunidade_id))
-        except (ValueError, TypeError):
-            pass
+    sub_id_valido = parse_int_seguro(subunidade_id, minimo=1)
+    if sub_id_valido is not None:
+        query = query.filter_by(subunidade_id=sub_id_valido)
     usuarios = query.order_by(Usuario.nome).all()
     subunidades = Subunidade.query.filter_by(ativa=True).order_by(Subunidade.nome).all()
     return render_template(
@@ -175,23 +184,33 @@ def listar_usuarios():
 def novo_usuario():
     subunidades = Subunidade.query.filter_by(ativa=True).order_by(Subunidade.nome).all()
     if request.method == "POST":
-        nome  = request.form.get("nome", "").strip()
-        cpf   = request.form.get("cpf", "").strip()
-        senha = request.form.get("senha", "").strip()
-        tipo  = request.form.get("tipo", TipoUsuario.USUARIO)
-        sub_id = request.form.get("subunidade_id", "")
+        nome_raw  = request.form.get("nome", "")
+        cpf_raw   = request.form.get("cpf", "")
+        senha     = (request.form.get("senha", "") or "")[:255]
+        tipo      = sanitizar_texto(request.form.get("tipo", TipoUsuario.USUARIO), max_len=20)
+        sub_id    = request.form.get("subunidade_id", "")
 
-        errors = []
-        if not nome:
-            errors.append("O nome é obrigatório.")
-        if not cpf:
-            errors.append("O CPF é obrigatório.")
-        if not senha or len(senha) < 4:
+        nome, erros_nome = validar_nome(nome_raw, campo="nome")
+        cpf, erros_cpf = validar_cpf_ou_identificacao(cpf_raw)
+
+        errors = [*erros_nome, *erros_cpf]
+        if not senha.strip() or len(senha.strip()) < 4:
             errors.append("A senha deve ter no mínimo 4 caracteres.")
+        if len(senha) > 72:
+            errors.append("A senha deve ter no máximo 72 caracteres.")
         if tipo not in TipoUsuario.TODOS:
             errors.append("Tipo de usuário inválido.")
-        if not errors and Usuario.query.filter_by(cpf=cpf).first():
+        if not errors and cpf and Usuario.query.filter_by(cpf=cpf).first():
             errors.append("Este CPF já está cadastrado.")
+
+        subunidade_id_valida = None
+        if sub_id:
+            subunidade_id_valida = parse_int_seguro(sub_id, minimo=1)
+            if subunidade_id_valida is None:
+                errors.append("Subunidade inválida.")
+            elif not Subunidade.query.get(subunidade_id_valida):
+                errors.append("Subunidade não encontrada.")
+                subunidade_id_valida = None
 
         if errors:
             for e in errors:
@@ -199,14 +218,17 @@ def novo_usuario():
             return render_template("admin/form_usuario.html", acao="novo", subunidades=subunidades)
 
         usuario = Usuario(nome=nome, cpf=cpf, tipo=tipo)
-        usuario.set_senha(senha)
-        if sub_id:
-            try:
-                usuario.subunidade_id = int(sub_id)
-            except (ValueError, TypeError):
-                pass
-        db.session.add(usuario)
-        db.session.commit()
+        usuario.set_senha(senha.strip())
+        usuario.subunidade_id = subunidade_id_valida
+
+        try:
+            db.session.add(usuario)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Não foi possível cadastrar o usuário. Verifique os dados e tente novamente.", "danger")
+            return render_template("admin/form_usuario.html", acao="novo", subunidades=subunidades)
+
         flash(f"Usuário {nome} cadastrado com sucesso!", "success")
         return redirect(url_for("admin.listar_usuarios"))
 
@@ -225,22 +247,32 @@ def editar_usuario(id):
     subunidades = Subunidade.query.filter_by(ativa=True).order_by(Subunidade.nome).all()
 
     if request.method == "POST":
-        nome       = request.form.get("nome", "").strip()
-        cpf        = request.form.get("cpf", "").strip()
-        tipo       = request.form.get("tipo", TipoUsuario.USUARIO)
-        nova_senha = request.form.get("nova_senha", "").strip()
+        nome_raw   = request.form.get("nome", "")
+        cpf_raw    = request.form.get("cpf", "")
+        tipo       = sanitizar_texto(request.form.get("tipo", TipoUsuario.USUARIO), max_len=20)
+        nova_senha = (request.form.get("nova_senha", "") or "")[:255]
         ativo      = request.form.get("ativo") == "on"
         sub_id     = request.form.get("subunidade_id", "")
 
-        errors = []
-        if not nome:
-            errors.append("O nome é obrigatório.")
-        if not cpf:
-            errors.append("O CPF é obrigatório.")
+        nome, erros_nome = validar_nome(nome_raw, campo="nome")
+        cpf, erros_cpf = validar_cpf_ou_identificacao(cpf_raw)
+
+        errors = [*erros_nome, *erros_cpf]
         if tipo not in TipoUsuario.TODOS:
             errors.append("Tipo de usuário inválido.")
-        if Usuario.query.filter(Usuario.cpf == cpf, Usuario.id != id).first():
+        if cpf and Usuario.query.filter(Usuario.cpf == cpf, Usuario.id != id).first():
             errors.append("Este CPF já pertence a outro usuário.")
+        if nova_senha.strip() and len(nova_senha.strip()) > 72:
+            errors.append("A senha deve ter no máximo 72 caracteres.")
+
+        subunidade_id_valida = None
+        if sub_id:
+            subunidade_id_valida = parse_int_seguro(sub_id, minimo=1)
+            if subunidade_id_valida is None:
+                errors.append("Subunidade inválida.")
+            elif not Subunidade.query.get(subunidade_id_valida):
+                errors.append("Subunidade não encontrada.")
+                subunidade_id_valida = None
 
         if errors:
             for e in errors:
@@ -251,29 +283,35 @@ def editar_usuario(id):
         usuario.cpf   = cpf
         usuario.tipo  = tipo
         usuario.ativo = ativo
-        usuario.subunidade_id = int(sub_id) if sub_id else None
+        usuario.subunidade_id = subunidade_id_valida
 
-        if nova_senha:
-            if len(nova_senha) >= 4:
-                usuario.set_senha(nova_senha)
+        if nova_senha.strip():
+            if len(nova_senha.strip()) >= 4:
+                usuario.set_senha(nova_senha.strip())
             else:
                 flash("Senha não alterada: deve ter no mínimo 4 caracteres.", "warning")
 
         if request.form.get("remover_foto") == "1":
             if usuario.foto:
-                try:
-                    caminho = os.path.join(current_app.config["UPLOAD_FOLDER"], usuario.foto)
-                    if os.path.exists(caminho):
-                        os.remove(caminho)
-                except Exception:
-                    pass
+                remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], usuario.foto)
             usuario.foto = None
         else:
-            foto = _save_upload("foto", f"user_{id}")
+            foto, erro_foto = _save_upload("foto", f"user_{id}")
+            if erro_foto:
+                flash(erro_foto, "danger")
+                return render_template("admin/form_usuario.html", usuario=usuario, acao="editar", subunidades=subunidades)
             if foto:
+                foto_antiga = usuario.foto
                 usuario.foto = foto
+                remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], foto_antiga)
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Não foi possível salvar as alterações. Verifique os dados e tente novamente.", "danger")
+            return render_template("admin/form_usuario.html", usuario=usuario, acao="editar", subunidades=subunidades)
+
         flash(f"Usuário {nome} atualizado com sucesso!", "success")
         return redirect(url_for("admin.listar_usuarios"))
 
@@ -293,8 +331,16 @@ def excluir_usuario(id):
         return redirect(url_for("admin.listar_usuarios"))
 
     nome = usuario.nome
-    db.session.delete(usuario)
-    db.session.commit()
+    foto_antiga = usuario.foto
+    try:
+        db.session.delete(usuario)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("Não foi possível excluir o usuário. Ele pode possuir registros vinculados.", "danger")
+        return redirect(url_for("admin.listar_usuarios"))
+
+    remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], foto_antiga)
     flash(f"Usuário {nome} excluído com sucesso.", "success")
     return redirect(url_for("admin.listar_usuarios"))
 
@@ -316,17 +362,33 @@ def listar_subunidades():
 @admin_required
 def nova_subunidade():
     if request.method == "POST":
-        nome  = request.form.get("nome", "").strip()
-        sigla = request.form.get("sigla", "").strip()
-        if not nome:
-            flash("O nome da subunidade é obrigatório.", "danger")
+        nome, erros_nome = validar_texto_livre(
+            request.form.get("nome", ""), campo="nome da subunidade",
+            max_len=100, min_len=2, obrigatorio=True,
+        )
+        sigla, erros_sigla = validar_texto_livre(
+            request.form.get("sigla", ""), campo="sigla",
+            max_len=20, obrigatorio=False,
+        )
+
+        errors = [*erros_nome, *erros_sigla]
+        if not errors and Subunidade.query.filter_by(nome=nome).first():
+            errors.append("Já existe uma subunidade com este nome.")
+
+        if errors:
+            for e in errors:
+                flash(e, "danger")
             return render_template("admin/form_subunidade.html", acao="nova")
-        if Subunidade.query.filter_by(nome=nome).first():
-            flash("Já existe uma subunidade com este nome.", "danger")
-            return render_template("admin/form_subunidade.html", acao="nova")
+
         sub = Subunidade(nome=nome, sigla=sigla or None)
-        db.session.add(sub)
-        db.session.commit()
+        try:
+            db.session.add(sub)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Não foi possível criar a subunidade. Tente novamente.", "danger")
+            return render_template("admin/form_subunidade.html", acao="nova")
+
         flash(f"Subunidade '{nome}' criada com sucesso!", "success")
         return redirect(url_for("admin.listar_subunidades"))
     return render_template("admin/form_subunidade.html", acao="nova")
@@ -342,20 +404,37 @@ def editar_subunidade(id):
         return redirect(url_for("admin.listar_subunidades"))
 
     if request.method == "POST":
-        nome  = request.form.get("nome", "").strip()
-        sigla = request.form.get("sigla", "").strip()
+        nome, erros_nome = validar_texto_livre(
+            request.form.get("nome", ""), campo="nome da subunidade",
+            max_len=100, min_len=2, obrigatorio=True,
+        )
+        sigla, erros_sigla = validar_texto_livre(
+            request.form.get("sigla", ""), campo="sigla",
+            max_len=20, obrigatorio=False,
+        )
         ativa = request.form.get("ativa") == "on"
-        if not nome:
-            flash("O nome é obrigatório.", "danger")
+
+        errors = [*erros_nome, *erros_sigla]
+        if not errors:
+            duplicado = Subunidade.query.filter(Subunidade.nome == nome, Subunidade.id != id).first()
+            if duplicado:
+                errors.append("Já existe uma subunidade com este nome.")
+
+        if errors:
+            for e in errors:
+                flash(e, "danger")
             return render_template("admin/form_subunidade.html", sub=sub, acao="editar")
-        duplicado = Subunidade.query.filter(Subunidade.nome == nome, Subunidade.id != id).first()
-        if duplicado:
-            flash("Já existe uma subunidade com este nome.", "danger")
-            return render_template("admin/form_subunidade.html", sub=sub, acao="editar")
+
         sub.nome  = nome
         sub.sigla = sigla or None
         sub.ativa = ativa
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash("Não foi possível salvar as alterações. Tente novamente.", "danger")
+            return render_template("admin/form_subunidade.html", sub=sub, acao="editar")
+
         flash(f"Subunidade '{nome}' atualizada.", "success")
         return redirect(url_for("admin.listar_subunidades"))
 
@@ -371,8 +450,14 @@ def excluir_subunidade(id):
         flash("Subunidade não encontrada.", "danger")
         return redirect(url_for("admin.listar_subunidades"))
     nome = sub.nome
-    db.session.delete(sub)
-    db.session.commit()
+    try:
+        db.session.delete(sub)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash("Não foi possível remover a subunidade.", "danger")
+        return redirect(url_for("admin.listar_subunidades"))
+
     flash(f"Subunidade '{nome}' removida.", "success")
     return redirect(url_for("admin.listar_subunidades"))
 
@@ -385,7 +470,7 @@ def excluir_subunidade(id):
 @login_required
 @admin_required
 def listar_saidas():
-    busca         = request.args.get("busca", "").strip()
+    busca         = sanitizar_texto(request.args.get("busca", ""), max_len=100)
     status_filtro = request.args.get("status", "")
     data_inicio   = request.args.get("data_inicio", "")
     data_fim      = request.args.get("data_fim", "")
@@ -401,25 +486,18 @@ def listar_saidas():
         )
     if status_filtro and status_filtro in StatusSaida.TODOS:
         query = query.filter(Registro.status == status_filtro)
-    if subunidade_id:
-        try:
-            query = query.filter(Usuario.subunidade_id == int(subunidade_id))
-        except (ValueError, TypeError):
-            pass
-    if data_inicio:
-        try:
-            query = query.filter(
-                Registro.data_saida >= datetime.strptime(data_inicio, "%Y-%m-%d")
-            )
-        except ValueError:
-            pass
-    if data_fim:
-        try:
-            query = query.filter(
-                Registro.data_saida <= datetime.strptime(data_fim, "%Y-%m-%d")
-            )
-        except ValueError:
-            pass
+
+    sub_id_valida = parse_int_seguro(subunidade_id, minimo=1)
+    if sub_id_valida is not None:
+        query = query.filter(Usuario.subunidade_id == sub_id_valida)
+
+    data_inicio_dt, _ = validar_data(data_inicio, campo="data de início")
+    if data_inicio_dt:
+        query = query.filter(Registro.data_saida >= data_inicio_dt)
+
+    data_fim_dt, _ = validar_data(data_fim, campo="data de fim")
+    if data_fim_dt:
+        query = query.filter(Registro.data_saida <= data_fim_dt)
 
     saidas = query.order_by(Registro.data_registro.desc()).all()
     subunidades = Subunidade.query.filter_by(ativa=True).order_by(Subunidade.nome).all()
@@ -445,33 +523,56 @@ def listar_saidas():
 @admin_required
 def configuracoes():
     if request.method == "POST":
-        campos_texto = [
-            "nome_sistema", "subtitulo", "organizacao",
-            "rodape", "cor_primaria", "cor_secundaria",
-            "dica_1", "dica_2", "dica_3", "dica_4",
-        ]
-        for campo in campos_texto:
-            valor = request.form.get(campo, "").strip()
+        # Cada campo de texto tem um limite de tamanho coerente com seu uso
+        # (títulos curtos vs. rodapé/dicas um pouco mais longos). Emojis são
+        # permitidos aqui pois são textos de exibição livre (ex.: dicas),
+        # mas continuam limitados em tamanho e sem caracteres de controle.
+        campos_texto_max = {
+            "nome_sistema": 100,
+            "subtitulo": 150,
+            "organizacao": 150,
+            "rodape": 255,
+            "dica_1": 200,
+            "dica_2": 200,
+            "dica_3": 200,
+            "dica_4": 200,
+        }
+        erros_config = []
+        for campo, max_len in campos_texto_max.items():
+            valor, erros = validar_texto_livre(
+                request.form.get(campo, ""), campo=campo,
+                max_len=max_len, obrigatorio=False, permitir_emoji=True,
+            )
+            erros_config.extend(erros)
             ConfigSistema.set(campo, valor)
+
+        for campo_cor in ["cor_primaria", "cor_secundaria"]:
+            cor_atual = ConfigSistema.get(campo_cor, "#1a3a5c") or "#1a3a5c"
+            cor, erros_cor = validar_cor_hex(request.form.get(campo_cor, ""), default=cor_atual)
+            erros_config.extend(erros_cor)
+            ConfigSistema.set(campo_cor, cor)
+
+        if erros_config:
+            for e in erros_config:
+                flash(e, "warning")
 
         for campo_img in ["logo", "logo_relatorio", "brasao", "favicon"]:
             # Verificar remoção
             if request.form.get(f"remover_{campo_img}") == "1":
                 valor_atual = ConfigSistema.get(campo_img)
-                if valor_atual:
-                    try:
-                        caminho = os.path.join(current_app.config["UPLOAD_FOLDER"], valor_atual)
-                        if os.path.exists(caminho):
-                            os.remove(caminho)
-                    except Exception:
-                        pass
+                remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], valor_atual)
                 ConfigSistema.set(campo_img, "")
                 continue
 
-            # Upload de nova imagem
-            nome_arquivo = _save_upload(campo_img, campo_img)
+            # Upload de nova imagem (valida conteúdo real, dimensões e tamanho)
+            nome_arquivo, erro_upload = _save_upload(campo_img, campo_img)
+            if erro_upload:
+                flash(f"{campo_img}: {erro_upload}", "danger")
+                continue
             if nome_arquivo:
+                valor_antigo = ConfigSistema.get(campo_img)
                 ConfigSistema.set(campo_img, nome_arquivo)
+                remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], valor_antigo)
 
         flash("Configurações salvas com sucesso!", "success")
         return redirect(url_for("admin.configuracoes"))
