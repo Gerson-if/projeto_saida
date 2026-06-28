@@ -2,11 +2,11 @@
 config.py — Configurações da aplicação.
 
 Hierarquia:
-  DevelopmentConfig  →  usa SQLite local, DEBUG=True
+  DevelopmentConfig  →  usa SQLite local em instance/, DEBUG=True
   ProductionConfig   →  lê DATABASE_URL do ambiente, DEBUG=False
   TestingConfig      →  banco em memória, TESTING=True
 
-Para selecionar: FLASK_ENV=production  (ou passe a classe diretamente).
+Para selecionar: export FLASK_ENV=production  (ou passe a classe diretamente).
 """
 
 import os
@@ -15,6 +15,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 basedir = os.path.abspath(os.path.dirname(__file__))
+
+# Pasta instance/ para o SQLite — criada em runtime pelo __init__.py
+INSTANCE_DIR = os.path.join(basedir, "instance")
 
 
 class Config:
@@ -26,21 +29,17 @@ class Config:
     # ── Banco de dados ─────────────────────────────────────────────────────
     SQLALCHEMY_DATABASE_URI: str = os.environ.get(
         "DATABASE_URL",
-        f"sqlite:///{os.path.join(basedir, 'instance', 'sistema_saida.db')}",
+        f"sqlite:///{os.path.join(INSTANCE_DIR, 'sistema_saida.db')}",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
-    SQLALCHEMY_ENGINE_OPTIONS: dict = {
-        # Reconecta automaticamente após idle de conexão (importante para MariaDB)
-        "pool_recycle": 280,
-        "pool_pre_ping": True,
-    }
+
+    # pool_recycle e pool_pre_ping causam problemas com SQLite puro.
+    # Em produção com MariaDB/MySQL, sobrescrevemos com os valores adequados.
+    SQLALCHEMY_ENGINE_OPTIONS: dict = {}
 
     # ── Upload de arquivos ─────────────────────────────────────────────────
-    # IMPORTANTE: esta lista é apenas informativa/legado. A validação real do
-    # arquivo é feita pelo conteúdo (Pillow), não pela extensão — ver
-    # app/uploads.py::FORMATOS_ACEITOS, que é a fonte de verdade.
     UPLOAD_FOLDER: str = os.path.join(basedir, "app", "static", "uploads")
-    MAX_CONTENT_LENGTH: int = 5 * 1024 * 1024          # 5 MB (limite global do Flask)
+    MAX_CONTENT_LENGTH: int = 5 * 1024 * 1024   # 5 MB (limite global do Flask)
     ALLOWED_EXTENSIONS: set = {"png", "jpg", "jpeg", "gif", "webp", "ico"}
 
     # ── Relatórios (PDF) ───────────────────────────────────────────────────
@@ -58,10 +57,8 @@ class Config:
     )
 
     # ── Regras de negócio ──────────────────────────────────────────────────
-    # Limite de caracteres para o campo "motivo" no formulário de saída
     MOTIVO_MAX_LENGTH: int = 300
 
-    # Motivos pré-definidos exibidos como sugestão no formulário
     MOTIVOS_SUGERIDOS: list = [
         "Férias anuais",
         "Licença médica / Tratamento de saúde",
@@ -73,7 +70,6 @@ class Config:
     ]
 
     # ── Agendador de status ────────────────────────────────────────────────
-    # Intervalo (em minutos) em que o job de atualização automática roda
     SCHEDULER_STATUS_INTERVAL_MINUTES: int = int(
         os.environ.get("SCHEDULER_STATUS_INTERVAL_MINUTES", 10)
     )
@@ -81,10 +77,19 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG: bool = True
+    # SQLite: sem pool (StaticPool gerenciado pelo SQLAlchemy)
+    SQLALCHEMY_ENGINE_OPTIONS: dict = {
+        "connect_args": {"check_same_thread": False},
+    }
 
 
 class ProductionConfig(Config):
     DEBUG: bool = False
+    # Para MariaDB/MySQL em produção: reconexão automática após idle
+    SQLALCHEMY_ENGINE_OPTIONS: dict = {
+        "pool_recycle": 280,
+        "pool_pre_ping": True,
+    }
 
     @classmethod
     def validate(cls) -> None:
@@ -103,6 +108,9 @@ class ProductionConfig(Config):
 class TestingConfig(Config):
     TESTING: bool = True
     SQLALCHEMY_DATABASE_URI: str = "sqlite:///:memory:"
+    SQLALCHEMY_ENGINE_OPTIONS: dict = {
+        "connect_args": {"check_same_thread": False},
+    }
     WTF_CSRF_ENABLED: bool = False
 
 

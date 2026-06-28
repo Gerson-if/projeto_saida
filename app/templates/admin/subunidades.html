@@ -24,7 +24,7 @@
                         <th class="ps-3">#</th>
                         <th>Nome</th>
                         <th>Sigla</th>
-                        <th>Militares</th>
+                        <th>Usuários</th>
                         <th>Status</th>
                         <th>Criada em</th>
                         <th class="text-end pe-3">Ações</th>
@@ -35,9 +35,19 @@
                     <tr>
                         <td class="ps-3 text-muted">{{ sub.id }}</td>
                         <td class="fw-semibold">{{ sub.nome }}</td>
-                        <td>{% if sub.sigla %}<span class="badge bg-secondary">{{ sub.sigla }}</span>{% else %}—{% endif %}</td>
                         <td>
-                            <span class="badge bg-primary bg-opacity-10 text-primary">{{ sub.usuarios.count() }}</span>
+                            {% if sub.sigla %}
+                            <span class="badge bg-secondary">{{ sub.sigla }}</span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% set qtd = sub.total_usuarios %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary">
+                                {{ qtd }}
+                            </span>
+                            {% if qtd > 0 %}
+                            <small class="text-muted ms-1">vínculo(s)</small>
+                            {% endif %}
                         </td>
                         <td>
                             {% if sub.ativa %}
@@ -48,15 +58,25 @@
                         </td>
                         <td style="font-size:0.85rem;">{{ sub.data_criacao.strftime('%d/%m/%Y') }}</td>
                         <td class="text-end pe-3">
-                            <a href="{{ url_for('admin.editar_subunidade', id=sub.id) }}" class="btn btn-sm btn-outline-primary me-1">
+                            <a href="{{ url_for('admin.editar_subunidade', id=sub.id) }}"
+                               class="btn btn-sm btn-outline-primary me-1"
+                               title="Editar">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            {% if sub.usuarios.count() == 0 %}
-                            <form method="POST" action="{{ url_for('admin.excluir_subunidade', id=sub.id) }}" class="d-inline"
-                                  onsubmit="return confirm('Excluir subunidade {{ sub.nome }}?')">
-                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
-                            </form>
-                            {% endif %}
+
+                            {# Excluir: sempre disponível.
+                               Se houver usuários vinculados, exibe aviso antes de confirmar. #}
+                            {% set qtd = sub.total_usuarios %}
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-danger"
+                                    title="Excluir subunidade"
+                                    onclick="confirmarExclusao(
+                                        '{{ url_for('admin.excluir_subunidade', id=sub.id) }}',
+                                        '{{ sub.nome | e }}',
+                                        {{ qtd }}
+                                    )">
+                                <i class="bi bi-trash"></i>
+                            </button>
                         </td>
                     </tr>
                     {% else %}
@@ -76,4 +96,33 @@
         </div>
     </div>
 </div>
+
+{# Formulário oculto usado pelo JS para submeter a exclusão #}
+<form id="form-excluir-sub" method="POST" style="display:none;">
+</form>
+
+<script>
+/**
+ * Exibe confirmação antes de excluir uma subunidade.
+ * Se houver usuários vinculados, avisa que eles serão desassociados.
+ */
+function confirmarExclusao(url, nome, qtdUsuarios) {
+    let mensagem;
+    if (qtdUsuarios > 0) {
+        mensagem =
+            `Você está prestes a excluir a subunidade "${nome}".\n\n` +
+            `⚠️  Atenção: ${qtdUsuarios} usuário(s) estão vinculados a ela.\n` +
+            `Eles serão desvinculados (sem subunidade), mas suas contas e registros serão mantidos.\n\n` +
+            `Deseja continuar?`;
+    } else {
+        mensagem = `Excluir a subunidade "${nome}"?\n\nEssa ação não pode ser desfeita.`;
+    }
+
+    if (!confirm(mensagem)) return;
+
+    const form = document.getElementById('form-excluir-sub');
+    form.action = url;
+    form.submit();
+}
+</script>
 {% endblock %}
