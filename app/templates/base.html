@@ -257,6 +257,9 @@
             <a href="{{ url_for('admin.configuracoes') }}" class="nav-link {% if 'configuracoes' in request.endpoint %}active{% endif %}" title="Configurações">
                 <i class="bi bi-gear"></i><span class="link-text"> Configurações</span>
             </a>
+            <a href="{{ url_for('admin.listar_motivos') }}" class="nav-link {% if 'motivo' in request.endpoint %}active{% endif %}" title="Motivos de Cancelamento">
+                <i class="bi bi-x-octagon"></i><span class="link-text"> Motivos Cancelamento</span>
+            </a>
         {% else %}
             <div class="nav-section">Meu Painel</div>
             <a href="{{ url_for('user.dashboard') }}" class="nav-link {% if request.endpoint == 'user.dashboard' %}active{% endif %}" title="Minhas Saídas">
@@ -264,6 +267,12 @@
             </a>
             <a href="{{ url_for('user.registrar_saida') }}" class="nav-link {% if 'registrar' in request.endpoint %}active{% endif %}" title="Nova Saída">
                 <i class="bi bi-plus-circle"></i><span class="link-text"> Nova Saída</span>
+            </a>
+            <a href="{{ url_for('user.meus_registros') }}" class="nav-link {% if 'meus_registros' in request.endpoint %}active{% endif %}" title="Meus Registros">
+                <i class="bi bi-journal-text"></i><span class="link-text"> Meus Registros</span>
+            </a>
+            <a href="{{ url_for('user.perfil') }}" class="nav-link {% if 'perfil' in request.endpoint %}active{% endif %}" title="Meu Perfil">
+                <i class="bi bi-person-circle"></i><span class="link-text"> Meu Perfil</span>
             </a>
         {% endif %}
     </div>

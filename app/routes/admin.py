@@ -622,3 +622,73 @@ def _validar_subunidade(sub_id: str, errors: list) -> int | None:
         errors.append("Subunidade não encontrada.")
         return None
     return subunidade_id_valida
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Motivos de Cancelamento
+# ─────────────────────────────────────────────────────────────────────────────
+
+from app.models import MotivoCancelamento  # noqa: E402 (append)
+
+
+@admin_bp.route("/motivos-cancelamento")
+@login_required
+@admin_required
+def listar_motivos():
+    motivos = MotivoCancelamento.query.order_by(
+        MotivoCancelamento.ordem, MotivoCancelamento.id
+    ).all()
+    return render_template("admin/motivos_cancelamento.html", motivos=motivos)
+
+
+@admin_bp.route("/motivos-cancelamento/salvar", methods=["POST"])
+@login_required
+@admin_required
+def salvar_motivos():
+    """Salva criação, edição e exclusão de motivos via POST único."""
+    # Motivos existentes para editar
+    ids_existentes = request.form.getlist("motivo_id")
+    textos = request.form.getlist("motivo_texto")
+    ativos = request.form.getlist("motivo_ativo")
+    ordens = request.form.getlist("motivo_ordem")
+    excluir = request.form.getlist("motivo_excluir")
+
+    for i, mid in enumerate(ids_existentes):
+        if mid in excluir:
+            obj = db.session.get(MotivoCancelamento, int(mid))
+            if obj:
+                db.session.delete(obj)
+            continue
+        texto = (textos[i] if i < len(textos) else "").strip()[:150]
+        if not texto:
+            continue
+        obj = db.session.get(MotivoCancelamento, int(mid))
+        if obj:
+            obj.texto = texto
+            obj.ativo = str(mid) in ativos
+            try:
+                obj.ordem = int(ordens[i]) if i < len(ordens) else 0
+            except (ValueError, TypeError):
+                obj.ordem = 0
+
+    # Novos motivos
+    novos_textos = request.form.getlist("novo_texto")
+    novos_ordens = request.form.getlist("nova_ordem")
+    for j, texto in enumerate(novos_textos):
+        texto = texto.strip()[:150]
+        if not texto:
+            continue
+        try:
+            ordem = int(novos_ordens[j]) if j < len(novos_ordens) else 0
+        except (ValueError, TypeError):
+            ordem = 0
+        db.session.add(MotivoCancelamento(texto=texto, ativo=True, ordem=ordem))
+
+    try:
+        db.session.commit()
+        flash("Motivos de cancelamento salvos com sucesso!", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Não foi possível salvar os motivos.", "danger")
+
+    return redirect(url_for("admin.listar_motivos"))

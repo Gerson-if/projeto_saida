@@ -3,23 +3,22 @@ routes/user.py — Rotas do painel do usuário (militar).
 """
 
 from datetime import datetime, timedelta
-from collections import defaultdict
 
 from flask import (
-    Blueprint, current_app, flash, redirect,
+    Blueprint, current_app, flash, jsonify, redirect,
     render_template, request, url_for,
 )
 from flask_login import current_user, login_required
 
 from app import db
-from app.models import Registro, StatusSaida, ConfigSistema
+from app.models import Registro, StatusSaida, ConfigSistema, MotivoCancelamento
+from app.uploads import validar_e_salvar_imagem, remover_upload_seguro
 from app.validators import validar_texto_livre, validar_telefone, validar_data
 
 user_bp = Blueprint("user", __name__)
 
 
 def _get_user_stats(cpf):
-    """Estatísticas do usuário para o dashboard."""
     todos = Registro.query.filter_by(cpf_usuario=cpf).all()
     total = len(todos)
 
@@ -28,7 +27,6 @@ def _get_user_stats(cpf):
     retornadas  = sum(1 for s in todos if s.status in (StatusSaida.RETORNADO, StatusSaida.FINALIZADO))
     canceladas  = sum(1 for s in todos if s.status == StatusSaida.CANCELADO)
 
-    # Saídas por mês (últimos 6 meses)
     hoje = datetime.today()
     meses_labels = []
     meses_qtd = []
@@ -54,11 +52,47 @@ def _get_user_stats(cpf):
     }
 
 
+def _saida_to_dict(saida):
+    """Serializa um Registro para JSON (usado na API AJAX do dashboard)."""
+    return {
+        'id': saida.id,
+        'local': saida.local,
+        'motivo': saida.motivo,
+        'status': saida.status,
+        'status_label': saida.status_label,
+        'status_badge': saida.status_badge,
+        'data_registro': saida.data_registro.strftime('%d/%m/%Y'),
+        'data_saida': saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else None,
+        'data_retorno': saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else None,
+        'telefone_contato': saida.telefone_contato or '',
+        'editavel': saida.editavel,
+        'motivo_cancelamento': saida.motivo_cancelamento or '',
+        'obs_cancelamento': saida.obs_cancelamento or '',
+        'url_editar': url_for('user.editar_saida', id=saida.id),
+    }
+
+
 @user_bp.route("/dashboard")
 @login_required
 def dashboard():
+    stats = _get_user_stats(current_user.cpf)
+    config_sistema = {c.chave: c.valor for c in ConfigSistema.query.all()}
+
+    return render_template(
+        "user/dashboard.html",
+        stats=stats,
+        config_sistema=config_sistema,
+    )
+
+
+@user_bp.route("/api/saidas")
+@login_required
+def api_saidas():
+    """Endpoint AJAX: retorna saídas filtradas em JSON sem recarregar a página."""
     status_filtro = request.args.get("status", "")
-    ver_historico = request.args.get("historico", "0") == "1"
+    historico = request.args.get("historico", "0") == "1"
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = 9
 
     query = Registro.query.filter_by(cpf_usuario=current_user.cpf)
     if status_filtro and status_filtro in StatusSaida.TODOS:
@@ -66,27 +100,21 @@ def dashboard():
 
     query = query.order_by(Registro.data_registro.desc())
 
-    if ver_historico or status_filtro:
-        saidas = query.all()
-        mostrar_botao_historico = False
+    total = query.count()
+
+    if historico or status_filtro:
+        saidas = query.offset((page - 1) * per_page).limit(per_page).all()
+        tem_mais = (page * per_page) < total
     else:
-        total = query.count()
         saidas = query.limit(6).all()
-        mostrar_botao_historico = total > 6
+        tem_mais = total > 6
 
-    stats = _get_user_stats(current_user.cpf)
-    config_sistema = {c.chave: c.valor for c in ConfigSistema.query.all()}
-
-    return render_template(
-        "user/dashboard.html",
-        saidas=saidas,
-        status_filtro=status_filtro,
-        StatusSaida=StatusSaida,
-        ver_historico=ver_historico,
-        mostrar_botao_historico=mostrar_botao_historico,
-        stats=stats,
-        config_sistema=config_sistema,
-    )
+    return jsonify({
+        'saidas': [_saida_to_dict(s) for s in saidas],
+        'total': total,
+        'tem_mais': tem_mais,
+        'page': page,
+    })
 
 
 @user_bp.route("/registrar", methods=["GET", "POST"])
@@ -182,8 +210,7 @@ def registrar_saida():
                 motivo_max=motivo_max,
             )
 
-        flash("Saída registrada com sucesso!", "success")
-        return redirect(url_for("user.dashboard"))
+        return redirect(url_for("user.dashboard", registrado="1"))
 
     return render_template(
         "user/registrar.html",
@@ -282,29 +309,216 @@ def cancelar_saida(id):
         id=id, cpf_usuario=current_user.cpf
     ).first_or_404()
 
+    origem = request.form.get("origem", "registros")  # 'registros' ou 'dashboard'
+
     if not saida.editavel:
         flash("Esta saída não pode mais ser cancelada.", "warning")
-        return redirect(url_for("user.dashboard"))
+        return redirect(url_for("user.meus_registros"))
 
-    motivo_cancelamento, erros = validar_texto_livre(
-        request.form.get("motivo_cancelamento", ""), campo="motivo do cancelamento",
-        max_len=500, obrigatorio=True,
+    # Valida o motivo selecionado (deve existir na lista de motivos ativos)
+    motivo_id = request.form.get("motivo_cancelamento_id", "").strip()
+    obs_raw   = request.form.get("obs_cancelamento", "").strip()
+
+    if not motivo_id:
+        flash("Selecione um motivo para o cancelamento.", "danger")
+        return redirect(url_for("user.meus_registros"))
+
+    motivo_obj = MotivoCancelamento.query.filter_by(id=motivo_id, ativo=True).first()
+    if not motivo_obj:
+        flash("Motivo de cancelamento inválido.", "danger")
+        return redirect(url_for("user.meus_registros"))
+
+    # Observação opcional — limitada a 200 caracteres
+    obs, erros_obs = validar_texto_livre(
+        obs_raw, campo="observação",
+        max_len=200, obrigatorio=False,
     )
-    if erros:
-        for e in erros:
+    if erros_obs:
+        for e in erros_obs:
             flash(e, "danger")
-        return redirect(url_for("user.dashboard"))
+        return redirect(url_for("user.meus_registros"))
 
-    saida.status = StatusSaida.CANCELADO
+    saida.status               = StatusSaida.CANCELADO
     saida.status_atualizado_em = datetime.utcnow()
-    saida.motivo_cancelamento  = motivo_cancelamento
+    saida.motivo_cancelamento  = motivo_obj.texto
+    saida.obs_cancelamento     = obs or None
     saida.data_cancelamento    = datetime.utcnow()
     try:
         db.session.commit()
     except Exception:
         db.session.rollback()
         flash("Não foi possível cancelar a saída. Tente novamente.", "danger")
-        return redirect(url_for("user.dashboard"))
+        return redirect(url_for("user.meus_registros"))
 
     flash("Saída cancelada com sucesso.", "info")
-    return redirect(url_for("user.dashboard"))
+    return redirect(url_for("user.meus_registros"))
+
+
+@user_bp.route("/api/registro/<int:id>")
+@login_required
+def api_registro_detalhe(id):
+    """Retorna JSON com detalhes de um registro para preview."""
+    saida = Registro.query.filter_by(
+        id=id, cpf_usuario=current_user.cpf
+    ).first_or_404()
+    return jsonify({
+        'id': saida.id,
+        'local': saida.local,
+        'motivo': saida.motivo,
+        'status': saida.status,
+        'status_label': saida.status_label,
+        'status_badge': saida.status_badge,
+        'data_registro': saida.data_registro.strftime('%d/%m/%Y %H:%M'),
+        'data_saida': saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else None,
+        'data_retorno': saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else None,
+        'telefone_contato': saida.telefone_contato or '',
+        'endereco_destino': saida.endereco_destino or '',
+        'editavel': saida.editavel,
+        'motivo_cancelamento': saida.motivo_cancelamento or '',
+        'obs_cancelamento': saida.obs_cancelamento or '',
+        'data_cancelamento': saida.data_cancelamento.strftime('%d/%m/%Y %H:%M') if saida.data_cancelamento else None,
+        'url_editar': url_for('user.editar_saida', id=saida.id),
+        'url_cancelar': url_for('user.cancelar_saida', id=saida.id),
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Perfil do usuário
+# ─────────────────────────────────────────────────────────────────────────────
+
+@user_bp.route("/meus-registros")
+@login_required
+def meus_registros():
+    """Página de consulta/pesquisa dos registros do próprio usuário."""
+    busca_local = request.args.get("local", "").strip()
+    data_inicio = request.args.get("data_inicio", "").strip()
+    data_fim    = request.args.get("data_fim", "").strip()
+    status_filtro = request.args.get("status", "").strip()
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = 10
+
+    query = Registro.query.filter_by(cpf_usuario=current_user.cpf)
+
+    if busca_local:
+        query = query.filter(Registro.local.ilike(f"%{busca_local}%"))
+
+    if data_inicio:
+        try:
+            dt_ini = datetime.strptime(data_inicio, "%Y-%m-%d")
+            query = query.filter(Registro.data_registro >= dt_ini)
+        except ValueError:
+            pass
+
+    if data_fim:
+        try:
+            from datetime import timedelta
+            dt_fim = datetime.strptime(data_fim, "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(Registro.data_registro < dt_fim)
+        except ValueError:
+            pass
+
+    if status_filtro and status_filtro in StatusSaida.TODOS:
+        query = query.filter_by(status=status_filtro)
+
+    query = query.order_by(Registro.data_registro.desc())
+    total = query.count()
+    saidas = query.offset((page - 1) * per_page).limit(per_page).all()
+    total_pages = max(1, -(-total // per_page))  # ceil division
+
+    tem_filtro = any([busca_local, data_inicio, data_fim, status_filtro])
+    motivos_cancelamento = MotivoCancelamento.listar_ativos()
+
+    return render_template(
+        "user/meus_registros.html",
+        saidas=saidas,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        tem_filtro=tem_filtro,
+        busca_local=busca_local,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        status_filtro=status_filtro,
+        StatusSaida=StatusSaida,
+        motivos_cancelamento=motivos_cancelamento,
+    )
+
+
+@user_bp.route("/perfil", methods=["GET", "POST"])
+@login_required
+def perfil():
+    """Permite que o usuário atualize sua foto, telefone e e-mail."""
+    if request.method == "POST":
+        acao = request.form.get("acao", "dados")
+
+        if acao == "senha":
+            # Troca de senha
+            senha_atual = request.form.get("senha_atual", "").strip()
+            nova_senha  = request.form.get("nova_senha", "").strip()
+            confirmar   = request.form.get("confirmar_senha", "").strip()
+
+            if not current_user.check_senha(senha_atual):
+                flash("Senha atual incorreta.", "danger")
+            elif len(nova_senha) < 4:
+                flash("A nova senha deve ter pelo menos 4 caracteres.", "danger")
+            elif nova_senha != confirmar:
+                flash("As senhas não coincidem.", "danger")
+            else:
+                current_user.set_senha(nova_senha)
+                try:
+                    db.session.commit()
+                    flash("Senha alterada com sucesso!", "success")
+                except Exception:
+                    db.session.rollback()
+                    flash("Não foi possível alterar a senha.", "danger")
+            return redirect(url_for("user.perfil"))
+
+        # Dados + foto
+        telefone, erros_tel = validar_telefone(request.form.get("telefone", ""))
+        email_raw = request.form.get("email", "").strip()[:120]
+
+        errors = list(erros_tel)
+
+        # Validação simples de e-mail
+        if email_raw and ("@" not in email_raw or "." not in email_raw.split("@")[-1]):
+            errors.append("E-mail inválido.")
+
+        if errors:
+            for e in errors:
+                flash(e, "danger")
+            return redirect(url_for("user.perfil"))
+
+        current_user.telefone = telefone or None
+        current_user.email    = email_raw or None
+
+        # Foto
+        if request.form.get("remover_foto") == "1":
+            if current_user.foto:
+                remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], current_user.foto)
+            current_user.foto = None
+        else:
+            file = request.files.get("foto")
+            resultado = validar_e_salvar_imagem(
+                file,
+                destino_dir=current_app.config["UPLOAD_FOLDER"],
+                prefixo=f"user_{current_user.id}",
+            )
+            if not resultado.ok:
+                flash(resultado.erro, "danger")
+                return redirect(url_for("user.perfil"))
+            if resultado.nome_arquivo:
+                foto_antiga = current_user.foto
+                current_user.foto = resultado.nome_arquivo
+                remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], foto_antiga)
+
+        try:
+            db.session.commit()
+            flash("Perfil atualizado com sucesso!", "success")
+        except Exception:
+            db.session.rollback()
+            flash("Não foi possível salvar as alterações.", "danger")
+
+        return redirect(url_for("user.perfil"))
+
+    return render_template("user/perfil.html")

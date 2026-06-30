@@ -1,0 +1,888 @@
+{% extends 'base.html' %}
+{% block title %}Meus Registros{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ══════════════════════════════════════════════════════
+   VARIÁVEIS & RESET (Modernizado com as cores do sistema)
+══════════════════════════════════════════════════════ */
+:root {
+  --mr-radius: 16px;
+  --mr-border: #e2e8f0;
+  --mr-surface: #ffffff;
+  --mr-bg: #f8fafc;
+  --mr-text-main: #0f172a;
+  --mr-text-muted: #475569;
+  --mr-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  --mr-shadow-hover: 0 12px 20px -3px rgba(15, 23, 42, 0.08);
+  --transition-smooth: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ══════════════════════════════════════════════════════
+   PAINEL DE BUSCA (Estilo Premium)
+══════════════════════════════════════════════════════ */
+.search-glass {
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: var(--mr-radius);
+  box-shadow: var(--mr-shadow);
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+.search-glass-body { padding: 1.5rem 1.5rem 1.25rem; }
+.search-glass-foot {
+  background: var(--mr-bg);
+  border-top: 1px solid var(--mr-border);
+  padding: 0.75rem 1.5rem;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+}
+
+.field-label {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--mr-text-muted);
+  margin-bottom: 6px; display: block;
+}
+
+.input-icon-wrap { position: relative; }
+.input-icon-wrap .icon {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: #94a3b8; font-size: 0.95rem; pointer-events: none;
+}
+.input-icon-wrap input { padding-left: 2.4rem !important; }
+
+.input-modern {
+  border-radius: 12px !important;
+  border: 1.5px solid var(--mr-border) !important;
+  font-size: 0.88rem !important;
+  height: 42px;
+  transition: all var(--transition-smooth);
+  background: #fafbfc !important;
+  color: var(--mr-text-main);
+}
+.input-modern:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+  background: #fff !important;
+}
+
+/* Chips de status */
+.chips-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1rem; }
+.s-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.3rem 0.85rem; border-radius: 50px;
+  border: 1px solid var(--mr-border); background: #fff;
+  font-size: 0.78rem; font-weight: 600; cursor: pointer;
+  transition: all var(--transition-smooth); text-decoration: none; color: var(--mr-text-muted);
+}
+.s-chip:hover { transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); color: var(--mr-text-main); }
+
+.s-chip.sel-all       { background: #1e293b; border-color: #1e293b; color: #fff; }
+.s-chip.sel-agendada   { background: #f59e0b; border-color: #d97706; color: #fff; }
+.s-chip.sel-em_transito{ background: #3b82f6; border-color: #2563eb; color: #fff; }
+.s-chip.sel-retornado  { background: #10b981; border-color: #059669; color: #fff; }
+.s-chip.sel-cancelado  { background: #64748b; border-color: #475569; color: #fff; }
+.s-chip.sel-finalizado { background: #334155; border-color: #1e293b; color: #fff; }
+
+/* Tag de filtro ativo */
+.ftag {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.2rem 0.65rem; border-radius: 20px;
+  background: #eff6ff; color: #1e40af;
+  font-size: 0.72rem; font-weight: 600;
+  border: 1px solid #dbeafe;
+}
+
+/* ══════════════════════════════════════════════════════
+   CARD DE REGISTRO (Micro-interações fluidas e elegantes)
+══════════════════════════════════════════════════════ */
+.reg-card {
+  background: var(--mr-surface);
+  border: 1px solid var(--mr-border);
+  border-radius: 14px;
+  padding: 1.1rem 1.4rem;
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  transition: transform var(--transition-smooth), box-shadow var(--transition-smooth), border-color var(--transition-smooth);
+  margin-bottom: 0.75rem;
+  position: relative;
+  cursor: default;
+}
+.reg-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: var(--mr-shadow-hover);
+  transform: translateY(-2px);
+}
+.reg-card::before {
+  content: '';
+  position: absolute; left: 0; top: 14px; bottom: 14px;
+  width: 4px; border-radius: 0 4px 4px 0;
+}
+.rc-agendada::before   { background: #f59e0b; }
+.rc-em_transito::before { background: #3b82f6; }
+.rc-retornado::before   { background: #10b981; }
+.rc-cancelado::before   { background: #94a3b8; }
+.rc-finalizado::before  { background: #334155; }
+
+/* Ícone de status */
+.rc-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.05rem; flex-shrink: 0;
+}
+.rci-agendada    { background: #fffbeb; color: #d97706; }
+.rci-em_transito { background: #eff6ff; color: #2563eb; }
+.rci-retornado   { background: #f0fdf4; color: #16a34a; }
+.rci-cancelado   { background: #f1f5f9; color: #64748b; }
+.rci-finalizado  { background: #f8fafc; color: #334155; }
+
+/* Conteúdo interno do card */
+.rc-main { min-width: 0; }
+.rc-local {
+  font-size: 0.95rem; font-weight: 700; color: var(--mr-text-main);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 3px; letter-spacing: -0.01em;
+}
+.rc-local mark {
+  background: #fef08a; color: #854d0e; border-radius: 4px; padding: 0 4px;
+}
+.rc-sub {
+  font-size: 0.78rem; color: #748094;
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+}
+
+/* Lado direito */
+.rc-right {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 0.5rem; flex-shrink: 0;
+}
+
+/* Status pill */
+.spill {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.2rem 0.6rem; border-radius: 20px;
+  font-size: 0.72rem; font-weight: 700;
+}
+.sp-agendada    { background: #fffbeb; color: #b45309; }
+.sp-em_transito { background: #eff6ff; color: #1d4ed8; }
+.sp-retornado   { background: #f0fdf4; color: #15803d; }
+.sp-cancelado   { background: #f1f5f9; color: #475569; }
+.sp-finalizado  { background: #f8fafc; color: #1e293b; }
+
+/* Botões de Ação (Visibilidade e contraste de alta definição) */
+.rc-actions { 
+  display: flex; 
+  gap: 0.5rem; 
+  align-items: center; 
+}
+.btn-action {
+  width: 36px; 
+  height: 36px; 
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.92rem;
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  cursor: pointer; 
+  transition: all var(--transition-smooth); 
+  text-decoration: none;
+}
+
+/* Hovers Semânticos: Cores vivas e nítidas ao passar o mouse */
+.btn-action.preview { 
+  color: #4f46e5; 
+  border-color: #818cf8; 
+}
+.btn-action.preview:hover { 
+  background: #e0e7ff; 
+  border-color: #4f46e5; 
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.btn-action.edit { 
+  color: #2563eb; 
+  border-color: #93c5fd; 
+}
+.btn-action.edit:hover { 
+  background: #dbeafe; 
+  border-color: #2563eb; 
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.btn-action.cancel { 
+  color: #dc2626; 
+  border-color: #fca5a5; 
+}
+.btn-action.cancel:hover { 
+  background: #fee2e2; 
+  border-color: #dc2626; 
+  box-shadow: 0 0 0 3px rgba(220, 38, 229, 0.15);
+}
+
+/* Feedback tátil ao clicar */
+.btn-action:active {
+  transform: scale(0.95);
+}
+
+/* ══════════════════════════════════════════════════════
+   DRAWER DE PREVIEW (Deslizamento suave tipo iOS)
+══════════════════════════════════════════════════════ */
+.drawer-backdrop {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.3); z-index: 1040;
+  backdrop-filter: blur(4px);
+  animation: bdFadeIn 0.2s ease-out;
+}
+.drawer-backdrop.open { display: block; }
+@keyframes bdFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.preview-drawer {
+  position: fixed; top: 0; right: -500px; bottom: 0;
+  width: min(480px, 100vw); z-index: 1050;
+  background: #fff;
+  box-shadow: -10px 0 40px rgba(15, 23, 42, 0.08);
+  display: flex; flex-direction: column;
+  transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 24px 0 0 24px;
+  overflow: hidden;
+}
+.preview-drawer.open { right: 0; }
+
+.drawer-header {
+  padding: 1.5rem 1.5rem 1.1rem;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.drawer-header h6 { font-size: 0.88rem; font-weight: 700; color: var(--mr-text-muted); margin: 0; }
+
+.drawer-body { flex: 1; overflow-y: auto; padding: 1.5rem; }
+.drawer-body::-webkit-scrollbar { width: 5px; }
+.drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+.drawer-footer {
+  padding: 1.1rem 1.5rem;
+  border-top: 1px solid #f1f5f9;
+  display: flex; gap: 0.75rem; flex-shrink: 0;
+  background: #f8fafc;
+}
+
+/* Conteúdo Interno do Preview */
+.preview-status-badge {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.4rem 1.1rem; border-radius: 50px;
+  font-size: 0.82rem; font-weight: 700; margin-bottom: 1.25rem;
+}
+.psb-agendada    { background: #fffbeb; color: #b45309; }
+.psb-em_transito { background: #eff6ff; color: #1d4ed8; }
+.psb-retornado   { background: #f0fdf4; color: #15803d; }
+.psb-cancelado   { background: #fdf2f2; color: #b91c1c; }
+.psb-finalizado  { background: #f8fafc; color: #1e293b; }
+
+.preview-local {
+  font-size: 1.25rem; font-weight: 800; color: var(--mr-text-main);
+  line-height: 1.3; margin-bottom: 0.6rem; letter-spacing: -0.02em;
+}
+.preview-motivo {
+  font-size: 0.88rem; color: var(--mr-text-muted); line-height: 1.5;
+  padding: 0.85rem 1.1rem; background: #f8fafc;
+  border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 1.5rem;
+}
+
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.5rem; }
+.info-cell { background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 0.8rem 1.1rem; }
+.info-cell .lbl {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;
+}
+.info-cell .val { font-size: 0.9rem; font-weight: 600; color: var(--mr-text-main); }
+.info-cell.full { grid-column: 1 / -1; }
+
+.cancel-box {
+  background: #fdf2f2; border: 1px solid #fca5a5;
+  border-radius: 12px; padding: 1rem; margin-top: 1rem;
+}
+.cancel-box .clbl { font-size: 0.75rem; font-weight: 700; color: #b91c1c; margin-bottom: 4px; }
+.cancel-box .cval { font-size: 0.88rem; color: #7f1d1d; line-height: 1.4; }
+
+/* Efeito Shimmer sutil para carregamento */
+.skel {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: skelShimmer 1.5s infinite linear;
+  border-radius: 8px;
+}
+@keyframes skelShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ══════════════════════════════════════════════════════
+   MODAL DE CANCELAMENTO
+══════════════════════════════════════════════════════ */
+#modalCancelar .modal-content { border: none; border-radius: 20px; box-shadow: 0 20px 50px rgba(15,23,42,0.15); overflow: hidden; }
+#modalCancelar .modal-header { background: linear-gradient(135deg, #fdf2f2, #fee2e2); border-bottom: 1px solid #fee2e2; padding: 1.25rem 1.5rem; }
+
+.motivo-radio {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.8rem 1rem; border: 1px solid #e2e8f0;
+  border-radius: 12px; cursor: pointer; transition: all var(--transition-smooth);
+  margin-bottom: 0.5rem;
+}
+.motivo-radio:hover { background: #fafbfc; border-color: #cbd5e1; }
+.motivo-radio input[type=radio] { accent-color: #ef4444; }
+.motivo-radio.selected { background: #fdf2f2; border-color: #fca5a5; }
+
+/* ══════════════════════════════════════════════════════
+   RESULTADO E PAGINAÇÃO
+══════════════════════════════════════════════════════ */
+.results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+.results-title { font-size: 0.92rem; font-weight: 700; color: var(--mr-text-main); display: flex; align-items: center; gap: 0.5rem; }
+.total-pill { background: #1e293b; color: #fff; border-radius: 20px; padding: 0.15rem 0.6rem; font-size: 0.72rem; font-weight: 700; }
+
+.empty-state { text-align: center; padding: 5rem 1rem; color: #94a3b8; }
+.empty-state i { font-size: 3rem; opacity: 0.3; display: block; margin-bottom: 1rem; }
+.empty-state p { font-size: 0.92rem; margin: 0; }
+
+/* Paginação Estilo Clean */
+.pag-wrap { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; padding: 1rem 0; }
+.pag-info { font-size: 0.82rem; color: var(--mr-text-muted); }
+.pag-btns { display: flex; gap: 0.3rem; }
+.pag-btn {
+  width: 36px; height: 36px; border-radius: 10px;
+  border: 1px solid var(--mr-border); background: #fff;
+  color: var(--mr-text-muted); font-size: 0.82rem; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  text-decoration: none; transition: all var(--transition-smooth);
+}
+.pag-btn:hover:not(.disabled):not(.active) { border-color: #cbd5e1; color: var(--mr-text-main); background: #f8fafc; }
+.pag-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; pointer-events: none; }
+.pag-btn.disabled { opacity: 0.35; pointer-events: none; }
+.pag-btn-w { width: auto; padding: 0 0.8rem; }
+
+/* ══════════════════════════════════════════════════════
+   RESPONSIVO
+══════════════════════════════════════════════════════ */
+@media (max-width: 600px) {
+  .reg-card { grid-template-columns: 40px 1fr auto; gap: 0.75rem; padding: 1rem; }
+  .search-glass-body { padding: 1.25rem 1rem; }
+  .info-grid { grid-template-columns: 1fr; }
+  .preview-drawer { border-radius: 0; }
+}
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <h4 class="mb-0 fw-bold" style="color:#0f172a;">
+      <i class="bi bi-journal-text me-2" style="color:var(--cor-secundaria);"></i>
+      Meus Registros
+    </h4>
+    <small class="text-muted">Pesquise, filtre e gerencie todas as suas saídas</small>
+  </div>
+  <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-primary px-3 rounded-3 fw-semibold shadow-sm">
+    <i class="bi bi-plus-circle me-1"></i> Nova Saída
+  </a>
+</div>
+
+<div class="search-glass">
+  <form method="GET" id="formBusca" action="{{ url_for('user.meus_registros') }}">
+    <div class="search-glass-body">
+      <div class="row g-3 align-items-end">
+
+        <div class="col-12 col-md-5">
+          <label class="field-label"><i class="bi bi-geo-alt me-1"></i>Cidade / Local de destino</label>
+          <div class="input-icon-wrap">
+            <i class="bi bi-search icon"></i>
+            <input type="text" name="local" class="form-control input-modern"
+                   value="{{ busca_local }}"
+                   placeholder="Ex: Campo Grande, Aquidauana…"
+                   autocomplete="off" id="inputLocal">
+          </div>
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label class="field-label"><i class="bi bi-calendar-event me-1"></i>A partir de</label>
+          <input type="date" name="data_inicio" class="form-control input-modern"
+                 value="{{ data_inicio }}" id="inputDataInicio">
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label class="field-label"><i class="bi bi-calendar-check me-1"></i>Até</label>
+          <input type="date" name="data_fim" class="form-control input-modern"
+                 value="{{ data_fim }}" id="inputDataFim">
+        </div>
+
+        <div class="col-12 col-md-1 d-flex gap-2">
+          <button type="submit" class="btn btn-primary rounded-3 px-3 flex-grow-1">
+            <i class="bi bi-search"></i>
+            <span class="d-md-none ms-1">Buscar</span>
+          </button>
+          {% if tem_filtro %}
+          <a href="{{ url_for('user.meus_registros') }}" class="btn btn-light rounded-3 px-2" title="Limpar">
+            <i class="bi bi-x-lg"></i>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="mt-1">
+        <div class="field-label mt-2"><i class="bi bi-tags me-1"></i>Filtrar por status</div>
+        <div class="chips-row">
+          <a href="{{ url_for('user.meus_registros', local=busca_local, data_inicio=data_inicio, data_fim=data_fim, status='') }}"
+             class="s-chip {{ 'sel-all' if not status_filtro }}">
+            <i class="bi bi-list-check"></i> Todos
+          </a>
+          {% for val, icon, lbl in [
+              ('agendada','bi-clock','Agendada'),
+              ('em_transito','bi-truck','Em Trânsito'),
+              ('retornado','bi-house-check','Retornado'),
+              ('cancelado','bi-x-circle','Cancelado'),
+              ('finalizado','bi-check-circle','Finalizado')
+          ] %}
+          <a href="{{ url_for('user.meus_registros', local=busca_local, data_inicio=data_inicio, data_fim=data_fim, status=val) }}"
+             class="s-chip {{ ('sel-' ~ val) if status_filtro == val }}">
+            <i class="bi {{ icon }}"></i> {{ lbl }}
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {% if tem_filtro %}
+    <div class="search-glass-foot">
+      <i class="bi bi-funnel-fill text-primary" style="font-size:.78rem;"></i>
+      <span style="font-size:.75rem;color:#64748b;font-weight:600;">Filtros ativos:</span>
+      {% if busca_local %}<span class="ftag"><i class="bi bi-geo-alt"></i>{{ busca_local }}</span>{% endif %}
+      {% if data_inicio %}
+        {%- set d = data_inicio.split('-') %}
+        <span class="ftag"><i class="bi bi-calendar-event"></i>De {{ d[2] }}/{{ d[1] }}/{{ d[0] }}</span>
+      {% endif %}
+      {% if data_fim %}
+        {%- set d2 = data_fim.split('-') %}
+        <span class="ftag"><i class="bi bi-calendar-check"></i>Até {{ d2[2] }}/{{ d2[1] }}/{{ d2[0] }}</span>
+      {% endif %}
+      {% if status_filtro %}
+        <span class="ftag"><i class="bi bi-circle-fill" style="font-size:.45rem;"></i>
+          {{ {'agendada':'Agendada','em_transito':'Em Trânsito','retornado':'Retornado','cancelado':'Cancelado','finalizado':'Finalizado'}.get(status_filtro, status_filtro) }}
+        </span>
+      {% endif %}
+      <a href="{{ url_for('user.meus_registros') }}" class="ms-auto" style="font-size:.73rem;color:#64748b;text-decoration:none;">
+        <i class="bi bi-x me-1"></i>Limpar tudo
+      </a>
+    </div>
+    {% endif %}
+  </form>
+</div>
+
+<div class="results-header">
+  <div class="results-title">
+    <i class="bi bi-table" style="color:var(--cor-secundaria);"></i>
+    Registros encontrados
+    <span class="total-pill">{{ total }}</span>
+  </div>
+  {% if total > 0 %}
+  <span style="font-size:.76rem;color:#94a3b8;">
+    Página {{ page }} de {{ total_pages }} · {{ saidas|length }} de {{ total }}
+  </span>
+  {% endif %}
+</div>
+
+{% if saidas %}
+  {% set status_icons = {
+    'agendada':'bi-clock','em_transito':'bi-truck',
+    'retornado':'bi-house-check','cancelado':'bi-x-circle','finalizado':'bi-check-circle'
+  } %}
+
+  <div id="containerRegistros">
+    {% for saida in saidas %}
+    <div class="reg-card rc-{{ saida.status }} js-reg-card" {% if loop.index > 4 %}style="display: none;"{% endif %}>
+
+      <div class="rc-icon rci-{{ saida.status }}">
+        <i class="bi {{ status_icons.get(saida.status, 'bi-circle') }}"></i>
+      </div>
+
+      <div class="rc-main">
+        <div class="rc-local" data-texto="{{ saida.local }}">{{ saida.local }}</div>
+        <div class="rc-sub">
+          <span><i class="bi bi-tag" style="font-size:.7rem;"></i> {{ saida.motivo|truncate(55) }}</span>
+          <span class="d-none d-sm-inline">·</span>
+          <span class="d-none d-sm-inline">
+            <i class="bi bi-calendar3" style="font-size:.7rem;"></i>
+            {{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '—' }}
+            {% if saida.data_retorno %}
+              <span class="text-muted">→ {{ saida.data_retorno.strftime('%d/%m/%Y') }}</span>
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
+      <div class="rc-right">
+        <span class="spill sp-{{ saida.status }}">
+          <i class="bi {{ status_icons.get(saida.status,'bi-circle') }}" style="font-size:.6rem;"></i>
+          {{ saida.status_label }}
+        </span>
+        <div class="rc-actions">
+          <button class="btn-action preview"
+                  onclick="abrirPreview({{ saida.id }})"
+                  title="Pré-visualizar">
+            <i class="bi bi-eye"></i>
+          </button>
+          {% if saida.editavel %}
+          <a href="{{ url_for('user.editar_saida', id=saida.id) }}"
+             class="btn-action edit" title="Editar">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <button class="btn-action cancel"
+                  onclick="abrirCancelar({{ saida.id }}, '{{ saida.local|replace("'","\\'") }}')"
+                  title="Cancelar saída">
+            <i class="bi bi-x-circle"></i>
+          </button>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if saidas|length > 4 %}
+  <div class="text-center my-3" id="wrapperVerMais">
+    <button type="button" class="btn btn-sm px-4 rounded-pill fw-semibold shadow-sm" 
+            style="background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; transition: all 0.2s;"
+            onclick="expandirRegistros()">
+      <i class="bi bi-chevron-down me-1"></i> Ver mais registros ({{ saidas|length - 4 }})
+    </button>
+  </div>
+  {% endif %}
+
+  {% if total_pages > 1 %}
+  <div class="pag-wrap">
+    <div class="pag-info">
+      Mostrando <strong>{{ (page-1)*per_page+1 }}–{{ [page*per_page, total]|min }}</strong>
+      de <strong>{{ total }}</strong>
+    </div>
+    <div class="pag-btns">
+      <a href="{{ url_for('user.meus_registros', local=busca_local, data_inicio=data_inicio, data_fim=data_fim, status=status_filtro, page=page-1) }}"
+         class="pag-btn pag-btn-w {{ 'disabled' if page==1 }}">
+        <i class="bi bi-chevron-left"></i>
+      </a>
+
+      {% set sp = [1, page-2]|max %}
+      {% set ep = [total_pages, page+2]|min %}
+
+      {% if sp > 1 %}
+        <a href="{{ url_for('user.meus_registros', local=busca_local, data_inicio=data_inicio, data_fim=data_fim, status=status_filtro, page=1) }}" class="pag-btn">1</a>
+        {% if sp > 2 %}<span class="pag-btn" style="pointer-events:none;border:none;background:none;color:#94a3b8;">…</span>{% endif %}
+      {% endif %}
+
+      {% for p in range(sp, ep+1) %}
+      <a href="{{ url_for('user.meus_registros', local=busca_local, data_inicio=data_inicio, data_fim=data_fim, status=status_filtro, page=p) }}"
+         class="pag-btn {{ 'active' if p==page }}">{{ p }}</a>
+      {% endfor %}
+
+      {% if ep < total_pages %}
+        {% if ep < total_pages-1 %}<span class="pag-btn" style="pointer-events:none;border:none;background:none;color:#94a3b8;">…</span>{% endif %}
+        <a href="{{ url_for('user.meus_registros', local=busca_local, data_inicio=data_inicio, data_fim=data_fim, status=status_filtro, page=total_pages) }}" class="pag-btn">{{ total_pages }}</a>
+      {% endif %}
+
+      <a href="{{ url_for('user.meus_registros', local=busca_local, data_inicio=data_inicio, data_fim=data_fim, status=status_filtro, page=page+1) }}"
+         class="pag-btn pag-btn-w {{ 'disabled' if page==total_pages }}">
+        <i class="bi bi-chevron-right"></i>
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+{% else %}
+<div class="empty-state">
+  {% if tem_filtro %}
+  <i class="bi bi-search"></i>
+  <strong style="color:#475569;font-size:1rem;display:block;margin-bottom:.35rem;">Nenhum registro encontrado</strong>
+  <p>Tente ajustar os filtros ou
+    <a href="{{ url_for('user.meus_registros') }}" style="color:var(--cor-primaria);">limpe a busca</a>.
+  </p>
+  {% else %}
+  <i class="bi bi-journal-x"></i>
+  <strong style="color:#475569;font-size:1rem;display:block;margin-bottom:.35rem;">Você ainda não tem registros</strong>
+  <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-primary mt-2 rounded-3">
+    <i class="bi bi-plus-circle me-1"></i> Registrar primeira saída
+  </a>
+  {% endif %}
+</div>
+{% endif %}
+
+
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="fecharPreview()"></div>
+
+<div class="preview-drawer" id="previewDrawer">
+  <div class="drawer-header">
+    <h6><i class="bi bi-eye me-2"></i>Resumo do Registro</h6>
+    <button type="button" class="btn-close btn-sm" onclick="fecharPreview()"></button>
+  </div>
+
+  <div class="drawer-body" id="drawerBody">
+    <div class="d-flex flex-column gap-3">
+      <div class="skel" style="height:32px;width:120px;"></div>
+      <div class="skel" style="height:28px;width:80%;"></div>
+      <div class="skel" style="height:70px;"></div>
+      <div class="info-grid">
+        <div class="skel" style="height:70px;"></div>
+        <div class="skel" style="height:70px;"></div>
+        <div class="skel" style="height:70px;"></div>
+        <div class="skel" style="height:70px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer-footer" id="drawerFooter">
+    <button class="btn btn-light rounded-3 flex-grow-1" onclick="fecharPreview()">
+      <i class="bi bi-x me-1"></i>Fechar
+    </button>
+  </div>
+</div>
+
+
+<div class="modal fade" id="modalCancelar" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">
+          <i class="bi bi-x-circle text-danger me-2"></i>Cancelar Saída
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" id="formCancelar">
+        <input type="hidden" name="origem" value="registros">
+        <div class="modal-body pt-2 pb-1">
+          <p class="text-muted mb-3" style="font-size:.88rem;">
+            Você está cancelando a saída para:
+            <strong id="cancelarLocal" class="text-dark d-block mt-1" style="font-size:.95rem;"></strong>
+          </p>
+
+          {% if motivos_cancelamento %}
+          <div class="mb-3">
+            <label class="field-label">Motivo do cancelamento <span class="text-danger">*</span></label>
+            {% for m in motivos_cancelamento %}
+            <label class="motivo-radio">
+              <input type="radio" name="motivo_cancelamento_id" value="{{ m.id }}" required>
+              <span style="font-size:.88rem;">{{ m.texto }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="alert alert-warning py-2 px-3 rounded-3 mb-3" style="font-size:.83rem;">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Nenhum motivo cadastrado. Contate o administrador.
+          </div>
+          <input type="hidden" name="motivo_cancelamento_id" value="">
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="field-label">Observação <span class="text-muted fw-normal">(opcional)</span></label>
+            <input type="text" name="obs_cancelamento" class="form-control input-modern"
+                   placeholder="Detalhe adicional se necessário…" maxlength="200" id="obsInput">
+            <div class="d-flex justify-content-end mt-1">
+              <small class="text-muted" id="obsContador">0/200</small>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-light rounded-3 px-4" data-bs-dismiss="modal">Voltar</button>
+          <button type="submit" class="btn btn-danger rounded-3 px-4"
+                  {% if not motivos_cancelamento %}disabled{% endif %}>
+            <i class="bi bi-x-circle me-1"></i>Confirmar Cancelamento
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+// ── Highlight da busca ────────────────────────────────────────────────────
+(function(){
+  const busca = {{ busca_local | tojson }};
+  if (!busca) return;
+  const regex = new RegExp('(' + busca.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')','gi');
+  document.querySelectorAll('.rc-local[data-texto]').forEach(el => {
+    el.innerHTML = el.getAttribute('data-texto').replace(regex,'<mark>$1</mark>');
+  });
+})();
+
+// ── Validação de datas ────────────────────────────────────────────────────
+const dtIni = document.getElementById('inputDataInicio');
+const dtFim = document.getElementById('inputDataFim');
+function validarDatas(){
+  if(dtIni.value && dtFim.value && dtFim.value < dtIni.value){
+    dtFim.setCustomValidity('Data final anterior à inicial.');
+    dtFim.style.borderColor='#ef4444';
+  } else {
+    dtFim.setCustomValidity('');
+    dtFim.style.borderColor='';
+  }
+}
+if(dtIni && dtFim){ dtIni.addEventListener('change',validarDatas); dtFim.addEventListener('change',validarDatas); }
+
+// ── Enter no campo de busca ───────────────────────────────────────────────
+document.getElementById('inputLocal').addEventListener('keydown',e=>{
+  if(e.key==='Enter') document.getElementById('formBusca').submit();
+});
+
+// ── Lógica do Botão Ver Mais ──────────────────────────────────────────────
+function expandirRegistros() {
+  const cardsOcultos = document.querySelectorAll('.js-reg-card[style*="display: none"]');
+  cardsOcultos.forEach(card => {
+    card.style.display = 'flex'; // Aplica o display flex padrão do seu layout card
+  });
+
+  const btnVerMais = document.getElementById('wrapperVerMais');
+  if (btnVerMais) btnVerMais.style.display = 'none';
+}
+
+// ════════════════════════════════════════════════════════
+// DRAWER DE PRÉ-VISUALIZAÇÃO
+// ════════════════════════════════════════════════════════
+const drawer   = document.getElementById('previewDrawer');
+const backdrop = document.getElementById('drawerBackdrop');
+const body     = document.getElementById('drawerBody');
+const footer   = document.getElementById('drawerFooter');
+
+const statusIcons = {
+  agendada:'bi-clock', em_transito:'bi-truck',
+  retornado:'bi-house-check', cancelado:'bi-x-circle', finalizado:'bi-check-circle'
+};
+
+function abrirPreview(id){
+  body.innerHTML = `
+    <div class="d-flex flex-column gap-3">
+      <div class="skel" style="height:32px;width:120px;"></div>
+      <div class="skel" style="height:28px;width:80%;"></div>
+      <div class="skel" style="height:70px;"></div>
+      <div class="info-grid">
+        <div class="skel" style="height:70px;"></div>
+        <div class="skel" style="height:70px;"></div>
+        <div class="skel" style="height:70px;"></div>
+        <div class="skel" style="height:70px;"></div>
+      </div>
+    </div>`;
+  footer.innerHTML = `<button class="btn btn-light rounded-3 flex-grow-1" onclick="fecharPreview()"><i class="bi bi-x me-1"></i>Fechar</button>`;
+
+  drawer.classList.add('open');
+  backdrop.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  fetch(`/usuario/api/registro/${id}`)
+    .then(r => r.json())
+    .then(d => renderPreview(d))
+    .catch(() => {
+      body.innerHTML = `<div class="alert alert-danger rounded-3">Erro ao carregar. Tente novamente.</div>`;
+    });
+}
+
+function renderPreview(d){
+  const icon = statusIcons[d.status] || 'bi-circle';
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  body.innerHTML = `
+    <span class="preview-status-badge psb-${d.status}">
+      <i class="bi ${icon}"></i> ${esc(d.status_label)}
+    </span>
+
+    <div class="preview-local">
+      <i class="bi bi-geo-alt-fill me-1" style="color:var(--cor-secundaria);font-size:.9rem;"></i>
+      ${esc(d.local)}
+    </div>
+
+    <div class="preview-motivo">
+      <i class="bi bi-chat-left-text text-muted me-2" style="font-size:.8rem;"></i>
+      ${esc(d.motivo)}
+    </div>
+
+    <div class="info-grid">
+      <div class="info-cell">
+        <div class="lbl"><i class="bi bi-calendar-event me-1"></i>Data de Saída</div>
+        <div class="val">${d.data_saida || '—'}</div>
+      </div>
+      <div class="info-cell">
+        <div class="lbl"><i class="bi bi-calendar-check me-1"></i>Retorno Previsto</div>
+        <div class="val">${d.data_retorno || 'Não informado'}</div>
+      </div>
+      ${d.telefone_contato ? `
+      <div class="info-cell">
+        <div class="lbl"><i class="bi bi-telephone me-1"></i>Telefone</div>
+        <div class="val">${esc(d.telefone_contato)}</div>
+      </div>` : ''}
+      ${d.endereco_destino ? `
+      <div class="info-cell ${d.telefone_contato ? '' : 'full'}">
+        <div class="lbl"><i class="bi bi-house me-1"></i>Endereço no Destino</div>
+        <div class="val" style="font-size:.82rem;">${esc(d.endereco_destino)}</div>
+      </div>` : ''}
+      <div class="info-cell ${(d.telefone_contato || d.endereco_destino) ? '' : 'full'}">
+        <div class="lbl"><i class="bi bi-clock-history me-1"></i>Registrado em</div>
+        <div class="val" style="font-size:.82rem;">${d.data_registro}</div>
+      </div>
+    </div>
+
+    ${d.status === 'cancelado' ? `
+    <div class="cancel-box">
+      <div class="clbl"><i class="bi bi-x-circle me-1"></i>Motivo do Cancelamento</div>
+      <div class="cval">${esc(d.motivo_cancelamento)}</div>
+      ${d.obs_cancelamento ? `<div class="cval mt-1" style="font-size:.82rem;opacity:.8;">${esc(d.obs_cancelamento)}</div>` : ''}
+      ${d.data_cancelamento ? `<div class="clbl mt-2">Cancelado em: <span style="font-weight:400;">${d.data_cancelamento}</span></div>` : ''}
+    </div>` : ''}
+  `;
+
+  let btns = `<button class="btn btn-light rounded-3" onclick="fecharPreview()"><i class="bi bi-x me-1"></i>Fechar</button>`;
+  if(d.editavel){
+    btns += `
+      <a href="${d.url_editar}" class="btn btn-outline-primary rounded-3 flex-grow-1">
+        <i class="bi bi-pencil me-1"></i>Editar
+      </a>
+      <button class="btn btn-outline-danger rounded-3"
+              onclick="fecharPreview(); setTimeout(()=>abrirCancelar(${d.id}, '${esc(d.local).replace(/'/g,"\\'")}'), 200)">
+        <i class="bi bi-x-circle me-1"></i>Cancelar
+      </button>`;
+  }
+  footer.innerHTML = btns;
+}
+
+function fecharPreview(){
+  drawer.classList.remove('open');
+  backdrop.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', e => { if(e.key==='Escape') fecharPreview(); });
+
+// ════════════════════════════════════════════════════════
+// MODAL DE CANCELAMENTO
+// ════════════════════════════════════════════════════════
+function abrirCancelar(id, local){
+  document.getElementById('cancelarLocal').textContent = local;
+  document.getElementById('formCancelar').action = `/usuario/cancelar/${id}`;
+  document.querySelectorAll('#formCancelar input[type=radio]').forEach(r => r.checked=false);
+  document.querySelectorAll('.motivo-radio').forEach(l => l.classList.remove('selected'));
+  const obs = document.getElementById('obsInput');
+  if(obs){ obs.value=''; document.getElementById('obsContador').textContent='0/200'; }
+  new bootstrap.Modal(document.getElementById('modalCancelar')).show();
+}
+
+document.querySelectorAll('.motivo-radio').forEach(label => {
+  label.addEventListener('click', function(){
+    document.querySelectorAll('.motivo-radio').forEach(l => l.classList.remove('selected'));
+    this.classList.add('selected');
+  });
+});
+
+const obsEl = document.getElementById('obsInput');
+const obsCount = document.getElementById('obsContador');
+if(obsEl) obsEl.addEventListener('input', ()=>{ obsCount.textContent=`${obsEl.value.length}/200`; });
+</script>
+{% endblock %}

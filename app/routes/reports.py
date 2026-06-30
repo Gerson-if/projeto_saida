@@ -28,6 +28,16 @@ from app.validators import parse_int_seguro, validar_data
 
 reports_bp = Blueprint("reports", __name__)
 
+# Categorias de status disponíveis para o relatório
+STATUS_OPCOES = [
+    ("agendada",    "Agendada"),
+    ("em_transito", "Em Trânsito"),
+    ("retornado",   "Retornado"),
+    ("cancelado",   "Cancelado"),
+    ("finalizado",  "Finalizado"),
+]
+STATUS_VALIDOS = {k for k, _ in STATUS_OPCOES}
+
 
 def admin_required(f):
     @wraps(f)
@@ -45,9 +55,12 @@ def admin_required(f):
 
 def get_saidas_filtradas(
     data_inicio=None, data_fim=None, usuario_id=None,
-    status=None, busca_exata=None, subunidade_id=None,
+    status_list=None, busca_exata=None, subunidade_id=None,
 ):
-    """Retorna registros de saída com base nos filtros fornecidos."""
+    """Retorna registros de saída com base nos filtros fornecidos.
+    
+    status_list: lista de status para filtrar. None ou lista vazia = todos.
+    """
     query = Registro.query.join(Usuario, Registro.cpf_usuario == Usuario.cpf)
 
     di_dt, _ = validar_data(data_inicio or "", campo="data de início") if data_inicio else (None, [])
@@ -76,9 +89,10 @@ def get_saidas_filtradas(
         if usuario:
             query = query.filter(Registro.cpf_usuario == usuario.cpf)
 
-    STATUS_VALIDOS = ("agendada", "em_transito", "retornado", "cancelado", "finalizado")
-    if status and status in STATUS_VALIDOS:
-        query = query.filter(Registro.status == status)
+    # Filtro de múltiplos status
+    status_filtrados = [s for s in (status_list or []) if s in STATUS_VALIDOS]
+    if status_filtrados:
+        query = query.filter(Registro.status.in_(status_filtrados))
 
     return query.order_by(Registro.data_saida.desc()).all()
 
@@ -318,6 +332,28 @@ def _escrever_csv(saidas: list) -> bytes:
     return output.getvalue().encode("utf-8-sig")
 
 
+def _parse_status_list(form) -> list:
+    """Extrai lista de status selecionados do formulário.
+    
+    Retorna lista vazia se 'todos' estiver selecionado ou nenhum selecionado.
+    """
+    if form.get("status_todos") == "1":
+        return []
+    status_list = form.getlist("status[]")
+    return [s for s in status_list if s in STATUS_VALIDOS]
+
+
+def _status_label_resumido(status_list: list) -> str:
+    """Retorna texto resumido dos status selecionados para o subtítulo."""
+    if not status_list:
+        return "Todos os status"
+    labels = {k: v for k, v in STATUS_OPCOES}
+    nomes = [labels.get(s, s) for s in status_list]
+    if len(nomes) == 1:
+        return f"Status: {nomes[0]}"
+    return f"Status: {', '.join(nomes)}"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Rotas
 # ─────────────────────────────────────────────────────────────────────────────
@@ -343,14 +379,16 @@ def por_periodo():
         data_inicio   = request.form.get("data_inicio", "")
         data_fim      = request.form.get("data_fim", "")
         usuario_id    = request.form.get("usuario_id") or None
-        status        = request.form.get("status") or None
         subunidade_id = request.form.get("subunidade_id") or None
         formato       = request.form.get("formato", "visualizar")
+        status_list   = _parse_status_list(request.form)
 
         filtros = {
             "data_inicio": data_inicio, "data_fim": data_fim,
-            "usuario_id": usuario_id, "status": status,
+            "usuario_id": usuario_id,
             "subunidade_id": subunidade_id,
+            "status_list": status_list,
+            "status_todos": request.form.get("status_todos", "1"),
         }
 
         data_inicio_dt, erros_di = validar_data(data_inicio, campo="data de início") if data_inicio else (None, [])
@@ -363,11 +401,12 @@ def por_periodo():
                 "reports/periodo.html",
                 usuarios=usuarios, subunidades=subunidades,
                 saidas=saidas, filtros=filtros,
+                status_opcoes=STATUS_OPCOES,
             )
 
         saidas = get_saidas_filtradas(
             data_inicio=data_inicio, data_fim=data_fim,
-            usuario_id=usuario_id, status=status,
+            usuario_id=usuario_id, status_list=status_list,
             subunidade_id=subunidade_id,
         )
 
@@ -381,6 +420,7 @@ def por_periodo():
             sub = db.session.get(Subunidade, sub_id_valida)
             if sub:
                 partes.append(f"Subunidade: {sub.sigla or sub.nome}")
+        partes.append(_status_label_resumido(status_list))
         subtitulo = " | ".join(partes)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M")
@@ -402,6 +442,7 @@ def por_periodo():
         "reports/periodo.html",
         usuarios=usuarios, subunidades=subunidades,
         saidas=saidas, filtros=filtros,
+        status_opcoes=STATUS_OPCOES,
     )
 
 
@@ -417,13 +458,15 @@ def data_exata():
     if request.method == "POST":
         data          = request.form.get("data_exata", "")
         usuario_id    = request.form.get("usuario_id") or None
-        status        = request.form.get("status") or None
         subunidade_id = request.form.get("subunidade_id") or None
         formato       = request.form.get("formato", "visualizar")
+        status_list   = _parse_status_list(request.form)
 
         filtros = {
             "data_exata": data, "usuario_id": usuario_id,
-            "status": status, "subunidade_id": subunidade_id,
+            "subunidade_id": subunidade_id,
+            "status_list": status_list,
+            "status_todos": request.form.get("status_todos", "1"),
         }
 
         data_dt, erros_data = validar_data(data, campo="data") if data else (None, [])
@@ -434,11 +477,12 @@ def data_exata():
                 "reports/data_exata.html",
                 usuarios=usuarios, subunidades=subunidades,
                 saidas=saidas, filtros=filtros,
+                status_opcoes=STATUS_OPCOES,
             )
 
         saidas = get_saidas_filtradas(
             busca_exata=data, usuario_id=usuario_id,
-            status=status, subunidade_id=subunidade_id,
+            status_list=status_list, subunidade_id=subunidade_id,
         )
 
         data_arquivo = data_dt.strftime("%Y%m%d") if data_dt else datetime.now().strftime("%Y%m%d")
@@ -451,6 +495,7 @@ def data_exata():
             sub = db.session.get(Subunidade, sub_id_valida)
             if sub:
                 partes.append(f"Subunidade: {sub.sigla or sub.nome}")
+        partes.append(_status_label_resumido(status_list))
         subtitulo = " | ".join(partes)
 
         if formato == "pdf":
@@ -471,4 +516,5 @@ def data_exata():
         "reports/data_exata.html",
         usuarios=usuarios, subunidades=subunidades,
         saidas=saidas, filtros=filtros,
+        status_opcoes=STATUS_OPCOES,
     )
