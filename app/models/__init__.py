@@ -4,7 +4,7 @@ models/__init__.py — Modelos SQLAlchemy do sistema.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask_login import UserMixin
 
@@ -129,6 +129,10 @@ class Usuario(UserMixin, db.Model):
     telefone      = db.Column(db.String(20), nullable=True)
     email         = db.Column(db.String(120), nullable=True)
 
+    # Proteção contra força bruta no login (ver app/routes/auth.py)
+    tentativas_login = db.Column(db.Integer, default=0, nullable=False)
+    bloqueado_ate     = db.Column(db.DateTime, nullable=True)
+
     registros = db.relationship(
         "Registro",
         backref="usuario",
@@ -147,6 +151,51 @@ class Usuario(UserMixin, db.Model):
     @property
     def is_admin(self) -> bool:
         return self.tipo == TipoUsuario.ADMIN
+
+    @property
+    def esta_bloqueado(self) -> bool:
+        return bool(self.bloqueado_ate and self.bloqueado_ate > datetime.utcnow())
+
+    @staticmethod
+    def registrar_tentativa_falha(usuario_id: int, max_tentativas: int, bloqueio_minutos: int) -> None:
+        """
+        Incrementa o contador de tentativas de forma atômica (uma única
+        instrução SQL UPDATE ... SET tentativas_login = tentativas_login + 1
+        no banco), em vez de ler o valor em Python e escrever de volta —
+        essa segunda forma perde incrementos quando duas tentativas erradas
+        chegam ao mesmo tempo (condição de corrida clássica de "leia,
+        some, grave").
+        """
+        db.session.query(Usuario).filter(Usuario.id == usuario_id).update(
+            {Usuario.tentativas_login: Usuario.tentativas_login + 1},
+            synchronize_session=False,
+        )
+        db.session.commit()
+
+        # Lê o valor direto do banco (consulta de coluna avulsa, não de
+        # entidade) para não pegar uma cópia desatualizada do objeto que já
+        # possa estar no identity map da sessão — o UPDATE acima foi feito
+        # com synchronize_session=False de propósito (é mais barato), então
+        # o objeto Python em memória não é atualizado automaticamente.
+        novo_total = db.session.query(Usuario.tentativas_login).filter(
+            Usuario.id == usuario_id
+        ).scalar()
+
+        if novo_total is not None and novo_total >= max_tentativas:
+            db.session.query(Usuario).filter(Usuario.id == usuario_id).update(
+                {Usuario.bloqueado_ate: datetime.utcnow() + timedelta(minutes=bloqueio_minutos)},
+                synchronize_session=False,
+            )
+            db.session.commit()
+
+    @staticmethod
+    def limpar_tentativas(usuario_id: int) -> None:
+        """Zera o contador após um login bem-sucedido."""
+        db.session.query(Usuario).filter(Usuario.id == usuario_id).update(
+            {Usuario.tentativas_login: 0, Usuario.bloqueado_ate: None},
+            synchronize_session=False,
+        )
+        db.session.commit()
 
     @property
     def saidas_ativas(self) -> int:

@@ -12,6 +12,7 @@ from flask import (
 from flask_login import current_user, login_required
 
 from app import db
+from app.db_utils import commit_seguro
 from app.models import ConfigSistema, Registro, StatusSaida, Subunidade, TipoUsuario, Usuario
 from app.uploads import validar_e_salvar_imagem, remover_upload_seguro
 from app.validators import (
@@ -213,12 +214,14 @@ def novo_usuario():
         usuario.set_senha(senha.strip())
         usuario.subunidade_id = subunidade_id_valida
 
-        try:
-            db.session.add(usuario)
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            flash("Não foi possível cadastrar o usuário. Verifique os dados e tente novamente.", "danger")
+        db.session.add(usuario)
+        ok, erro = commit_seguro(
+            db,
+            mensagem_erro="Não foi possível cadastrar o usuário. Verifique os dados e tente novamente.",
+            mensagem_duplicado="Este CPF já está cadastrado.",
+        )
+        if not ok:
+            flash(erro, "danger")
             return render_template("admin/form_usuario.html", acao="novo", subunidades=subunidades)
 
         flash(f"Usuário {nome} cadastrado com sucesso!", "success")
@@ -296,11 +299,13 @@ def editar_usuario(id):
                 usuario.foto = foto
                 remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], foto_antiga)
 
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            flash("Não foi possível salvar as alterações. Verifique os dados e tente novamente.", "danger")
+        ok, erro = commit_seguro(
+            db,
+            mensagem_erro="Não foi possível salvar as alterações. Verifique os dados e tente novamente.",
+            mensagem_duplicado="Este CPF já pertence a outro usuário.",
+        )
+        if not ok:
+            flash(erro, "danger")
             return render_template(
                 "admin/form_usuario.html", usuario=usuario,
                 acao="editar", subunidades=subunidades,
@@ -329,12 +334,13 @@ def excluir_usuario(id):
 
     nome      = usuario.nome
     foto_antiga = usuario.foto
-    try:
-        db.session.delete(usuario)
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        flash("Não foi possível excluir o usuário. Ele pode possuir registros vinculados.", "danger")
+    db.session.delete(usuario)
+    ok, erro = commit_seguro(
+        db,
+        mensagem_erro="Não foi possível excluir o usuário. Ele pode possuir registros vinculados.",
+    )
+    if not ok:
+        flash(erro, "danger")
         return redirect(url_for("admin.listar_usuarios"))
 
     remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], foto_antiga)
@@ -378,12 +384,14 @@ def nova_subunidade():
             return render_template("admin/form_subunidade.html", acao="nova")
 
         sub = Subunidade(nome=nome, sigla=sigla or None)
-        try:
-            db.session.add(sub)
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            flash("Não foi possível criar a subunidade. Tente novamente.", "danger")
+        db.session.add(sub)
+        ok, erro = commit_seguro(
+            db,
+            mensagem_erro="Não foi possível criar a subunidade. Tente novamente.",
+            mensagem_duplicado="Já existe uma subunidade com este nome.",
+        )
+        if not ok:
+            flash(erro, "danger")
             return render_template("admin/form_subunidade.html", acao="nova")
 
         flash(f"Subunidade '{nome}' criada com sucesso!", "success")
@@ -427,11 +435,13 @@ def editar_subunidade(id):
         sub.nome  = nome
         sub.sigla = sigla or None
         sub.ativa = ativa
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            flash("Não foi possível salvar as alterações. Tente novamente.", "danger")
+        ok, erro = commit_seguro(
+            db,
+            mensagem_erro="Não foi possível salvar as alterações. Tente novamente.",
+            mensagem_duplicado="Já existe uma subunidade com este nome.",
+        )
+        if not ok:
+            flash(erro, "danger")
             return render_template("admin/form_subunidade.html", sub=sub, acao="editar")
 
         flash(f"Subunidade '{nome}' atualizada.", "success")
@@ -469,10 +479,17 @@ def excluir_subunidade(id):
             u.subunidade_id = None
 
         db.session.delete(sub)
-        db.session.commit()
     except Exception:
         db.session.rollback()
         flash("Não foi possível remover a subunidade. Tente novamente.", "danger")
+        return redirect(url_for("admin.listar_subunidades"))
+
+    ok, erro = commit_seguro(
+        db,
+        mensagem_erro="Não foi possível remover a subunidade. Tente novamente.",
+    )
+    if not ok:
+        flash(erro, "danger")
         return redirect(url_for("admin.listar_subunidades"))
 
     if qtd_desvinculados:
@@ -684,11 +701,13 @@ def salvar_motivos():
             ordem = 0
         db.session.add(MotivoCancelamento(texto=texto, ativo=True, ordem=ordem))
 
-    try:
-        db.session.commit()
+    ok, erro = commit_seguro(
+        db,
+        mensagem_erro="Não foi possível salvar os motivos.",
+    )
+    if ok:
         flash("Motivos de cancelamento salvos com sucesso!", "success")
-    except Exception:
-        db.session.rollback()
-        flash("Não foi possível salvar os motivos.", "danger")
+    else:
+        flash(erro, "danger")
 
     return redirect(url_for("admin.listar_motivos"))

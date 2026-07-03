@@ -125,10 +125,55 @@ gunicorn "run:app" -w 4 -b 0.0.0.0:8000
 | `flask create-admin NOME CPF SENHA` | Cria um administrador |
 | `flask seed` | Insere dados de exemplo para testes |
 | `flask atualizar-status` | Força atualização manual de todos os status |
+| `flask diagnosticar` | Verifica config. de sessão/segurança e do banco (debug) |
 | `flask db migrate -m "msg"` | Gera migração após alterar modelos |
 | `flask db upgrade` | Aplica migrações pendentes |
 
 ---
+
+## Atualização — Segurança, sessão e concorrência
+
+Se você já tinha o projeto instalado antes desta atualização, rode uma vez:
+
+```bash
+python migrate_v3.py
+```
+
+Isso adiciona as colunas de proteção contra força bruta no login à tabela
+`usuarios`. Instalações novas (`flask init-db`) já criam essas colunas
+automaticamente.
+
+Principais mudanças:
+
+- **SECRET_KEY própria por instalação**: se `SECRET_KEY` não estiver no
+  `.env`, o sistema gera uma chave aleatória e a guarda em
+  `instance/secret_key` (nunca versionada). Antes, o projeto usava uma
+  string fixa no código-fonte como padrão — qualquer pessoa que lesse o
+  repositório conhecia essa chave e poderia, teoricamente, forjar um cookie
+  de sessão válido para qualquer usuário sem fazer login. Em produção, a
+  `SECRET_KEY` continua sendo obrigatória via variável de ambiente.
+- **Cookies de sessão explicitamente protegidos** (`HttpOnly`, `SameSite=Lax`,
+  `Secure` em produção, nome de cookie próprio, expiração configurável) e
+  `session_protection = "strong"` no Flask-Login, que invalida a sessão se o
+  IP/navegador mudar no meio do caminho.
+  Toda página autenticada agora responde com `Cache-Control: no-store`, para
+  que nenhum proxy/navegador guarde em cache uma página com dados de sessão.
+- **Bloqueio por tentativas de login** (`LOGIN_MAX_TENTATIVAS`,
+  `LOGIN_BLOQUEIO_MINUTOS` no `.env`), com contador atômico no banco — não
+  perde incrementos mesmo com tentativas simultâneas.
+- **SQLite em modo WAL + busy_timeout**: reduz drasticamente os erros de
+  "database is locked" quando vários usuários (ou o job automático de
+  status) gravam no banco ao mesmo tempo.
+- **`commit_seguro()`** (`app/db_utils.py`): substitui os antigos
+  `try/except Exception: db.session.rollback()` espalhados pelas rotas.
+  Agora, qualquer falha real ao salvar é **logada** em
+  `instance/logs/app.log` (antes era descartada silenciosamente), erros de
+  lock transitório são reexecutados automaticamente, e conflitos de dados
+  duplicados mostram uma mensagem específica.
+
+---
+
+
 
 ## Status das Saídas
 
