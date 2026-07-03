@@ -10,6 +10,8 @@ Para selecionar: export FLASK_ENV=production  (ou passe a classe diretamente).
 """
 
 import os
+import secrets
+from datetime import timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,12 +21,88 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 # Pasta instance/ para o SQLite — criada em runtime pelo __init__.py
 INSTANCE_DIR = os.path.join(basedir, "instance")
 
+# Valor de fallback antigo. Se alguém ainda tiver isso no .env, tratamos como
+# "não configurado" — porque essa string está escrita no código-fonte público
+# do projeto. Qualquer pessoa que leia o repositório conhece essa chave, e
+# quem conhece a SECRET_KEY consegue *forjar* um cookie de sessão válido para
+# qualquer usuário (inclusive admin) sem nunca ter feito login. Isso é o tipo
+# de bug que se manifesta como "essa aba apareceu logada sozinha": não é a
+# aba que herdou a sessão, é que qualquer cookie assinado com essa chave
+# conhecida é aceito pelo servidor como legítimo.
+_CHAVE_INSEGURA_LEGADA = "troque-esta-chave-em-producao-use-uma-muito-longa"
+
+# Preenchido por _obter_secret_key(): True se a chave veio de uma variável de
+# ambiente explícita (o esperado em produção); False se foi autogerada em
+# instance/secret_key (aceitável em dev, mas ProductionConfig.validate()
+# deve recusar subir assim).
+_secret_key_veio_do_ambiente = False
+
+
+def _obter_secret_key() -> str:
+    """
+    Resolve a SECRET_KEY com a seguinte prioridade:
+
+    1. Variável de ambiente SECRET_KEY, desde que não seja o valor
+       inseguro conhecido publicamente no código.
+    2. Um arquivo `instance/secret_key` gerado automaticamente na primeira
+       execução (uma chave aleatória por instalação, nunca versionada).
+
+    Isso garante que, mesmo em dev/sem configurar nada, cada instalação do
+    sistema tem uma chave própria e imprevisível — sessões de uma instalação
+    nunca são aceitas por outra, e ninguém consegue forjar cookies só por
+    ter lido o código-fonte no GitHub.
+    """
+    global _secret_key_veio_do_ambiente
+
+    env_key = os.environ.get("SECRET_KEY")
+    if env_key and env_key != _CHAVE_INSEGURA_LEGADA:
+        _secret_key_veio_do_ambiente = True
+        return env_key
+
+    os.makedirs(INSTANCE_DIR, exist_ok=True)
+    caminho_chave = os.path.join(INSTANCE_DIR, "secret_key")
+
+    if os.path.exists(caminho_chave):
+        with open(caminho_chave, "r", encoding="utf-8") as f:
+            chave = f.read().strip()
+            if chave:
+                return chave
+
+    nova_chave = secrets.token_hex(32)
+    # Grava com permissão restrita (somente o dono lê/escreve), quando o SO
+    # suportar (Windows ignora o modo silenciosamente).
+    fd = os.open(caminho_chave, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(nova_chave)
+    return nova_chave
+
 
 class Config:
     # ── Segurança ──────────────────────────────────────────────────────────
-    SECRET_KEY: str = os.environ.get(
-        "SECRET_KEY", "troque-esta-chave-em-producao-use-uma-muito-longa"
+    SECRET_KEY: str = _obter_secret_key()
+
+    # ── Cookies de sessão ──────────────────────────────────────────────────
+    # Nome próprio evita colisão com outra aplicação Flask rodando no mesmo
+    # domínio/porta (ex: outro projeto local na 5000) que use o nome padrão
+    # "session" — dois apps diferentes no mesmo host podem, sem isso,
+    # sobrescrever o cookie um do outro.
+    SESSION_COOKIE_NAME: str = "saida_session"
+    SESSION_COOKIE_HTTPONLY: bool = True        # JS não pode ler o cookie
+    SESSION_COOKIE_SAMESITE: str = "Lax"        # bloqueia envio cross-site
+    SESSION_COOKIE_SECURE: bool = False         # ligado em produção (abaixo)
+    PERMANENT_SESSION_LIFETIME: timedelta = timedelta(
+        minutes=int(os.environ.get("SESSION_LIFETIME_MINUTES", 480))  # 8h
     )
+    SESSION_REFRESH_EACH_REQUEST: bool = True
+
+    # "Lembrar-me" — cookie de longa duração do Flask-Login. Também precisa
+    # das mesmas travas, senão vira a forma mais fraca de manter sessão.
+    REMEMBER_COOKIE_DURATION: timedelta = timedelta(
+        days=int(os.environ.get("REMEMBER_COOKIE_DAYS", 14))
+    )
+    REMEMBER_COOKIE_HTTPONLY: bool = True
+    REMEMBER_COOKIE_SAMESITE: str = "Lax"
+    REMEMBER_COOKIE_SECURE: bool = False        # ligado em produção (abaixo)
 
     # ── Banco de dados ─────────────────────────────────────────────────────
     SQLALCHEMY_DATABASE_URI: str = os.environ.get(
@@ -74,6 +152,19 @@ class Config:
         os.environ.get("SCHEDULER_STATUS_INTERVAL_MINUTES", 10)
     )
 
+    # ── Proteção contra força bruta no login ───────────────────────────────
+    LOGIN_MAX_TENTATIVAS: int = int(os.environ.get("LOGIN_MAX_TENTATIVAS", 5))
+    LOGIN_BLOQUEIO_MINUTOS: int = int(os.environ.get("LOGIN_BLOQUEIO_MINUTOS", 15))
+
+    # ── Concorrência / SQLite ───────────────────────────────────────────────
+    # Quantas vezes tentamos novamente um commit que falhou por
+    # "database is locked" antes de desistir e reportar erro ao usuário.
+    DB_COMMIT_MAX_TENTATIVAS: int = int(os.environ.get("DB_COMMIT_MAX_TENTATIVAS", 3))
+    # Tempo (ms) que o SQLite espera por um lock antes de levantar
+    # OperationalError — evita que acessos simultâneos "cheguem atrasados
+    # por um milissegundo" e falhem sem necessidade.
+    SQLITE_BUSY_TIMEOUT_MS: int = int(os.environ.get("SQLITE_BUSY_TIMEOUT_MS", 8000))
+
 
 class DevelopmentConfig(Config):
     DEBUG: bool = True
@@ -91,11 +182,23 @@ class ProductionConfig(Config):
         "pool_pre_ping": True,
     }
 
+    # Em produção assumimos HTTPS — cookies só trafegam em conexão segura.
+    # Se o app estiver atrás de um proxy/load balancer que já termina TLS
+    # (nginx, Cloudflare, etc.), configure ProxyFix no __init__.py para o
+    # Flask enxergar o esquema corretamente.
+    SESSION_COOKIE_SECURE: bool = True
+    REMEMBER_COOKIE_SECURE: bool = True
+
     @classmethod
     def validate(cls) -> None:
         """Garante que variáveis críticas estejam definidas em produção."""
         missing = []
-        if cls.SECRET_KEY == "troque-esta-chave-em-producao-use-uma-muito-longa":
+        # Em produção, a SECRET_KEY autogerada em disco NÃO é aceitável:
+        # cada novo deploy/container geraria uma chave diferente, derrubando
+        # a sessão de todo mundo a cada restart/deploy, e times com múltiplas
+        # réplicas atrás de um load balancer teriam uma chave por réplica
+        # (uma sessão criada numa réplica seria rejeitada por outra).
+        if not _secret_key_veio_do_ambiente:
             missing.append("SECRET_KEY")
         if not os.environ.get("DATABASE_URL"):
             missing.append("DATABASE_URL")

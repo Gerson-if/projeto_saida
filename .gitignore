@@ -1,0 +1,22 @@
+# Segredos e dados locais — NUNCA versionar
+.env
+instance/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+
+# Uploads/relatórios gerados
+app/static/uploads/*
+!app/static/uploads/.gitkeep
+app/static/relatorios/*
+!app/static/relatorios/.gitkeep

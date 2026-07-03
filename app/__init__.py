@@ -9,7 +9,7 @@ Uso:
 
 import os
 
-from flask import Flask
+from flask import Flask, request
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from flask_migrate import Migrate
@@ -59,6 +59,21 @@ def create_app(config_name: str | None = None) -> Flask:
     login_manager.login_view = "auth.login"
     login_manager.login_message = "Por favor, faça login para acessar esta página."
     login_manager.login_message_category = "warning"
+    # "strong": se o IP ou o User-Agent do navegador mudar no meio de uma
+    # sessão marcada como "lembrar-me", o Flask-Login invalida a sessão e
+    # exige login novamente. É a defesa mais direta contra uma sessão sendo
+    # aceita fora do navegador/contexto onde ela foi criada.
+    login_manager.session_protection = "strong"
+
+    with app.app_context():
+        from app.db_utils import configurar_sqlite
+        configurar_sqlite(app, db)
+
+    # ── Logging em arquivo (facilita debug em produção e em dev) ──────────
+    _init_logging(app)
+
+    # ── Cabeçalhos de resposta (cache + segurança básica) ──────────────────
+    _init_response_headers(app)
 
     # ── Registra context processors ────────────────────────────────────────
     from app.context_processors import register_context_processors
@@ -87,6 +102,71 @@ def create_app(config_name: str | None = None) -> Flask:
     _init_scheduler(app)
 
     return app
+
+
+def _init_logging(app: Flask) -> None:
+    """
+    Configura log em arquivo rotativo, além do console.
+
+    Antes desta mudança, muitos `except Exception: db.session.rollback()`
+    espalhados pelas rotas engoliam o erro real sem registrar nada — o único
+    sinal era um flash genérico pro usuário. Isso torna impossível investigar
+    problemas depois (inclusive os de concorrência). Com isso aqui, qualquer
+    `current_app.logger.exception(...)` (usado em app/db_utils.py e nos
+    handlers de erro) grava o traceback completo em
+    instance/logs/app.log.
+    """
+    import logging
+    from logging.handlers import RotatingFileHandler
+
+    if app.testing:
+        return
+
+    from config import INSTANCE_DIR
+    log_dir = os.path.join(INSTANCE_DIR, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+
+    handler = RotatingFileHandler(
+        os.path.join(log_dir, "app.log"),
+        maxBytes=1_000_000,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+    ))
+    nivel = logging.DEBUG if app.config.get("DEBUG") else logging.INFO
+    handler.setLevel(nivel)
+
+    if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
+        app.logger.addHandler(handler)
+    app.logger.setLevel(nivel)
+
+
+def _init_response_headers(app: Flask) -> None:
+    """
+    - Evita que páginas autenticadas sejam guardadas em cache por proxies ou
+      pelo próprio navegador. Sem isso, em ambientes com proxy reverso
+      cacheando por engano (ou botão "voltar" do navegador após logout),
+      uma página com dados de outro usuário poderia ser reexibida.
+    - Cabeçalhos básicos de hardening que não têm custo nenhum.
+    """
+    from flask_login import current_user
+
+    @app.after_request
+    def _sem_cache_para_paginas_autenticadas(response):
+        try:
+            autenticado = current_user.is_authenticated
+        except Exception:
+            autenticado = False
+
+        if autenticado or request.path.startswith(("/admin", "/usuario", "/login", "/relatorios")):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        return response
 
 
 def _init_scheduler(app: Flask) -> None:
@@ -132,6 +212,7 @@ def _job_atualizar_status(app: Flask) -> None:
     """
     with app.app_context():
         from app.models import Registro, StatusSaida
+        from app.db_utils import commit_seguro
         try:
             pendentes = Registro.query.filter(
                 Registro.status.in_([StatusSaida.AGENDADA, StatusSaida.EM_TRANSITO])
@@ -143,10 +224,20 @@ def _job_atualizar_status(app: Flask) -> None:
                     atualizados += 1
 
             if atualizados:
-                db.session.commit()
-                app.logger.info(
-                    f"[scheduler] {atualizados} saída(s) atualizada(s) automaticamente."
+                # commit_seguro faz retry em caso de lock transitório (ex:
+                # um usuário salvando algo bem nesse instante) e loga
+                # qualquer falha real, em vez de deixar o job morrer
+                # silenciosamente.
+                ok, erro = commit_seguro(
+                    db,
+                    mensagem_erro="Falha ao atualizar status automático de saídas.",
                 )
+                if ok:
+                    app.logger.info(
+                        f"[scheduler] {atualizados} saída(s) atualizada(s) automaticamente."
+                    )
+                else:
+                    app.logger.error(f"[scheduler] {erro}")
         except Exception:
             db.session.rollback()
             app.logger.exception(

@@ -11,6 +11,7 @@ from flask import (
 from flask_login import current_user, login_required
 
 from app import db
+from app.db_utils import commit_seguro
 from app.models import Registro, StatusSaida, ConfigSistema, MotivoCancelamento
 from app.uploads import validar_e_salvar_imagem, remover_upload_seguro
 from app.validators import validar_texto_livre, validar_telefone, validar_data
@@ -197,12 +198,14 @@ def registrar_saida():
             status=status_inicial,
             status_atualizado_em=datetime.utcnow(),
         )
-        try:
-            db.session.add(registro)
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            flash("Não foi possível registrar a saída. Verifique os dados e tente novamente.", "danger")
+        db.session.add(registro)
+        ok, erro = commit_seguro(
+            db,
+            mensagem_erro="Não foi possível registrar a saída. Verifique os dados e tente novamente.",
+            mensagem_duplicado="Já existe um registro para este local e data de saída.",
+        )
+        if not ok:
+            flash(erro, "danger")
             return render_template(
                 "user/registrar.html",
                 form_data=request.form,
@@ -279,11 +282,12 @@ def editar_saida(id):
         saida.data_retorno     = data_retorno
         saida.telefone_contato = telefone
         saida.endereco_destino = endereco
-        try:
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            flash("Não foi possível salvar as alterações. Tente novamente.", "danger")
+        ok, erro = commit_seguro(
+            db,
+            mensagem_erro="Não foi possível salvar as alterações. Tente novamente.",
+        )
+        if not ok:
+            flash(erro, "danger")
             return render_template(
                 "user/editar.html",
                 saida=saida,
@@ -343,11 +347,12 @@ def cancelar_saida(id):
     saida.motivo_cancelamento  = motivo_obj.texto
     saida.obs_cancelamento     = obs or None
     saida.data_cancelamento    = datetime.utcnow()
-    try:
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        flash("Não foi possível cancelar a saída. Tente novamente.", "danger")
+    ok, erro = commit_seguro(
+        db,
+        mensagem_erro="Não foi possível cancelar a saída. Tente novamente.",
+    )
+    if not ok:
+        flash(erro, "danger")
         return redirect(url_for("user.meus_registros"))
 
     flash("Saída cancelada com sucesso.", "info")
@@ -466,12 +471,14 @@ def perfil():
                 flash("As senhas não coincidem.", "danger")
             else:
                 current_user.set_senha(nova_senha)
-                try:
-                    db.session.commit()
+                ok, erro = commit_seguro(
+                    db,
+                    mensagem_erro="Não foi possível alterar a senha.",
+                )
+                if ok:
                     flash("Senha alterada com sucesso!", "success")
-                except Exception:
-                    db.session.rollback()
-                    flash("Não foi possível alterar a senha.", "danger")
+                else:
+                    flash(erro, "danger")
             return redirect(url_for("user.perfil"))
 
         # Dados + foto
@@ -512,12 +519,14 @@ def perfil():
                 current_user.foto = resultado.nome_arquivo
                 remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], foto_antiga)
 
-        try:
-            db.session.commit()
+        ok, erro = commit_seguro(
+            db,
+            mensagem_erro="Não foi possível salvar as alterações.",
+        )
+        if ok:
             flash("Perfil atualizado com sucesso!", "success")
-        except Exception:
-            db.session.rollback()
-            flash("Não foi possível salvar as alterações.", "danger")
+        else:
+            flash(erro, "danger")
 
         return redirect(url_for("user.perfil"))
 

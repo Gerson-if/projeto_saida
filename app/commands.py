@@ -193,3 +193,60 @@ def register_commands(app) -> None:
         atualizados = sum(1 for r in pendentes if r.atualizar_status_automatico())
         db.session.commit()
         click.echo(f"✅ {atualizados} registro(s) atualizado(s) de {len(pendentes)} pendentes.")
+
+    # ── diagnosticar ───────────────────────────────────────────────────────
+
+    @app.cli.command("diagnosticar")
+    @with_appcontext
+    def diagnosticar():
+        """
+        Verifica configurações de sessão/segurança e do banco de dados —
+        útil para investigar sintomas como "sessão aparecendo logada
+        indevidamente" ou "erro ao salvar com vários usuários ao mesmo
+        tempo".
+        """
+        import os as _os
+        from config import INSTANCE_DIR
+
+        click.echo("── Diagnóstico do sistema ──────────────────────────────")
+
+        # SECRET_KEY
+        origem = "variável de ambiente" if _os.environ.get("SECRET_KEY") and \
+            _os.environ.get("SECRET_KEY") != "troque-esta-chave-em-producao-use-uma-muito-longa" \
+            else f"arquivo autogerado ({_os.path.join(INSTANCE_DIR, 'secret_key')})"
+        click.echo(f"SECRET_KEY: definida via {origem}.")
+        if app.config.get("DEBUG") is False and "autogerado" in origem:
+            click.echo(
+                "  ⚠️  Em produção, defina SECRET_KEY explicitamente no ambiente "
+                "(uma chave autogerada por réplica pode invalidar sessões entre "
+                "instâncias diferentes atrás de um load balancer)."
+            )
+
+        # Cookies de sessão
+        click.echo(
+            f"Cookie de sessão: nome={app.config.get('SESSION_COOKIE_NAME')} "
+            f"httponly={app.config.get('SESSION_COOKIE_HTTPONLY')} "
+            f"samesite={app.config.get('SESSION_COOKIE_SAMESITE')} "
+            f"secure={app.config.get('SESSION_COOKIE_SECURE')} "
+            f"duração={app.config.get('PERMANENT_SESSION_LIFETIME')}"
+        )
+        if app.config.get("DEBUG") is False and not app.config.get("SESSION_COOKIE_SECURE"):
+            click.echo("  ⚠️  SESSION_COOKIE_SECURE está desligado em produção — verifique se há HTTPS.")
+
+        # session_protection
+        from app import login_manager
+        click.echo(f"Flask-Login session_protection: {login_manager.session_protection}")
+
+        # Banco de dados
+        dialeto = db.engine.dialect.name
+        click.echo(f"Banco de dados: {dialeto} — URI: {app.config.get('SQLALCHEMY_DATABASE_URI')}")
+        if dialeto == "sqlite":
+            with db.engine.connect() as conn:
+                modo = conn.exec_driver_sql("PRAGMA journal_mode;").scalar()
+                timeout = conn.exec_driver_sql("PRAGMA busy_timeout;").scalar()
+            click.echo(f"  journal_mode={modo} busy_timeout={timeout}ms")
+            if str(modo).lower() != "wal":
+                click.echo("  ⚠️  journal_mode não está em WAL — acessos simultâneos têm mais chance de dar 'database is locked'.")
+
+        click.echo("─────────────────────────────────────────────────────────")
+        click.echo("✅ Diagnóstico concluído.")
