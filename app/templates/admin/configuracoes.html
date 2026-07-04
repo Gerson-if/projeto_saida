@@ -99,6 +99,35 @@
         </div>
     </div>
 
+    <!-- Hierarquia (Posto/Graduação) -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0 fw-semibold"><i class="bi bi-award me-2"></i>Hierarquia (Posto/Graduação)</h6></div>
+            <div class="card-body">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" name="postos_habilitados" id="postosHabilitados"
+                           {{ 'checked' if configs.get('postos_habilitados') == '1' else '' }}>
+                    <label class="form-check-label fw-semibold small" for="postosHabilitados">
+                        Habilitar campo Posto/Graduação no cadastro de usuários
+                    </label>
+                </div>
+                <small class="text-muted d-block mb-3">
+                    Quando desligado, o campo fica oculto em todos os formulários e nenhum cadastro é afetado —
+                    você pode ligar e desligar quando quiser, sem risco de perder dados já vinculados.
+                </small>
+                <a href="{{ url_for('admin.listar_postos') }}" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-list-ul me-1"></i>Gerenciar postos/graduações
+                </a>
+                <a href="{{ url_for('admin.listar_solicitacoes') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-bell me-1"></i>Solicitações de militares
+                    {% if solicitacoes_pendentes_count %}
+                    <span class="badge bg-danger ms-1">{{ solicitacoes_pendentes_count }}</span>
+                    {% endif %}
+                </a>
+            </div>
+        </div>
+    </div>
+
     <!-- Imagens -->
     <div class="col-12">
         <div class="card">

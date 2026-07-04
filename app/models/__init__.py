@@ -77,6 +77,136 @@ class Subunidade(db.Model):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Modelo: PostoGraduacao (níveis de hierarquia militar)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PostoGraduacao(db.Model):
+    """
+    Postos e graduações configuráveis pelo super-usuário (ex: Soldado,
+    Cabo, 3º Sargento, Tenente, Capitão...). Funciona nos mesmos moldes de
+    Subunidade: o super-usuário cria os níveis desejados e eles passam a
+    ficar disponíveis no formulário de cadastro do usuário.
+
+    O campo `nivel` representa a posição na hierarquia (quanto maior, mais
+    alto o posto/graduação) e é usado apenas para ordenação — não há
+    nenhuma regra de permissão vinculada a ele, é puramente
+    informativo/organizacional.
+    """
+
+    __tablename__ = "postos_graduacoes"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    nome         = db.Column(db.String(60), unique=True, nullable=False)
+    sigla        = db.Column(db.String(20), nullable=True)
+    nivel        = db.Column(db.Integer, default=0, nullable=False)
+    ativo        = db.Column(db.Boolean, default=True, nullable=False)
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    usuarios = db.relationship(
+        "Usuario", backref="posto_graduacao", lazy="select",
+        foreign_keys="Usuario.posto_graduacao_id",
+    )
+
+    @property
+    def total_usuarios(self) -> int:
+        return len(self.usuarios)
+
+    @staticmethod
+    def listar_ativos():
+        """Lista os postos/graduações ativos do mais alto para o mais baixo."""
+        return PostoGraduacao.query.filter_by(ativo=True).order_by(
+            PostoGraduacao.nivel.desc(), PostoGraduacao.nome
+        ).all()
+
+    def __repr__(self) -> str:
+        return f"<PostoGraduacao {self.nome} (nível {self.nivel})>"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Modelo: SolicitacaoPostoGraduacao
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SolicitacaoPostoGraduacao(db.Model):
+    """
+    Pedido do próprio militar para alterar seu posto/graduação. Fica
+    pendente até o super-usuário aprovar ou rejeitar — a alteração só é
+    aplicada ao usuário quando aprovada. O super-usuário é "notificado"
+    através do contador de pendências (ver context_processors.py e a rota
+    admin.listar_solicitacoes).
+    """
+
+    __tablename__ = "solicitacoes_posto_graduacao"
+
+    STATUS_PENDENTE  = "pendente"
+    STATUS_APROVADA  = "aprovada"
+    STATUS_REJEITADA = "rejeitada"
+    STATUS_TODOS = [STATUS_PENDENTE, STATUS_APROVADA, STATUS_REJEITADA]
+
+    STATUS_LABELS = {
+        STATUS_PENDENTE:  "Pendente",
+        STATUS_APROVADA:  "Aprovada",
+        STATUS_REJEITADA: "Rejeitada",
+    }
+    STATUS_BADGES = {
+        STATUS_PENDENTE:  "warning",
+        STATUS_APROVADA:  "success",
+        STATUS_REJEITADA: "danger",
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    usuario_id = db.Column(
+        db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    posto_atual_id = db.Column(
+        db.Integer, db.ForeignKey("postos_graduacoes.id", ondelete="SET NULL"), nullable=True,
+    )
+    posto_solicitado_id = db.Column(
+        db.Integer, db.ForeignKey("postos_graduacoes.id", ondelete="CASCADE"), nullable=False,
+    )
+
+    status        = db.Column(db.String(20), default=STATUS_PENDENTE, nullable=False, index=True)
+    justificativa = db.Column(db.String(255), nullable=True)   # preenchida pelo militar
+    resposta_obs  = db.Column(db.String(255), nullable=True)   # preenchida pelo admin
+
+    data_solicitacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    data_resposta     = db.Column(db.DateTime, nullable=True)
+
+    respondido_por_id = db.Column(
+        db.Integer, db.ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True,
+    )
+
+    usuario = db.relationship(
+        "Usuario", foreign_keys=[usuario_id],
+        backref=db.backref("solicitacoes_posto", cascade="all, delete-orphan"),
+    )
+    posto_atual      = db.relationship("PostoGraduacao", foreign_keys=[posto_atual_id])
+    posto_solicitado = db.relationship("PostoGraduacao", foreign_keys=[posto_solicitado_id])
+    respondido_por   = db.relationship("Usuario", foreign_keys=[respondido_por_id])
+
+    @property
+    def status_label(self) -> str:
+        return self.STATUS_LABELS.get(self.status, self.status)
+
+    @property
+    def status_badge(self) -> str:
+        return self.STATUS_BADGES.get(self.status, "secondary")
+
+    @staticmethod
+    def contar_pendentes() -> int:
+        try:
+            return SolicitacaoPostoGraduacao.query.filter_by(
+                status=SolicitacaoPostoGraduacao.STATUS_PENDENTE
+            ).count()
+        except Exception:
+            return 0
+
+    def __repr__(self) -> str:
+        return f"<SolicitacaoPostoGraduacao #{self.id} usuario={self.usuario_id} [{self.status}]>"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Modelo: MotivoCancelamento
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -122,6 +252,15 @@ class Usuario(UserMixin, db.Model):
     subunidade_id = db.Column(
         db.Integer,
         db.ForeignKey("subunidades.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # Posto/Graduação — opcional; o recurso pode ser ligado/desligado pelo
+    # super-usuário em Configurações (chave ConfigSistema "postos_habilitados")
+    # sem impacto no restante do sistema, já que o campo é sempre nullable.
+    posto_graduacao_id = db.Column(
+        db.Integer,
+        db.ForeignKey("postos_graduacoes.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

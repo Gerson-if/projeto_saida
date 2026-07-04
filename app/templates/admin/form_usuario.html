@@ -121,6 +121,28 @@
                         </select>
                     </div>
 
+                    {% if config_sistema.get('postos_habilitados') == '1' %}
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-award me-1"></i>Posto/Graduação
+                        </label>
+                        <select name="posto_graduacao_id" class="form-select">
+                            <option value="">— Sem posto/graduação —</option>
+                            {% for posto in postos %}
+                            <option value="{{ posto.id }}" {{ 'selected' if usuario and usuario.posto_graduacao_id == posto.id else '' }}>
+                                {{ posto.sigla or posto.nome }} — {{ posto.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        {% if not postos %}
+                        <div class="form-text">
+                            Nenhum posto/graduação cadastrado ainda.
+                            <a href="{{ url_for('admin.novo_posto') }}">Cadastre o primeiro</a>.
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
                     {% if acao == 'editar' %}
                     <div class="mb-3">
                         <div class="form-check form-switch">

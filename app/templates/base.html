@@ -241,6 +241,15 @@
             <a href="{{ url_for('admin.listar_subunidades') }}" class="nav-link {% if 'subunidade' in request.endpoint %}active{% endif %}" title="Subunidades">
                 <i class="bi bi-diagram-3"></i><span class="link-text"> Subunidades</span>
             </a>
+            <a href="{{ url_for('admin.listar_postos') }}" class="nav-link {% if 'posto' in request.endpoint %}active{% endif %}" title="Postos/Graduações">
+                <i class="bi bi-award"></i><span class="link-text"> Postos/Graduações</span>
+            </a>
+            <a href="{{ url_for('admin.listar_solicitacoes') }}" class="nav-link {% if 'solicitacoes' in request.endpoint %}active{% endif %}" title="Solicitações">
+                <i class="bi bi-bell"></i><span class="link-text"> Solicitações</span>
+                {% if solicitacoes_pendentes_count %}
+                <span class="badge bg-danger ms-auto" style="font-size:0.65rem;">{{ solicitacoes_pendentes_count }}</span>
+                {% endif %}
+            </a>
             <a href="{{ url_for('admin.listar_saidas') }}" class="nav-link {% if 'saidas' in request.endpoint %}active{% endif %}" title="Saídas">
                 <i class="bi bi-journal-text"></i><span class="link-text"> Todas as Saídas</span>
             </a>

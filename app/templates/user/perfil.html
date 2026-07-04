@@ -108,11 +108,18 @@
             <h5 class="fw-bold mb-0" style="color:#1e293b;">{{ current_user.nome }}</h5>
             <small class="text-muted">{{ 'Administrador' if current_user.is_admin else 'Usuário' }}</small>
 
-            {% if current_user.subunidade %}
-            <div class="mt-2">
+            {% if current_user.subunidade or (postos_habilitados and current_user.posto_graduacao) %}
+            <div class="mt-2 d-flex flex-wrap justify-content-center gap-1">
+                {% if current_user.subunidade %}
                 <span class="badge px-3 py-1" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;font-size:0.8rem;">
                     <i class="bi bi-building me-1"></i>{{ current_user.subunidade.nome }}
                 </span>
+                {% endif %}
+                {% if postos_habilitados and current_user.posto_graduacao %}
+                <span class="badge px-3 py-1" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:0.8rem;">
+                    <i class="bi bi-award me-1"></i>{{ current_user.posto_graduacao.nome }}
+                </span>
+                {% endif %}
             </div>
             {% endif %}
 
@@ -168,6 +175,16 @@
                         <i class="bi bi-lock me-1"></i>Alterar Senha
                     </button>
                 </li>
+                {% if postos_habilitados %}
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPosto">
+                        <i class="bi bi-award me-1"></i>Posto/Graduação
+                        {% if solicitacao_pendente %}
+                        <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;">pendente</span>
+                        {% endif %}
+                    </button>
+                </li>
+                {% endif %}
             </ul>
 
             <div class="tab-content p-4">
@@ -230,6 +247,9 @@
                         <div class="alert alert-light border mt-4 mb-3 rounded-3 py-2 px-3" style="font-size:0.82rem;color:#64748b;">
                             <i class="bi bi-info-circle me-1"></i>
                             Nome, CPF, tipo e subunidade só podem ser alterados pelo administrador.
+                            {% if postos_habilitados %}
+                            O posto/graduação pode ser alterado na aba <strong>Posto/Graduação</strong> ao lado, mediante aprovação.
+                            {% endif %}
                         </div>
 
                         <div class="d-flex gap-2">
@@ -276,6 +296,67 @@
                         </button>
                     </form>
                 </div>
+
+                {% if postos_habilitados %}
+                <!-- Aba: Posto/Graduação -->
+                <div class="tab-pane fade" id="tabPosto">
+                    {% if solicitacao_pendente %}
+                    <div class="alert alert-warning rounded-3" style="font-size:0.85rem;">
+                        <i class="bi bi-hourglass-split me-1"></i>
+                        Você tem uma solicitação de alteração para
+                        <strong>{{ solicitacao_pendente.posto_solicitado.nome if solicitacao_pendente.posto_solicitado else '' }}</strong>
+                        aguardando aprovação do super-usuário desde
+                        {{ solicitacao_pendente.data_solicitacao.strftime('%d/%m/%Y') }}.
+                        Você poderá enviar uma nova solicitação assim que esta for respondida.
+                    </div>
+                    {% else %}
+                    <form method="POST">
+                        <input type="hidden" name="acao" value="solicitar_posto">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Posto/Graduação atual</label>
+                            <div>
+                                {% if current_user.posto_graduacao %}
+                                <span class="badge px-3 py-2" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">
+                                    {{ current_user.posto_graduacao.nome }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">— nenhum definido —</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Novo posto/graduação <span class="text-danger">*</span></label>
+                            <select name="posto_graduacao_id" class="form-select" required>
+                                <option value="">Selecione...</option>
+                                {% for posto in postos %}
+                                <option value="{{ posto.id }}" {{ 'disabled' if current_user.posto_graduacao_id == posto.id else '' }}>
+                                    {{ posto.sigla or posto.nome }} — {{ posto.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold small">Justificativa (opcional)</label>
+                            <textarea name="justificativa" class="form-control" rows="3" maxlength="255"
+                                      placeholder="Ex: promoção publicada em boletim, correção de cadastro..."></textarea>
+                        </div>
+
+                        <div class="alert alert-light border mb-3 rounded-3 py-2 px-3" style="font-size:0.8rem;color:#64748b;">
+                            <i class="bi bi-info-circle me-1"></i>
+                            A alteração só passa a valer depois que o super-usuário aprovar o pedido.
+                            Ele será notificado automaticamente.
+                        </div>
+
+                        <button type="submit" class="btn btn-primary rounded-3 px-4">
+                            <i class="bi bi-send me-1"></i>Enviar Solicitação
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

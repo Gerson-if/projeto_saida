@@ -12,7 +12,10 @@ from flask_login import current_user, login_required
 
 from app import db
 from app.db_utils import commit_seguro
-from app.models import Registro, StatusSaida, ConfigSistema, MotivoCancelamento
+from app.models import (
+    ConfigSistema, MotivoCancelamento, PostoGraduacao, Registro,
+    SolicitacaoPostoGraduacao, StatusSaida,
+)
 from app.uploads import validar_e_salvar_imagem, remover_upload_seguro
 from app.validators import validar_texto_livre, validar_telefone, validar_data
 
@@ -481,6 +484,67 @@ def perfil():
                     flash(erro, "danger")
             return redirect(url_for("user.perfil"))
 
+        if acao == "solicitar_posto":
+            # Solicitação de alteração de posto/graduação — não altera o
+            # cadastro diretamente; fica pendente até o super-usuário
+            # aprovar ou rejeitar (ver admin.responder_solicitacao).
+            if (ConfigSistema.get("postos_habilitados", "0") or "0") != "1":
+                flash("Este recurso não está habilitado no momento.", "warning")
+                return redirect(url_for("user.perfil"))
+
+            ja_pendente = SolicitacaoPostoGraduacao.query.filter_by(
+                usuario_id=current_user.id,
+                status=SolicitacaoPostoGraduacao.STATUS_PENDENTE,
+            ).first()
+            if ja_pendente:
+                flash("Você já tem uma solicitação de alteração pendente de aprovação.", "warning")
+                return redirect(url_for("user.perfil"))
+
+            posto_id = request.form.get("posto_graduacao_id", "")
+            posto = None
+            if posto_id:
+                from app.validators import parse_int_seguro
+                posto_id_valido = parse_int_seguro(posto_id, minimo=1)
+                if posto_id_valido is not None:
+                    posto = db.session.get(PostoGraduacao, posto_id_valido)
+
+            if not posto or not posto.ativo:
+                flash("Selecione um posto/graduação válido.", "danger")
+                return redirect(url_for("user.perfil"))
+
+            if posto.id == current_user.posto_graduacao_id:
+                flash("Você já possui este posto/graduação.", "warning")
+                return redirect(url_for("user.perfil"))
+
+            justificativa, erros_just = validar_texto_livre(
+                request.form.get("justificativa", ""), campo="justificativa",
+                max_len=255, obrigatorio=False,
+            )
+            if erros_just:
+                for e in erros_just:
+                    flash(e, "danger")
+                return redirect(url_for("user.perfil"))
+
+            solicitacao = SolicitacaoPostoGraduacao(
+                usuario_id=current_user.id,
+                posto_atual_id=current_user.posto_graduacao_id,
+                posto_solicitado_id=posto.id,
+                justificativa=justificativa or None,
+            )
+            db.session.add(solicitacao)
+            ok, erro = commit_seguro(
+                db,
+                mensagem_erro="Não foi possível enviar a solicitação. Tente novamente.",
+            )
+            if ok:
+                flash(
+                    "Solicitação enviada! O super-usuário foi notificado e irá analisar seu pedido.",
+                    "success",
+                )
+            else:
+                flash(erro, "danger")
+            return redirect(url_for("user.perfil"))
+
         # Dados + foto
         telefone, erros_tel = validar_telefone(request.form.get("telefone", ""))
         email_raw = request.form.get("email", "").strip()[:120]
@@ -530,4 +594,18 @@ def perfil():
 
         return redirect(url_for("user.perfil"))
 
-    return render_template("user/perfil.html")
+    postos_habilitados = (ConfigSistema.get("postos_habilitados", "0") or "0") == "1"
+    postos = PostoGraduacao.listar_ativos() if postos_habilitados else []
+    solicitacao_pendente = None
+    if postos_habilitados:
+        solicitacao_pendente = SolicitacaoPostoGraduacao.query.filter_by(
+            usuario_id=current_user.id,
+            status=SolicitacaoPostoGraduacao.STATUS_PENDENTE,
+        ).first()
+
+    return render_template(
+        "user/perfil.html",
+        postos_habilitados=postos_habilitados,
+        postos=postos,
+        solicitacao_pendente=solicitacao_pendente,
+    )
