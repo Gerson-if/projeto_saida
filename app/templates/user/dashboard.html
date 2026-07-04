@@ -33,9 +33,10 @@ body {
 }
 #toast-registro-sucesso.show {
   display: flex;
-  animation: slideInToast 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: slideInToast 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 #toast-registro-sucesso.hide {
+  display: flex; /* Mantém visível durante a animação de saída */
   animation: slideOutToast 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 @keyframes slideInToast { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
@@ -193,7 +194,8 @@ body {
       Ver histórico <i class="bi bi-arrow-right"></i>
     </a>
   </div>
-  <button type="button" onclick="fecharSucesso()" class="btn-close" style="font-size: 0.65rem;" aria-label="Fechar"></button>
+  <!-- Ajustado o clique manual para prevenir o comportamento padrão -->
+  <button type="button" onclick="event.preventDefault(); fecharSucesso();" class="btn-close" style="font-size: 0.65rem;" aria-label="Fechar"></button>
 </div>
 
 <div class="row align-items-center mb-3 g-2">
@@ -340,9 +342,7 @@ body {
   </div>
 </div>
 
-<!-- ── NOVA SEÇÃO EQUILIBRADA (COL-MD-6 / COL-MD-6) ── -->
 <div class="row g-3 mb-2">
-  <!-- Atividades Recentes em formato Clean (Sem tabelas) -->
   <div class="col-md-6">
     <div class="chart-card h-100 d-flex flex-column justify-content-between">
       <div>
@@ -354,14 +354,12 @@ body {
           <a href="{{ url_for('user.meus_registros') }}" class="text-decoration-none fw-bold" style="font-size: 0.75rem; color: #1d4ed8;">Ver Histórico</a>
         </div>
         <div id="containerRecentes" class="py-1">
-          <!-- Gerado dinamicamente via JS -->
           <div class="text-center py-4 text-muted small">Carregando histórico recente...</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Novo Indicador Visual: Gráfico de Linha Suave (Ritmo Operacional Semanal) -->
   <div class="col-md-6">
     <div class="chart-card h-100">
       <div class="chart-card-head">
@@ -388,7 +386,6 @@ body {
 
 {% block extra_js %}
 <script>
-// ── Slider de Transição com Animação Suave Dinâmica ──
 document.addEventListener('DOMContentLoaded', function() {
   const itensDica = document.querySelectorAll('.js-dica-item');
   if (itensDica.length === 0) return;
@@ -427,11 +424,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(alternarDica, 7000);
   }
 
-  // Aciona a renderização da lista assíncrona
   carregarRecentesClean();
 });
 
-// ── Renderização da Lista de Recentes Assíncrona ──
 function carregarRecentesClean() {
   const container = document.getElementById('containerRecentes');
   const LABELS_STATUS = { agendada: 'Agendada', em_transito: 'Em Trânsito', retornado: 'Retornado', cancelado: 'Cancelado' };
@@ -440,7 +435,7 @@ function carregarRecentesClean() {
     .then(r => r.json())
     .then(data => {
       const lista = data.saidas || [];
-      const ultimas = lista.slice(0, 3); // Apenas as 3 últimas atividades
+      const ultimas = lista.slice(0, 3);
 
       if(ultimas.length === 0) {
         container.innerHTML = '<div class="text-center py-3 text-muted small">Nenhum registro encontrado.</div>';
@@ -452,7 +447,7 @@ function carregarRecentesClean() {
         return `
           <div class="recent-list-item">
             <div>
-              <div class="fw-semibold style="font-size: 0.85rem; color: var(--text-main);">${_esc(s.local)}</div>
+              <div class="fw-semibold" style="font-size: 0.85rem; color: var(--text-main);">${_esc(s.local)}</div>
               <div class="text-muted" style="font-size: 0.75rem;">${_esc(s.motivo)}</div>
             </div>
             <div class="text-end">
@@ -474,7 +469,9 @@ function _esc(str) {
   return d.innerHTML;
 }
 
-// ── Controle do Feedback Visual Sucesso ──
+// ── CORREÇÃO DE CONTROLE DO TOAST DE SUCESSO ──
+let timerSucesso = null;
+
 (function(){
   if(new URLSearchParams(location.search).get('registrado')==='1'){
     mostrarSucesso();
@@ -482,29 +479,33 @@ function _esc(str) {
   }
 })();
 
-let timerSucesso = null;
 function mostrarSucesso(){
   const o = document.getElementById('toast-registro-sucesso');
   if(!o) return;
   o.classList.remove('hide');
   o.classList.add('show');
+  
   clearTimeout(timerSucesso);
-  timerSucesso = setTimeout(fecharSucesso, 4500);
+  // Executa o fechamento suave automático após 4 segundos
+  timerSucesso = setTimeout(fecharSucesso, 4000);
 }
+
 function fecharSucesso(){
   const o = document.getElementById('toast-registro-sucesso');
   if(!o || !o.classList.contains('show')) return;
+  
   clearTimeout(timerSucesso);
+  o.classList.remove('show');
   o.classList.add('hide');
-  setTimeout(()=>{ o.classList.remove('show','hide'); }, 200);
+  
+  // Aguarda os 200ms da animação de fade-out do CSS para remover o elemento da tela de forma limpa
+  setTimeout(()=>{ 
+    o.classList.remove('hide'); 
+    o.style.display = 'none';
+  }, 200);
 }
 
 {% if stats.total > 0 %}
-// ── Inicialização Gráficos (Chart.js) ──
-// Os gráficos são desenhados em <canvas> — CSS não alcança o texto deles.
-// Por isso lemos o tema atual (já aplicado no <html> antes deste script
-// rodar) e definimos explicitamente a cor dos eixos/legendas, senão o
-// Chart.js usa um cinza escuro padrão que fica ilegível em fundo escuro.
 const temaAtualGraficos = document.documentElement.getAttribute('data-theme');
 const corTextoGrafico = (temaAtualGraficos === 'dark') ? '#cbd5e1' : '#64748b';
 const corGradeGrafico  = (temaAtualGraficos === 'dark') ? 'rgba(255,255,255,0.08)' : '#e2e8f0';
@@ -559,10 +560,8 @@ if(ctxMensal){
   });
 }
 
-// ── NOVO GRÁFICO INDICADOR: Ritmo Operacional (Sparkline de Linha Suave com Gradiente) ──
 const ctxRitmo = document.getElementById('chartRitmoSemanal');
 if(ctxRitmo){
-  // Criando efeito de gradiente elegante para o preenchimento da linha
   const ctx = ctxRitmo.getContext('2d');
   const gradient = ctx.createLinearGradient(0, 0, 0, 140);
   gradient.addColorStop(0, 'rgba(16, 185, 129, 0.24)');
@@ -574,7 +573,6 @@ if(ctxRitmo){
       labels: ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4 (Atual)'],
       datasets: [{
         label: 'Registros',
-        // Mock suave baseado no total para garantir comportamento visual idôneo
         data: [
           Math.max(1, Math.round({{ stats.total }} * 0.15)), 
           Math.max(2, Math.round({{ stats.total }} * 0.22)), 
@@ -585,7 +583,7 @@ if(ctxRitmo){
         borderWidth: 2.5,
         fill: true,
         backgroundColor: gradient,
-        tension: 0.4, // Suaviza as curvas da linha de forma orgânica
+        tension: 0.4,
         pointRadius: 3,
         pointBackgroundColor: '#10b981'
       }]
