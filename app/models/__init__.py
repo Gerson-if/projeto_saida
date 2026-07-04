@@ -354,7 +354,14 @@ class Registro(db.Model):
     id                   = db.Column(db.Integer, primary_key=True)
     cpf_usuario          = db.Column(
         db.String(14),
-        db.ForeignKey("usuarios.cpf", ondelete="CASCADE"),
+        # onupdate="CASCADE": se o CPF de um usuário for corrigido/editado,
+        # os registros já existentes acompanham a mudança automaticamente
+        # em vez de ficarem "órfãos" ou impedirem a edição por violação de
+        # chave estrangeira (bancos que suportam ON UPDATE CASCADE nativo,
+        # como PostgreSQL/MySQL, cuidam disso sozinhos; para instalações
+        # SQLite já existentes, a rota admin.editar_usuario também trata
+        # isso explicitamente — veja o comentário lá).
+        db.ForeignKey("usuarios.cpf", ondelete="CASCADE", onupdate="CASCADE"),
         nullable=False,
         index=True,
     )

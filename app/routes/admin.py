@@ -231,7 +231,10 @@ def novo_usuario():
         errors = [*erros_nome, *erros_cpf]
         if not senha.strip() or len(senha.strip()) < 4:
             errors.append("A senha deve ter no mínimo 4 caracteres.")
-        if len(senha) > 72:
+        if len(senha.encode("utf-8")) > 72:
+            # bcrypt limita a senha a 72 BYTES, não caracteres — com acentos
+            # ou outros caracteres multibyte, len() em caracteres não é
+            # suficiente para evitar o ValueError do bcrypt no set_senha().
             errors.append("A senha deve ter no máximo 72 caracteres.")
         if tipo not in TipoUsuario.TODOS:
             errors.append("Tipo de usuário inválido.")
@@ -305,7 +308,7 @@ def editar_usuario(id):
             errors.append("Tipo de usuário inválido.")
         if cpf and Usuario.query.filter(Usuario.cpf == cpf, Usuario.id != id).first():
             errors.append("Este CPF já pertence a outro usuário.")
-        if nova_senha.strip() and len(nova_senha.strip()) > 72:
+        if nova_senha.strip() and len(nova_senha.strip().encode("utf-8")) > 72:
             errors.append("A senha deve ter no máximo 72 caracteres.")
 
         subunidade_id_valida = _validar_subunidade(sub_id, errors)
@@ -317,6 +320,29 @@ def editar_usuario(id):
             return render_template(
                 "admin/form_usuario.html", usuario=usuario,
                 acao="editar", subunidades=subunidades, postos=postos,
+            )
+
+        cpf_anterior = usuario.cpf
+        cpf_mudou = cpf != cpf_anterior
+
+        if cpf_mudou:
+            # O CPF é usado como chave estrangeira "natural" em registros.cpf_usuario
+            # (ON DELETE CASCADE). Como não há ON UPDATE CASCADE configurado no
+            # banco (SQLite não permite alterar essa cláusula sem recriar a
+            # tabela), uma troca de CPF de um usuário que já possui saídas
+            # registradas violaria a constraint de chave estrangeira e o
+            # commit falharia com IntegrityError — por isso não era possível
+            # editar o CPF de ninguém que já tivesse pelo menos um registro.
+            #
+            # A solução: dentro da MESMA transação, adiar a checagem de
+            # chaves estrangeiras (SQLite) e atualizar em conjunto o usuário
+            # e todos os registros que apontam para o CPF antigo, para que o
+            # banco só valide a consistência no momento do commit, quando
+            # tudo já está coerente.
+            if db.engine.dialect.name == "sqlite":
+                db.session.execute(db.text("PRAGMA defer_foreign_keys=ON"))
+            Registro.query.filter_by(cpf_usuario=cpf_anterior).update(
+                {Registro.cpf_usuario: cpf}, synchronize_session=False
             )
 
         usuario.nome               = nome
