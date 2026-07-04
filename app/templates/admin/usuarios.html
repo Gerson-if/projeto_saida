@@ -3,53 +3,54 @@
 
 {% block extra_css %}
 <style>
-/* ── Estilos do Card e Filtros Modernizados ── */
-.card {
-    border: 1px solid #cbd5e1;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    background: #ffffff;
+/* ── Estilos do Card e Filtros Modernizados (Compatíveis com Dark Mode) ── */
+.card-modern {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    background: var(--bs-card-bg);
+    overflow: hidden;
 }
-.card-header {
-    background-color: #f8fafc;
-    border-bottom: 1px solid #cbd5e1;
+.card-modern-header {
+    background-color: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
     padding: 1.25rem;
 }
-.table > :not(caption) > * > * {
-    padding: 0.85rem 1.1rem;
+.table-modern > :not(caption) > * > * {
+    padding: 1rem 1.25rem;
     vertical-align: middle;
 }
-.table thead th {
-    background-color: #f1f5f9;
-    color: #1e293b;
+.table-modern thead th {
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-heading-color);
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 2px solid #cbd5e1;
+    letter-spacing: 0.8px;
+    border-bottom: 2px solid var(--bs-border-color);
 }
-.table tbody tr {
-    border-bottom: 1px solid #e2e8f0;
+.table-modern tbody tr {
+    border-bottom: 1px solid var(--bs-border-color-translucent);
     transition: background-color 0.2s ease;
 }
 
 /* ── Avatares de Alto Impacto ── */
 .avatar-container {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid #3b82f6;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border: 2px solid var(--bs-primary);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    color: #ffffff;
+    color: #ffffff; /* Mantido branco pois o fundo do avatar padrão é escuro/azul */
 }
 
 /* Paginador Ver Mais */
-.table tbody tr.tr-hidden {
+.table-modern tbody tr.tr-hidden {
     display: none !important;
 }
 .btn-ver-mais {
@@ -59,18 +60,18 @@
     padding: 0.65rem 1.75rem;
     font-weight: 700;
     font-size: 0.875rem;
-    color: #1d4ed8;
-    background: #dbeafe;
-    border: 1px dashed #2563eb;
+    color: var(--bs-link-color);
+    background: var(--bs-primary-bg-subtle);
+    border: 1px dashed var(--bs-primary-border-subtle);
     border-radius: 30px;
     transition: all 0.25s ease;
     cursor: pointer;
 }
 .btn-ver-mais:hover {
-    background: #1d4ed8;
+    background: var(--bs-primary);
     color: #fff;
     border-style: solid;
-    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb), 0.3);
     transform: translateY(-1px);
 }
 </style>
@@ -79,28 +80,28 @@
 {% block content %}
 <div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
     <div>
-        <h4 class="mb-0 fw-bold text-dark">
-            <i class="bi bi-people text-dark me-2"></i>Gestão de Usuários
+        <h4 class="mb-0 fw-bold">
+            <i class="bi bi-people me-2"></i>Gestão de Usuários
         </h4>
-        <small class="text-secondary fw-medium">Cadastre, edite, filtre e gerencie os privilégios de acesso dos usuários do sistema</small>
+        <small class="text-muted fw-medium">Cadastre, edite, filtre e gerencie os privilégios de acesso dos usuários do sistema</small>
     </div>
-    <a href="{{ url_for('admin.novo_usuario') }}" class="btn btn-primary px-3 fw-bold" style="border-radius: 8px;">
-        <i class="bi bi-person-plus me-1 text-white"></i> Novo Usuário
+    <a href="{{ url_for('admin.novo_usuario') }}" class="btn btn-primary px-3 fw-bold d-inline-flex align-items-center gap-2" style="border-radius: 10px;">
+        <i class="bi bi-person-plus-fill fs-5"></i> Novo Usuário
     </a>
 </div>
 
-<div class="card">
-    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+<div class="card-modern">
+    <div class="card-modern-header d-flex flex-wrap align-items-center justify-content-between gap-3">
         <form class="d-flex gap-2 flex-wrap flex-grow-1 align-items-center mb-0" method="GET">
             <div class="input-group" style="max-width:380px;">
-                <span class="input-group-text bg-white border-end-0 text-muted"><i class="bi bi-search"></i></span>
+                <span class="input-group-text bg-transparent text-muted"><i class="bi bi-search"></i></span>
                 <input type="text" name="busca" class="form-control border-start-0 ps-0" placeholder="Buscar por nome ou CPF..."
                        value="{{ busca }}">
-                <button class="btn btn-dark fw-bold" type="submit">Buscar</button>
+                <button class="btn btn-secondary fw-bold" type="submit">Buscar</button>
             </div>
 
             {% if subunidades %}
-            <select name="subunidade" class="form-select fw-semibold text-dark" style="max-width:220px;" onchange="this.form.submit()">
+            <select name="subunidade" class="form-select fw-semibold" style="max-width:220px;" onchange="this.form.submit()">
                 <option value="">Todas as subunidades</option>
                 {% for sub in subunidades %}
                 <option value="{{ sub.id }}" {{ 'selected' if subunidade_id == sub.id|string }}>
@@ -111,7 +112,7 @@
             {% endif %}
 
             {% if postos_habilitados and postos %}
-            <select name="posto_graduacao" class="form-select fw-semibold text-dark" style="max-width:240px;" onchange="this.form.submit()">
+            <select name="posto_graduacao" class="form-select fw-semibold" style="max-width:240px;" onchange="this.form.submit()">
                 <option value="">Todos os níveis hierárquicos</option>
                 {% for posto in postos %}
                 <option value="{{ posto.id }}" {{ 'selected' if posto_graduacao_id == posto.id|string }}>
@@ -122,17 +123,17 @@
             {% endif %}
 
             {% if busca or subunidade_id or posto_graduacao_id %}
-            <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-danger" title="Limpar filtros" style="border-radius: 6px;">
-                <i class="bi bi-x-lg text-white"></i>
+            <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-outline-danger d-inline-flex align-items-center justify-content-center" title="Limpar filtros" style="border-radius: 8px; width: 40px; height: 40px;">
+                <i class="bi bi-x-lg"></i>
             </a>
             {% endif %}
         </form>
-        <span class="badge bg-dark px-3 py-2 text-white rounded-pill fw-bold">{{ usuarios|length }} usuários</span>
+        <span class="badge bg-body-secondary text-body-emphasis border px-3 py-2 rounded-pill fw-bold">{{ usuarios|length }} usuários</span>
     </div>
 
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover mb-0 align-middle" id="tabelaUsuarios">
+            <table class="table table-hover table-modern mb-0 align-middle" id="tabelaUsuarios">
                 <thead>
                     <tr>
                         <th class="ps-4" style="width:50px;">#</th>
@@ -150,7 +151,7 @@
                 <tbody>
                     {% for u in usuarios %}
                     <tr class="user-row">
-                        <td class="ps-4 text-dark fw-bold small">{{ loop.index }}</td>
+                        <td class="ps-4 fw-bold small text-muted">{{ loop.index }}</td>
                         <td>
                             <div class="d-flex align-items-center gap-3">
                                 {% if u.foto %}
@@ -162,28 +163,28 @@
                                     </div>
                                 {% endif %}
                                 <div>
-                                    <div class="fw-bold text-dark" style="font-size:0.92rem;">{{ u.nome }}</div>
+                                    <div class="fw-bold" style="font-size:0.92rem;">{{ u.nome }}</div>
                                 </div>
                             </div>
                         </td>
-                        <td class="text-dark fw-medium font-monospace" style="font-size:0.875rem;">{{ u.cpf }}</td>
+                        <td class="font-monospace text-muted" style="font-size:0.875rem;">{{ u.cpf }}</td>
                         <td>
                             {% if u.is_admin %}
-                            <span class="badge bg-danger text-white px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">
-                                <i class="bi bi-shield-fill text-white me-1"></i>Super Admin
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">
+                                <i class="bi bi-shield-fill me-1"></i>Super Admin
                             </span>
                             {% else %}
-                            <span class="badge bg-primary text-white px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">
-                                <i class="bi bi-person text-white me-1"></i>Usuário
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">
+                                <i class="bi bi-person me-1"></i>Usuário
                             </span>
                             {% endif %}
                         </td>
                         {% if postos_habilitados %}
                         <td>
                             {% if u.posto_graduacao %}
-                            <span class="badge bg-info text-dark border border-info px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem; background-color: #cff4fc !important;"
+                            <span class="badge bg-info-subtle text-info border border-info-subtle px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;"
                                   title="Nível de hierarquia: {{ u.posto_graduacao.nivel }}">
-                                <i class="bi bi-award text-dark me-1"></i>{{ u.posto_graduacao.nome }}
+                                <i class="bi bi-award me-1"></i>{{ u.posto_graduacao.nome }}
                                 {% if u.posto_graduacao.sigla %} ({{ u.posto_graduacao.sigla }}){% endif %}
                             </span>
                             {% else %}
@@ -193,28 +194,28 @@
                         {% endif %}
                         <td>
                             {% if u.ativo %}
-                            <span class="badge bg-success text-white px-3 py-1.5 rounded-pill fw-bold" style="font-size: 0.75rem; background-color: #15803d !important;">
-                                <i class="bi bi-check-circle text-white me-1"></i>Ativo
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1.5 rounded-pill fw-bold" style="font-size: 0.75rem;">
+                                <i class="bi bi-check-circle me-1"></i>Ativo
                             </span>
                             {% else %}
-                            <span class="badge bg-secondary text-white px-3 py-1.5 rounded-pill fw-bold" style="font-size: 0.75rem; background-color: #64748b !important;">
-                                <i class="bi bi-x-circle text-white me-1"></i>Inativo
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-1.5 rounded-pill fw-bold" style="font-size: 0.75rem;">
+                                <i class="bi bi-x-circle me-1"></i>Inativo
                             </span>
                             {% endif %}
                         </td>
-                        <td class="text-dark fw-medium" style="font-size:0.85rem;">
+                        <td class="text-muted" style="font-size:0.85rem;">
                             {{ u.data_criacao.strftime('%d/%m/%Y') if u.data_criacao else '-' }}
                         </td>
                         <td class="text-center">
                             <div class="d-inline-flex gap-2">
                                 <a href="{{ url_for('admin.editar_usuario', id=u.id) }}"
-                                   class="btn btn-sm btn-primary" style="border-radius: 6px;" title="Editar">
-                                    <i class="bi bi-pencil text-white"></i>
+                                   class="btn btn-sm btn-outline-primary d-inline-flex align-items-center justify-content-center" style="border-radius: 8px; width: 32px; height: 32px;" title="Editar">
+                                    <i class="bi bi-pencil"></i>
                                 </a>
                                 {% if u.id != current_user.id %}
-                                <button type="button" class="btn btn-sm btn-danger" style="border-radius: 6px;"
+                                <button type="button" class="btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center" style="border-radius: 8px; width: 32px; height: 32px;"
                                         title="Excluir" data-bs-toggle="modal" data-bs-target="#modalExcluir{{ u.id }}">
-                                    <i class="bi bi-trash text-white"></i>
+                                    <i class="bi bi-trash"></i>
                                 </button>
                                 {% endif %}
                             </div>
@@ -224,20 +225,20 @@
                     <div class="modal fade" id="modalExcluir{{ u.id }}" tabindex="-1">
                         <div class="modal-dialog modal-dialog-centered modal-sm">
                             <div class="modal-content shadow border-0">
-                                <div class="modal-header bg-light border-bottom">
+                                <div class="modal-header border-bottom">
                                     <h6 class="modal-title text-danger fw-bold">
                                         <i class="bi bi-exclamation-triangle-fill me-1"></i>Confirmar Exclusão
                                     </h6>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                 </div>
-                                <div class="modal-body text-dark py-3" style="font-size:0.9rem; line-height: 1.5;">
-                                    Tem certeza que deseja excluir permanentemente o usuário <strong class="text-dark">{{ u.nome }}</strong>? Esta ação não poderá ser desfeita.
+                                <div class="modal-body py-3" style="font-size:0.9rem; line-height: 1.5;">
+                                    Tem certeza que deseja excluir permanentemente o usuário <strong>{{ u.nome }}</strong>? Esta ação não poderá ser desfeita.
                                 </div>
-                                <div class="modal-footer bg-light gap-2 pt-2 border-top">
+                                <div class="modal-footer gap-2 pt-2 border-top">
                                     <button class="btn btn-sm btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
                                     <form method="POST" action="{{ url_for('admin.excluir_usuario', id=u.id) }}">
                                         <button type="submit" class="btn btn-sm btn-danger fw-bold">
-                                            <i class="bi bi-trash me-1 text-white"></i>Excluir
+                                            <i class="bi bi-trash me-1"></i>Excluir
                                         </button>
                                     </form>
                                 </div>
@@ -246,9 +247,9 @@
                     </div>
                     {% else %}
                     <tr>
-                        <td colspan="{{ 8 if postos_habilitados else 7 }}" class="text-center py-5 text-dark">
-                            <i class="bi bi-people display-5 d-block mb-2 text-secondary"></i>
-                            <span class="fw-bold">Nenhum usuário encontrado para os parâmetros informados.</span>
+                        <td colspan="{{ 8 if postos_habilitados else 7 }}" class="text-center py-5">
+                            <i class="bi bi-people display-5 d-block mb-2 text-muted"></i>
+                            <span class="fw-bold text-muted">Nenhum usuário encontrado para os parâmetros informados.</span>
                         </td>
                     </tr>
                     {% endfor %}

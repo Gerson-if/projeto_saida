@@ -1,139 +1,257 @@
 {% extends 'base.html' %}
 {% block title %}Solicitações de Alteração{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ── Estilos Modernizados e Adaptáveis a Temas ── */
+.card-modern {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    background: var(--bs-card-bg);
+    overflow: hidden;
+}
+.table-modern > :not(caption) > * > * {
+    padding: 1rem 1.25rem;
+    vertical-align: middle;
+}
+.table-modern thead th {
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-heading-color);
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    border-bottom: 2px solid var(--bs-border-color);
+}
+.table-modern tbody tr {
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+    transition: background-color 0.2s ease;
+}
+
+/* Ocultação de registros para paginação client-side */
+.table-modern tbody tr.tr-hidden {
+    display: none !important;
+}
+
+/* Botão Ver Mais Customizado */
+.btn-ver-mais {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.75rem;
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: var(--bs-link-color);
+    background: var(--bs-primary-bg-subtle);
+    border: 1px dashed var(--bs-primary-border-subtle);
+    border-radius: 30px;
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+.btn-ver-mais:hover {
+    background: var(--bs-primary);
+    color: #fff;
+    border-style: solid;
+    box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb), 0.3);
+    transform: translateY(-1px);
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
     <div>
         <h4 class="mb-0 fw-bold">
-            <i class="bi bi-bell me-2" style="color:var(--cor-secundaria);"></i>
+            <i class="bi bi-bell-fill me-2 text-primary"></i>
             Solicitações de Alteração de Posto/Graduação
         </h4>
-        <small class="text-muted">Pedidos enviados pelos próprios militares — aprove ou rejeite abaixo</small>
+        <small class="text-muted fw-medium">Pedidos enviados pelos próprios militares — aprove ou rejeite na listagem abaixo</small>
     </div>
-    <div class="btn-group btn-group-sm" role="group">
+    <div class="btn-group" role="group" style="border-radius: 8px; overflow: hidden;">
         <a href="{{ url_for('admin.listar_solicitacoes', status='pendente') }}"
-           class="btn btn-outline-warning {{ 'active' if status_filtro == 'pendente' else '' }}">Pendentes</a>
+           class="btn btn-sm btn-outline-warning fw-bold px-3 {{ 'active' if status_filtro == 'pendente' else '' }}">Pendentes</a>
         <a href="{{ url_for('admin.listar_solicitacoes', status='aprovada') }}"
-           class="btn btn-outline-success {{ 'active' if status_filtro == 'aprovada' else '' }}">Aprovadas</a>
+           class="btn btn-sm btn-outline-success fw-bold px-3 {{ 'active' if status_filtro == 'aprovada' else '' }}">Aprovadas</a>
         <a href="{{ url_for('admin.listar_solicitacoes', status='rejeitada') }}"
-           class="btn btn-outline-danger {{ 'active' if status_filtro == 'rejeitada' else '' }}">Rejeitadas</a>
+           class="btn btn-sm btn-outline-danger fw-bold px-3 {{ 'active' if status_filtro == 'rejeitada' else '' }}">Rejeitadas</a>
     </div>
 </div>
 
-<div class="card">
+<div class="card-modern">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover table-modern mb-0 align-middle" id="tabelaSolicitacoes">
                 <thead>
                     <tr>
-                        <th class="ps-3">Militar</th>
-                        <th>Posto/Graduação atual</th>
-                        <th>Posto/Graduação solicitado</th>
+                        <th class="ps-4">Militar</th>
+                        <th>Posto Atual</th>
+                        <th>Posto Solicitado</th>
                         <th>Justificativa</th>
                         <th>Enviado em</th>
                         <th>Status</th>
-                        <th class="text-end pe-3">Ações</th>
+                        <th class="text-end pe-4" style="min-width: 130px;">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for s in solicitacoes %}
-                    <tr>
-                        <td class="ps-3">
-                            <div class="fw-semibold" style="font-size:0.875rem;">{{ s.usuario.nome if s.usuario else '—' }}</div>
-                            <div class="text-muted" style="font-size:0.78rem;">{{ s.usuario.cpf if s.usuario else '' }}</div>
+                    <tr class="solicitacao-row">
+                        <td class="ps-4">
+                            <div class="fw-bold" style="font-size:0.92rem;">{{ s.usuario.nome if s.usuario else '—' }}</div>
+                            <div class="text-muted font-monospace" style="font-size:0.78rem;">{{ s.usuario.cpf if s.usuario else '' }}</div>
                         </td>
                         <td>
                             {% if s.posto_atual %}
-                                <span class="badge bg-secondary">{{ s.posto_atual.sigla or s.posto_atual.nome }}</span>
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">
+                                    {{ s.posto_atual.sigla or s.posto_atual.nome }}
+                                </span>
                             {% else %}
-                                <span class="text-muted">— nenhum —</span>
+                                <span class="text-muted small fw-medium">— nenhum —</span>
                             {% endif %}
                         </td>
                         <td>
-                            <span class="badge bg-primary">{{ s.posto_solicitado.sigla or s.posto_solicitado.nome if s.posto_solicitado else '—' }}</span>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">
+                                <i class="bi bi-arrow-up-short me-0.5"></i>{{ s.posto_solicitado.sigla or s.posto_solicitado.nome if s.posto_solicitado else '—' }}
+                            </span>
                         </td>
-                        <td style="max-width:220px;font-size:0.82rem;" class="text-muted">
+                        <td style="max-width:240px; font-size:0.85rem;" class="text-muted text-wrap">
                             {{ s.justificativa or '—' }}
                         </td>
-                        <td style="font-size:0.82rem;">{{ s.data_solicitacao.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td class="text-muted font-monospace" style="font-size:0.82rem;">
+                            {{ s.data_solicitacao.strftime('%d/%m/%Y %H:%M') }}
+                        </td>
                         <td>
-                            <span class="badge bg-{{ s.status_badge }}">{{ s.status_label }}</span>
+                            {# Substituição dinâmica inteligente de badges baseada nas cores nativas flexíveis #}
+                            {% set badge_class = 'warning' if s.status == 'pendente' else ('success' if s.status == 'aprovada' else 'danger') %}
+                            <span class="badge bg-{{ badge_class }}-subtle text-{{ badge_class }} border border-{{ badge_class }}-subtle px-3 py-1.5 rounded-pill fw-bold" style="font-size: 0.75rem;">
+                                {{ s.status_label }}
+                            </span>
+                            
                             {% if s.status != 'pendente' and s.respondido_por %}
-                            <div class="text-muted" style="font-size:0.72rem;">
-                                por {{ s.respondido_por.nome }} em {{ s.data_resposta.strftime('%d/%m/%Y') if s.data_resposta else '' }}
+                            <div class="text-muted mt-1" style="font-size:0.72rem; line-height: 1.2;">
+                                por {{ s.respondido_por.nome }}<br>em {{ s.data_resposta.strftime('%d/%m/%Y') if s.data_resposta else '' }}
                             </div>
                             {% endif %}
                         </td>
-                        <td class="text-end pe-3">
+                        <td class="text-end pe-4">
                             {% if s.status == 'pendente' %}
-                            <button type="button" class="btn btn-sm btn-outline-success me-1" title="Aprovar"
-                                    onclick="abrirModalResposta('{{ url_for('admin.responder_solicitacao', id=s.id) }}', 'aprovar', '{{ s.usuario.nome|e if s.usuario else '' }}')">
-                                <i class="bi bi-check-lg"></i>
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-danger" title="Rejeitar"
-                                    onclick="abrirModalResposta('{{ url_for('admin.responder_solicitacao', id=s.id) }}', 'rejeitar', '{{ s.usuario.nome|e if s.usuario else '' }}')">
-                                <i class="bi bi-x-lg"></i>
-                            </button>
+                            <div class="d-inline-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-success d-inline-flex align-items-center justify-content-center" 
+                                        style="border-radius: 8px; width: 32px; height: 32px;" title="Aprovar"
+                                        onclick="abrirModalResposta('{{ url_for('admin.responder_solicitacao', id=s.id) }}', 'aprovar', '{{ s.usuario.nome|e if s.usuario else '' }}')">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger d-inline-flex align-items-center justify-content-center" 
+                                        style="border-radius: 8px; width: 32px; height: 32px;" title="Rejeitar"
+                                        onclick="abrirModalResposta('{{ url_for('admin.responder_solicitacao', id=s.id) }}', 'rejeitar', '{{ s.usuario.nome|e if s.usuario else '' }}')">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
                             {% else %}
-                            <span class="text-muted small">
-                                {{ s.resposta_obs or '—' }}
+                            <span class="text-muted small fst-italic text-wrap d-block" style="max-width: 150px; font-size: 0.8rem;">
+                                {{ s.resposta_obs or 'Sem observações.' }}
                             </span>
                             {% endif %}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center py-5 text-muted">
-                            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
-                            Nenhuma solicitação {{ 'pendente' if status_filtro == 'pendente' else ('aprovada' if status_filtro == 'aprovada' else 'rejeitada') }} no momento.
+                        <td colspan="7" class="text-center py-5">
+                            <i class="bi bi-inbox-fill display-5 d-block mb-2 text-muted"></i>
+                            <span class="fw-bold text-muted d-block">Nenhuma solicitação encontrada</span>
+                            <small class="text-muted">Não há registros com o status "{{ 'Pendente' if status_filtro == 'pendente' else ('Aprovada' if status_filtro == 'aprovada' else 'Rejeitada') }}" no momento.</small>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+
+        {# Container Dinâmico do Botão Ver Mais (Limite de 5 registros) #}
+        <div class="text-center py-4 d-none" id="containerVerMais">
+            <button type="button" class="btn-ver-mais" id="btnVerMais">
+                <span>Ver mais solicitações</span>
+                <i class="bi bi-chevron-down"></i>
+            </button>
+        </div>
     </div>
 </div>
 
-<!-- Modal de resposta (aprovar/rejeitar) -->
+<!-- Modal de resposta adaptado a temas (sem bgs rígidos) -->
 <div class="modal fade" id="modalResposta" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow border-0">
             <form method="POST" id="formResposta">
                 <input type="hidden" name="decisao" id="respostaDecisao" value="">
-                <div class="modal-header">
-                    <h6 class="modal-title" id="respostaTitulo">Responder solicitação</h6>
+                <div class="modal-header border-bottom">
+                    <h6 class="modal-title fw-bold" id="respostaTitulo">Responder solicitação</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <p class="mb-3" id="respostaDescricao"></p>
-                    <label class="form-label fw-semibold small">Observação (opcional)</label>
-                    <textarea name="observacao" class="form-control" rows="3" maxlength="255"
-                              placeholder="Visível apenas nos registros internos."></textarea>
+                <div class="modal-body py-3">
+                    <p class="mb-3 text-body" id="respostaDescricao" style="font-size:0.92rem; line-height: 1.5;"></p>
+                    <div class="form-group">
+                        <label class="form-label fw-bold small text-muted">Observação (opcional)</label>
+                        <textarea name="observacao" class="form-control" rows="3" maxlength="255"
+                                  placeholder="Visível apenas nos registros internos de auditoria."></textarea>
+                    </div>
                 </div>
-                <div class="modal-footer gap-2">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="respostaBotao">Confirmar</button>
+                <div class="modal-footer border-top gap-2">
+                    <button type="button" class="btn btn-sm btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-sm fw-bold" id="respostaBotao">Confirmar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
+// ── Controle do Modal de Resposta ──
 function abrirModalResposta(url, decisao, nome) {
     document.getElementById('formResposta').action = url;
     document.getElementById('respostaDecisao').value = decisao;
     const aprovar = decisao === 'aprovar';
-    document.getElementById('respostaTitulo').textContent = aprovar ? 'Aprovar solicitação' : 'Rejeitar solicitação';
-    document.getElementById('respostaDescricao').textContent =
-        (aprovar
-            ? `Confirmar aprovação da alteração de posto/graduação de "${nome}"? O cadastro será atualizado imediatamente.`
-            : `Confirmar rejeição da solicitação de "${nome}"? O posto/graduação atual será mantido.`);
+    
+    document.getElementById('respostaTitulo').className = 'modal-title fw-bold ' + (aprovar ? 'text-success' : 'text-danger');
+    document.getElementById('respostaTitulo').textContent = aprovar ? 'Aprovar Solicitação' : 'Rejeitar Solicitação';
+    
+    document.getElementById('respostaDescricao').textContent = aprovar
+        ? `Confirmar aprovação da alteração de posto/graduação de "${nome}"? O cadastro do militar será atualizado imediatamente.`
+        : `Confirmar a rejeição do pedido de "${nome}"? O posto/graduação atual permanecerá inalterado.`;
+        
     const botao = document.getElementById('respostaBotao');
-    botao.className = 'btn ' + (aprovar ? 'btn-success' : 'btn-danger');
-    botao.textContent = aprovar ? 'Aprovar' : 'Rejeitar';
+    botao.className = 'btn btn-sm fw-bold ' + (aprovar ? 'btn-success' : 'btn-danger');
+    botao.textContent = aprovar ? 'Aprovar e Atualizar' : 'Rejeitar Pedido';
+    
     new bootstrap.Modal(document.getElementById('modalResposta')).show();
 }
+
+// ── Paginação Local Inteligente (Limite de 5 Itens) ──
+document.addEventListener("DOMContentLoaded", function() {
+    const tabela = document.getElementById('tabelaSolicitacoes');
+    if (tabela) {
+        const rows = tabela.querySelectorAll('tbody tr.solicitacao-row');
+        const limite = 5; // Limite customizado solicitado
+        
+        if (rows.length > limite) {
+            // Oculta os itens excedentes iniciais
+            for (let i = limite; i < rows.length; i++) {
+                rows[i].classList.add('tr-hidden');
+            }
+            
+            const containerBtn = document.getElementById('containerVerMais');
+            const btnVerMais = document.getElementById('btnVerMais');
+            containerBtn.classList.remove('d-none');
+            
+            btnVerMais.addEventListener('click', function() {
+                for (let i = limite; i < rows.length; i++) {
+                    rows[i].classList.remove('tr-hidden');
+                }
+                containerBtn.style.display = 'none'; // Some com o botão após exibir tudo
+            });
+        }
+    }
+});
 </script>
 {% endblock %}

@@ -1,36 +1,168 @@
 {% extends 'base.html' %}
 {% block title %}Nova Saída{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ══════════════════════════════════════════════════════
+   VARIÁVEIS ADAPTÁVEIS (Suporte Total a Temas Dark/Light)
+══════════════════════════════════════════════════════ */
+:root {
+  --form-radius-lg: 16px;
+  --form-radius-md: 12px;
+  --form-surface: var(--bs-body-bg, #ffffff);
+  --form-border: var(--bs-border-color, #e2e8f0);
+  --form-bg-muted: var(--bs-tertiary-bg, #f8fafc);
+  
+  /* Cores dinâmicas para texto */
+  --form-text-main: var(--bs-body-color, #0f172a);
+  --form-text-muted: var(--bs-secondary-color, #64748b);
+  
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-form-card {
+  background: var(--form-surface);
+  border: 1px solid var(--form-border) !important;
+  border-radius: var(--form-radius-lg);
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.03);
+}
+
+.input-modern {
+  border-radius: var(--form-radius-md) !important;
+  border: 1.5px solid var(--form-border) !important;
+  font-size: 0.88rem !important;
+  transition: all var(--transition-fast);
+  background: var(--form-bg-muted) !important;
+  color: var(--form-text-main) !important;
+}
+.input-modern:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+  background: var(--form-surface) !important;
+}
+
+.input-modern::placeholder {
+  color: var(--form-text-muted) !important;
+  opacity: 0.7;
+}
+
+.sugestao-motivo {
+  font-size: 0.78rem !important;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem !important;
+  border-radius: 50px !important;
+  border: 1px solid var(--form-border) !important;
+  background: var(--form-bg-muted) !important;
+  color: var(--form-text-muted) !important;
+  transition: all var(--transition-fast) !important;
+}
+.sugestao-motivo:hover {
+  background: var(--form-border) !important;
+  color: var(--form-text-main) !important;
+  transform: translateY(-1px);
+}
+.sugestao-motivo.active {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+/* Ajuste sutil para os feedbacks de erro combinarem com o layout */
+.invalid-feedback {
+  font-size: 0.8rem !important;
+  font-weight: 500;
+  margin-top: 0.4rem;
+}
+
+/* ══════════════════════════════════════════════════════
+   ANIMAÇÃO E CORES DO AVISO DE SUCESSO MODERNO
+══════════════════════════════════════════════════════ */
+.alert-animated-success {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  color: #10b981 !important;
+  border-radius: var(--form-radius-md);
+  animation: slideDownIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.08);
+}
+
+@keyframes slideDownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.alert-info-custom {
+  background: rgba(37, 99, 235, 0.07);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: var(--form-radius-md);
+}
+
+.text-custom-main { color: var(--form-text-main) !important; }
+.text-custom-muted { color: var(--form-text-muted) !important; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header mb-4">
-    <h4 class="mb-0 fw-bold">
+    <h4 class="mb-0 fw-bold text-custom-main">
         <i class="bi bi-plus-circle me-2" style="color: var(--cor-secundaria);"></i>
         Registrar Saída
     </h4>
-    <small class="text-muted">Preencha os dados da sua saída para atualização automática do status</small>
+    <small class="text-custom-muted">Preencha os dados da sua saída para atualização automática do status</small>
 </div>
 
 <div class="row justify-content-center">
     <div class="col-lg-8">
-        <div class="card shadow-sm border-0">
+        
+        <!-- CONTAINER DE AVISOS (FLASK FLASH MESSAGES) TOTALMENTE ADAPTÁVEL -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert {% if category == 'success' %}alert-animated-success{% else %}alert-warning{% endif %} d-flex align-items-center justify-content-between py-3 px-4 mb-4" role="alert">
+                  <div class="d-flex align-items-center gap-3">
+                      {% if category == 'success' %}
+                        <i class="bi bi-check2-circle h4 mb-0 flex-shrink-0"></i>
+                      {% else %}
+                        <i class="bi bi-exclamation-triangle h4 mb-0 flex-shrink-0"></i>
+                      {% endif %}
+                      <div class="fw-medium small">{{ message }}</div>
+                  </div>
+                  <button type="button" class="btn-close shadow-none" data-bs-dismiss="alert" aria-label="Close" style="filter: var(--bs-btn-close-white-filter, none);"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="card custom-form-card border-0">
             <div class="card-body p-4">
-                <form method="POST" class="needs-validation" novalidate>
+                <form method="POST" class="needs-validation" id="formRegistrarSaida" novalidate>
+                    
+                    <!-- LOCAL DE DESTINO -->
                     <div class="mb-3">
-                        <label for="local" class="form-label fw-semibold">Local de Destino <span class="text-danger">*</span></label>
-                        <input type="text" id="local" name="local" class="form-control"
+                        <label for="local" class="form-label fw-semibold small text-uppercase tracking-wider text-custom-muted">Local de Destino <span class="text-danger">*</span></label>
+                        <input type="text" id="local" name="local" class="form-control input-modern p-2.5"
                                value="{{ form_data.get('local','') }}"
                                placeholder="Ex: Campo Grande/MS — Rua das Palmeiras, 500"
                                maxlength="255" required>
-                        <div class="invalid-feedback">Por favor, informe o local de destino.</div>
+                        <div class="invalid-feedback">
+                            <i class="bi bi-exclamation-circle me-1"></i> Por favor, informe a cidade ou endereço de destino.
+                        </div>
                     </div>
 
+                    <!-- MOTIVO -->
                     <div class="mb-3">
-                        <label for="motivo" class="form-label fw-semibold">Motivo <span class="text-danger">*</span></label>
+                        <label for="motivo" class="form-label fw-semibold small text-uppercase tracking-wider text-custom-muted">Motivo <span class="text-danger">*</span></label>
 
                         {% if motivos_sugeridos %}
                         <div class="mb-2 d-flex flex-wrap gap-2">
                             {% for m in motivos_sugeridos %}
-                            <button type="button" class="btn btn-sm btn-outline-secondary sugestao-motivo transition-all"
+                            <button type="button" class="btn btn-sm sugestao-motivo"
                                     onclick="selecionarMotivo(this, '{{ m }}')">
                                 {{ m }}
                             </button>
@@ -38,63 +170,74 @@
                         </div>
                         {% endif %}
 
-                        <textarea name="motivo" id="motivo" class="form-control"
+                        <textarea name="motivo" id="motivo" class="form-control input-modern"
                                   rows="3" maxlength="{{ motivo_max }}"
                                   placeholder="Descreva o motivo da saída ou clique em uma sugestão acima..."
                                   required>{{ form_data.get('motivo','') }}</textarea>
                         
                         <div class="d-flex justify-content-between mt-1">
-                            <small class="text-muted">Você pode usar uma sugestão ou escrever livremente.</small>
-                            <small class="text-muted" id="contador-motivo">0/{{ motivo_max }}</small>
+                            <small class="text-custom-muted" style="font-size: 0.75rem;">Você pode usar uma sugestão ou escrever livremente.</small>
+                            <small class="text-custom-muted fw-semibold" style="font-size: 0.75rem;" id="contador-motivo">0/{{ motivo_max }}</small>
                         </div>
-                        <div class="invalid-feedback">Por favor, insira o motivo da viagem.</div>
+                        <div class="invalid-feedback">
+                            <i class="bi bi-exclamation-circle me-1"></i> É necessário justificar o motivo desta saída.
+                        </div>
                     </div>
 
+                    <!-- DATAS -->
                     <div class="row g-3 mb-3">
                         <div class="col-sm-6">
-                            <label for="data_saida" class="form-label fw-semibold">Data de Saída <span class="text-danger">*</span></label>
-                            <input type="date" id="data_saida" name="data_saida" class="form-control"
+                            <label for="data_saida" class="form-label fw-semibold small text-uppercase tracking-wider text-custom-muted">Data de Saída <span class="text-danger">*</span></label>
+                            <input type="date" id="data_saida" name="data_saida" class="form-control input-modern"
                                    value="{{ form_data.get('data_saida','') }}" required>
-                            <div class="invalid-feedback">Insira uma data de saída válida.</div>
-                            <small class="form-text text-muted d-block mt-1">O status muda para <strong>Em Trânsito</strong> nesta data.</small>
+                            <div class="invalid-feedback">
+                                <i class="bi bi-calendar-x me-1"></i> Selecione a data de início.
+                            </div>
+                            <small class="form-text text-custom-muted d-block mt-1" style="font-size: 0.75rem;">O status muda para <strong class="text-custom-main">Em Trânsito</strong> nesta data.</small>
                         </div>
                         <div class="col-sm-6">
-                            <label for="data_retorno" class="form-label fw-semibold">Previsão de Retorno</label>
-                            <input type="date" id="data_retorno" name="data_retorno" class="form-control"
-                                   value="{{ form_data.get('data_retorno','') }}">
-                            <small class="form-text text-muted d-block mt-1">Ao expirar, o status muda para <strong>Retornado</strong>.</small>
+                            <label for="data_retorno" class="form-label fw-semibold small text-uppercase tracking-wider text-custom-muted">Previsão de Retorno <span class="text-danger">*</span></label>
+                            <input type="date" id="data_retorno" name="data_retorno" class="form-control input-modern"
+                                   value="{{ form_data.get('data_retorno','') }}" required>
+                            <div class="invalid-feedback">
+                                <i class="bi bi-calendar-x me-1"></i> Selecione a data prevista de retorno.
+                            </div>
+                            <small class="form-text text-custom-muted d-block mt-1" style="font-size: 0.75rem;">Ao expirar, o status muda para <strong class="text-custom-main">Retornado</strong>.</small>
                         </div>
                     </div>
 
+                    <!-- CONTATO E ENDEREÇO EXTRA -->
                     <div class="row g-3 mb-4">
                         <div class="col-sm-6">
-                            <label for="telefone_contato" class="form-label fw-semibold">Telefone de Contato</label>
-                            <input type="tel" id="telefone_contato" name="telefone_contato" class="form-control"
+                            <label for="telefone_contato" class="form-label fw-semibold small text-uppercase tracking-wider text-custom-muted">Telefone de Contato</label>
+                            <input type="tel" id="telefone_contato" name="telefone_contato" class="form-control input-modern"
                                    value="{{ form_data.get('telefone_contato','') }}"
                                    placeholder="(XX) 9XXXX-XXXX" maxlength="20">
                         </div>
                         <div class="col-sm-6">
-                            <label for="endereco_destino" class="form-label fw-semibold">Endereço no Destino</label>
-                            <input type="text" id="endereco_destino" name="endereco_destino" class="form-control"
+                            <label for="endereco_destino" class="form-label fw-semibold small text-uppercase tracking-wider text-custom-muted">Endereço no Destino</label>
+                            <input type="text" id="endereco_destino" name="endereco_destino" class="form-control input-modern"
                                    value="{{ form_data.get('endereco_destino','') }}"
-                                   maxlength="500"
-                                   placeholder="Rua, número, bairro">
+                                   maxlength="500" placeholder="Rua, número, bairro">
                         </div>
                     </div>
 
-                    <div class="alert alert-light border d-flex gap-3 mb-4 align-items-center py-3">
-                        <i class="bi bi-info-circle-fill text-info h5 mb-0"></i>
-                        <div class="small text-secondary">
-                            <strong class="text-dark">Status automático:</strong> O sistema atualiza tudo sozinho. 
+                    <!-- CARD INFORMATIVO DE STATUS -->
+                    <div class="alert alert-info-custom d-flex gap-3 mb-4 align-items-center py-3">
+                        <i class="bi bi-info-circle-fill text-primary h5 mb-0 flex-shrink-0"></i>
+                        <div class="small text-custom-muted">
+                            <strong class="text-custom-main">Status automático:</strong> O sistema atualiza tudo sozinho. 
                             Na data de saída você entra <strong>Em Trânsito</strong>, e após o prazo, constará como <strong>Retornado</strong>.
                         </div>
                     </div>
 
-                    <div class="d-flex gap-2 justify-content-end justify-content-sm-start">
-                        <button type="submit" class="btn btn-primary px-4">
-                            <i class="bi bi-check-circle me-2"></i>Registrar Saída
+                    <!-- BOTÕES DE AÇÃO -->
+                    <div class="d-flex gap-2 justify-content-end justify-content-sm-start flex-row-reverse flex-sm-row">
+                        <button type="submit" class="btn btn-primary px-4 rounded-3 d-inline-flex align-items-center justify-content-center" id="btnSubmitForm">
+                            <i class="bi bi-check-circle me-2" id="iconSubmitBtn"></i>
+                            <span id="textSubmitBtn">Registrar Saída</span>
                         </button>
-                        <a href="{{ url_for('user.dashboard') }}" class="btn btn-outline-secondary px-4">Cancelar</a>
+                        <a href="{{ url_for('user.dashboard') }}" class="btn btn-outline-secondary px-4 rounded-3">Cancelar</a>
                     </div>
                 </form>
             </div>
@@ -105,28 +248,26 @@
 
 {% block extra_js %}
 <script>
-// Elementos do DOM guardados em cache para melhor performance
 const campoMotivo = document.getElementById('motivo');
 const contadorMotivo = document.getElementById('contador-motivo');
 const inputSaida = document.getElementById('data_saida');
 const inputRetorno = document.getElementById('data_retorno');
 const motivoMax = parseInt("{{ motivo_max }}") || 255;
+const form = document.getElementById('formRegistrarSaida');
+const btnSubmit = document.getElementById('btnSubmitForm');
+const iconSubmit = document.getElementById('iconSubmitBtn');
+const textSubmit = document.getElementById('textSubmitBtn');
 
 function selecionarMotivo(btn, texto) {
     campoMotivo.value = texto;
     limparEstiloBotoes();
-    
-    // Ativa o botão clicado
-    btn.classList.add('active', 'btn-secondary');
-    btn.classList.remove('btn-outline-secondary');
-    
+    btn.classList.add('active');
     atualizarContador();
 }
 
 function limparEstiloBotoes() {
     document.querySelectorAll('.sugestao-motivo').forEach(b => {
-        b.classList.remove('active', 'btn-secondary');
-        b.classList.add('btn-outline-secondary');
+        b.classList.remove('active');
     });
 }
 
@@ -135,13 +276,12 @@ function atualizarContador() {
     contadorMotivo.textContent = `${atual}/${motivoMax}`;
 }
 
-// Ouvinte de digitação no motivo
 campoMotivo.addEventListener('input', function() {
     atualizarContador();
-    limparEstiloBotoes(); // Remove destaque se ele alterar o texto
+    limparEstiloBotoes();
 });
 
-// Configuração inicial de datas seguras (Evita bug de fuso horário UTC do .toISOString())
+// Configuração estável de datas sem bug de fuso horário
 const hoje = new Date();
 const ano = hoje.getFullYear();
 const mes = String(hoje.getMonth() + 1).padStart(2, '0');
@@ -150,30 +290,40 @@ const dataFormatada = `${ano}-${mes}-${dia}`;
 
 inputSaida.min = dataFormatada;
 
-// Atualiza a data mínima de retorno baseado na data de saída escolhida
 inputSaida.addEventListener('change', function() {
     inputRetorno.min = this.value;
     if (inputRetorno.value && inputRetorno.value < this.value) {
-        inputRetorno.value = this.value; // Corrige se o retorno ficou antes da saída
+        inputRetorno.value = this.value;
     }
 });
 
-// Validação nativa do Bootstrap 5
+// Validação padrão + Trava de reenvio + Foco Inteligente de Erros
 (function () {
     'use strict'
-    const forms = document.querySelectorAll('.needs-validation')
-    Array.prototype.slice.call(forms).forEach(function (form) {
-        form.addEventListener('submit', function (event) {
-            if (!form.checkValidity()) {
-                event.preventDefault()
-                event.stopPropagation()
-            }
-            form.classList.add('was-validated')
-        }, false)
-    })
-})()
+    form.addEventListener('submit', function (event) {
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+            form.classList.add('was-validated');
 
-// Executa a contagem inicial caso o form venha preenchido (validação falha vinda do backend)
+            // Encontra o primeiro elemento inválido do formulário
+            const primeiroInvalido = form.querySelector(':invalid');
+            if (primeiroInvalido) {
+                // Move a tela suavemente até ele e aplica foco
+                primeiroInvalido.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setTimeout(() => primeiroInvalido.focus(), 400);
+            }
+        } else {
+            // Desativa cliques duplos sem corromper o ciclo de envio normal do HTML
+            btnSubmit.classList.add('disabled');
+            btnSubmit.setAttribute('disabled', 'true');
+            iconSubmit.className = "spinner-border spinner-border-sm me-2";
+            iconSubmit.setAttribute('role', 'status');
+            textSubmit.textContent = "Processando...";
+        }
+    }, false);
+})();
+
 document.addEventListener("DOMContentLoaded", function() {
     atualizarContador();
     if (inputSaida.value) {

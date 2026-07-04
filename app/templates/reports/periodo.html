@@ -3,15 +3,45 @@
 
 {% block extra_css %}
 <style>
-/* ── Ajustes Gerais e Responsividade ── */
-.card {
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+:root{
+    /* Cores de marca configuradas pelo admin, com fallback seguro */
+    --rp-accent: var(--cor-secundaria, #3b82f6);
+
+    /* Superfícies — claro por padrão, sobrescritas abaixo por tema */
+    --rp-surface: #ffffff;
+    --rp-surface-alt: #f8fafc;
+    --rp-border: #e2e8f0;
+    --rp-text-muted: #64748b;
+    --rp-shadow: 0 4px 6px -1px rgba(0,0,0,.05), 0 2px 4px -1px rgba(0,0,0,.03);
 }
-.card-header {
-    background-color: #ffffff;
-    border-bottom: 1px solid #e2e8f0;
+html[data-theme="dark"], html[data-theme="olive"]{
+    --rp-surface: var(--tema-superficie);
+    --rp-surface-alt: var(--tema-bg);
+    --rp-border: var(--tema-borda);
+    --rp-text-muted: var(--tema-texto-fraco);
+}
+
+/* ── Cabeçalho da página ── */
+.page-icon-badge{
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    background: color-mix(in srgb, var(--rp-accent) 14%, transparent);
+    color: var(--rp-accent);
+    font-size: 1.15rem;
+    flex-shrink: 0;
+}
+
+/* ── Cards ── */
+.card{
+    border: 1px solid var(--rp-border);
+    border-radius: 14px;
+    background: var(--rp-surface);
+    box-shadow: var(--rp-shadow);
+}
+.card-header{
+    background: var(--rp-surface);
+    border-bottom: 1px solid var(--rp-border);
     padding: 1rem 1.25rem;
 }
 .table > :not(caption) > * > * {
@@ -19,13 +49,13 @@
     vertical-align: middle;
 }
 .table thead th {
-    background-color: #f8fafc;
-    color: #475569;
+    background-color: var(--rp-surface-alt);
+    color: var(--rp-text-muted);
     font-weight: 600;
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 2px solid var(--rp-border);
 }
 
 /* Efeito de transição suave para as linhas ocultas */
@@ -44,8 +74,8 @@
 
 /* ── Status Selector Modernizado ── */
 .status-selector-wrap {
-    background: #f8fafc;
-    border: 1.5px solid #e2e8f0;
+    background: var(--rp-surface-alt);
+    border: 1.5px solid var(--rp-border);
     border-radius: 14px;
     padding: 1.25rem;
 }
@@ -54,13 +84,15 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 0.85rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 .status-selector-label {
     font-size: 0.78rem;
     font-weight: 700;
     letter-spacing: 0.5px;
     text-transform: uppercase;
-    color: #64748b;
+    color: var(--rp-text-muted);
 }
 .status-resumo-pill {
     display: inline-flex;
@@ -70,13 +102,13 @@
     border-radius: 50px;
     font-size: 0.75rem;
     font-weight: 600;
-    background: #e2e8f0;
-    color: #475569;
+    background: var(--rp-border);
+    color: var(--rp-text-muted);
     transition: all .2s ease;
 }
 .status-resumo-pill.tem-filtro {
-    background: #dbeafe;
-    color: #1e40af;
+    background: color-mix(in srgb, var(--rp-accent) 16%, transparent);
+    color: var(--rp-accent);
 }
 .status-chips-row {
     display: flex;
@@ -91,27 +123,27 @@
     gap: 0.5rem;
     padding: 0.45rem 1rem;
     border-radius: 50px;
-    border: 2px solid #e2e8f0;
-    background: #fff;
+    border: 2px solid var(--rp-border);
+    background: var(--rp-surface);
     font-size: 0.825rem;
     font-weight: 600;
-    color: #475569;
+    color: var(--rp-text-muted);
     cursor: pointer;
     user-select: none;
     transition: all .18s cubic-bezier(0.4,0,0.2,1);
     position: relative;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
-.schip:hover { 
-    transform: translateY(-1px); 
-    border-color: #cbd5e1;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+.schip:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--rp-text-muted) 60%, transparent);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.08);
 }
 .schip input[type=checkbox] { display: none; }
 .schip .schip-dot {
     width: 8px; height: 8px;
     border-radius: 50%;
-    background: #cbd5e1;
+    background: #94a3b8;
     transition: all .18s;
     flex-shrink: 0;
 }
@@ -120,56 +152,56 @@
     font-size: 0.75rem;
 }
 
-/* Chip "Todos" */
-.schip-todos { border-color: #cbd5e1; }
+/* Chip "Todos" — usa a cor de marca em vez de um cinza genérico */
+.schip-todos { border-color: color-mix(in srgb, var(--rp-accent) 50%, var(--rp-border)); }
 .schip-todos.active {
-    border-color: #334155;
-    background: #334155;
+    border-color: var(--rp-accent);
+    background: var(--rp-accent);
     color: #fff;
-    box-shadow: 0 4px 12px rgba(51,65,85,0.25);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--rp-accent) 35%, transparent);
 }
 .schip-todos.active .schip-dot { background: #fff; }
 
-/* Configurações de Cores dos Chips Dinâmicos */
-.schip-agendada { border-color: #fef3c7; color: #b45309; }
+/* Cores por status: fundo translúcido, funciona em qualquer tema */
+.schip-agendada { border-color: rgba(251,191,36,.45); color: #d97706; }
 .schip-agendada .schip-dot { background: #fbbf24; }
-.schip-agendada.active { background: #d97706; border-color: #b45309; color: #fff; box-shadow: 0 4px 12px rgba(217,119,6,0.25); }
+.schip-agendada.active { background: #d97706; border-color: #b45309; color: #fff; box-shadow: 0 4px 12px rgba(217,119,6,0.3); }
 
-.schip-em_transito { border-color: #dbeafe; color: #1d4ed8; }
+.schip-em_transito { border-color: rgba(96,165,250,.45); color: #2563eb; }
 .schip-em_transito .schip-dot { background: #60a5fa; }
-.schip-em_transito.active { background: #2563eb; border-color: #1d4ed8; color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,0.25); }
+.schip-em_transito.active { background: #2563eb; border-color: #1d4ed8; color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
 
-.schip-retornado { border-color: #dcfce7; color: #15803d; }
+.schip-retornado { border-color: rgba(74,222,128,.45); color: #16a34a; }
 .schip-retornado .schip-dot { background: #4ade80; }
-.schip-retornado.active { background: #16a34a; border-color: #15803d; color: #fff; box-shadow: 0 4px 12px rgba(22,163,74,0.25); }
+.schip-retornado.active { background: #16a34a; border-color: #15803d; color: #fff; box-shadow: 0 4px 12px rgba(22,163,74,0.3); }
 
-.schip-cancelado { border-color: #fee2e2; color: #b91c1c; }
+.schip-cancelado { border-color: rgba(248,113,113,.45); color: #dc2626; }
 .schip-cancelado .schip-dot { background: #f87171; }
-.schip-cancelado.active { background: #dc2626; border-color: #b91c1c; color: #fff; box-shadow: 0 4px 12px rgba(220,38,38,0.25); }
+.schip-cancelado.active { background: #dc2626; border-color: #b91c1c; color: #fff; box-shadow: 0 4px 12px rgba(220,38,38,0.3); }
 
-.schip-finalizado { border-color: #f1f5f9; color: #475569; }
+.schip-finalizado { border-color: var(--rp-border); color: var(--rp-text-muted); }
 .schip-finalizado .schip-dot { background: #94a3b8; }
-.schip-finalizado.active { background: #475569; border-color: #334155; color: #fff; box-shadow: 0 4px 12px rgba(71,85,105,0.25); }
+.schip-finalizado.active { background: #475569; border-color: #334155; color: #fff; box-shadow: 0 4px 12px rgba(71,85,105,0.3); }
 
 .schip.active .schip-check { display: inline-block; }
-.schip.active .schip-dot { background: rgba(255,255,255,0.8) !important; }
+.schip.active .schip-dot { background: rgba(255,255,255,0.85) !important; }
 
 /* Barra de Progresso */
 .status-progress-bar {
     height: 4px;
     border-radius: 4px;
-    background: #e2e8f0;
+    background: var(--rp-border);
     margin-top: 1rem;
     overflow: hidden;
 }
 .status-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #3b82f6, #10b981);
+    background: linear-gradient(90deg, var(--rp-accent), #10b981);
     border-radius: 4px;
     transition: width .3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Botão Ver Mais Animado */
+/* Botão Ver Mais */
 .btn-ver-mais {
     display: inline-flex;
     align-items: center;
@@ -177,29 +209,25 @@
     padding: 0.6rem 1.5rem;
     font-weight: 600;
     font-size: 0.875rem;
-    color: #2563eb;
-    background: #eff6ff;
-    border: 1px dashed #bfdbfe;
+    color: var(--rp-accent);
+    background: color-mix(in srgb, var(--rp-accent) 10%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--rp-accent) 40%, transparent);
     border-radius: 30px;
     transition: all 0.25s ease;
     cursor: pointer;
 }
 .btn-ver-mais:hover {
-    background: #2563eb;
+    background: var(--rp-accent);
     color: #fff;
     border-style: solid;
-    border-color: #2563eb;
-    box-shadow: 0 4px 12px rgba(37,99,235,0.2);
+    border-color: var(--rp-accent);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--rp-accent) 30%, transparent);
     transform: translateY(-1px);
 }
-.btn-ver-mais i {
-    transition: transform 0.3s ease;
-}
-.btn-ver-mais:hover i {
-    transform: translateY(2px);
-}
+.btn-ver-mais i { transition: transform 0.3s ease; }
+.btn-ver-mais:hover i { transform: translateY(2px); }
 
-/* Print Overrides */
+/* Print Overrides — sempre em claro, independente do tema ativo na tela */
 @media print {
     #sidebar, .topbar, .page-header a, form, .btn, .toast-container, .badge, .container-ver-mais { display: none !important; }
     .tr-hidden { display: table-row !important; opacity: 1 !important; transform: none !important; }
@@ -210,6 +238,7 @@
     body { background: #fff; color: #000; }
     @page { margin: 1cm; }
 }
+
 </style>
 {% endblock %}
 
@@ -218,10 +247,11 @@
     <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-light border" style="border-radius: 8px;">
         <i class="bi bi-arrow-left"></i>
     </a>
+    <div class="page-icon-badge">
+        <i class="bi bi-calendar-range"></i>
+    </div>
     <div>
-        <h4 class="mb-0 fw-bold text-dark">
-            <i class="bi bi-calendar-range me-2" style="color:var(--cor-secundaria, #3b82f6);"></i>Relatório por Período
-        </h4>
+        <h4 class="mb-0 fw-bold">Relatório por Período</h4>
         <small class="text-muted">Filtre, analise e exporte seus registros de forma customizada</small>
     </div>
 </div>

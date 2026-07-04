@@ -3,6 +3,7 @@
 
 {% block extra_css %}
 <style>
+/* ── Estilos Adaptáveis e Modernos (Suporte Total a Dark Mode) ── */
 .avatar-wrap {
     position: relative;
     width: 110px;
@@ -14,14 +15,14 @@
     height: 110px;
     border-radius: 50%;
     object-fit: cover;
-    border: 3px solid #e2e8f0;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    border: 3px solid var(--bs-border-color);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
 .avatar-placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--cor-primaria);
+    background: var(--bs-primary);
     color: #fff;
     font-size: 2.5rem;
     font-weight: 700;
@@ -33,47 +34,59 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: var(--cor-secundaria);
-    color: #fff;
+    background: var(--bs-secondary-color);
+    color: var(--bs-body-bg);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    border: 2px solid #fff;
+    border: 2px solid var(--bs-body-bg);
     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    transition: transform 0.18s;
+    transition: transform 0.18s ease;
     font-size: 0.8rem;
 }
-.avatar-edit-btn:hover { transform: scale(1.1); }
+.avatar-edit-btn:hover { 
+    transform: scale(1.1);
+    background: var(--bs-primary);
+    color: #fff;
+}
 .card-perfil {
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--bs-border-color);
     border-radius: 16px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.03);
-    background: #fff;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+    background: var(--bs-card-bg);
 }
 .info-badge {
-    background: #f1f5f9;
-    border-radius: 8px;
-    padding: 0.5rem 0.8rem;
-    font-size: 0.83rem;
-    color: #475569;
+    background: var(--bs-secondary-bg);
+    border-radius: 12px;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.85rem;
+    color: var(--bs-body-color);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
+    border: 1px solid var(--bs-border-color-translucent);
 }
-.info-badge i { color: var(--cor-secundaria); font-size: 1rem; }
+.info-badge i { 
+    color: var(--bs-primary); 
+    font-size: 1.1rem; 
+}
 .nav-tabs-perfil .nav-link {
-    color: #64748b;
+    color: var(--bs-secondary-color);
     border: none;
     border-bottom: 2px solid transparent;
     border-radius: 0;
-    padding: 0.6rem 1.2rem;
+    padding: 0.75rem 1.25rem;
     font-size: 0.88rem;
-    font-weight: 500;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+.nav-tabs-perfil .nav-link:hover {
+    color: var(--bs-primary);
 }
 .nav-tabs-perfil .nav-link.active {
-    color: var(--cor-primaria);
-    border-bottom-color: var(--cor-primaria);
+    color: var(--bs-primary);
+    border-bottom-color: var(--bs-primary);
     background: transparent;
 }
 </style>
@@ -81,15 +94,15 @@
 
 {% block content %}
 <div class="page-header mb-4">
-    <h4 class="mb-0 fw-bold" style="color:#0f172a;">
-        <i class="bi bi-person-circle me-2" style="color:var(--cor-secundaria);"></i>
+    <h4 class="mb-0 fw-bold">
+        <i class="bi bi-person-circle me-2 text-primary"></i>
         Meu Perfil
     </h4>
-    <small class="text-muted">Atualize sua foto e informações pessoais</small>
+    <small class="text-muted fw-medium">Atualize sua foto e informações de contato de forma segura</small>
 </div>
 
 <div class="row g-4">
-    <!-- Coluna esquerda: avatar + dados fixos -->
+    <!-- Coluna esquerda: avatar + dados fixos de auditoria -->
     <div class="col-lg-4">
         <div class="card-perfil p-4 text-center">
             <!-- Avatar com botão de troca -->
@@ -105,55 +118,55 @@
                 </label>
             </div>
 
-            <h5 class="fw-bold mb-0" style="color:#1e293b;">{{ current_user.nome }}</h5>
-            <small class="text-muted">{{ 'Administrador' if current_user.is_admin else 'Usuário' }}</small>
+            <h5 class="fw-bold mb-0 text-body">{{ current_user.nome }}</h5>
+            <div class="mb-3"><small class="text-muted fw-semibold uppercase font-monospace">{{ 'Administrador' if current_user.is_admin else 'Usuário' }}</small></div>
 
             {% if current_user.subunidade or (postos_habilitados and current_user.posto_graduacao) %}
-            <div class="mt-2 d-flex flex-wrap justify-content-center gap-1">
+            <div class="d-flex flex-wrap justify-content-center gap-1.5 mb-2">
                 {% if current_user.subunidade %}
-                <span class="badge px-3 py-1" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;font-size:0.8rem;">
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-1.5 fw-bold" style="font-size:0.78rem;">
                     <i class="bi bi-building me-1"></i>{{ current_user.subunidade.nome }}
                 </span>
                 {% endif %}
                 {% if postos_habilitados and current_user.posto_graduacao %}
-                <span class="badge px-3 py-1" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:0.8rem;">
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1.5 fw-bold" style="font-size:0.78rem;">
                     <i class="bi bi-award me-1"></i>{{ current_user.posto_graduacao.nome }}
                 </span>
                 {% endif %}
             </div>
             {% endif %}
 
-            <!-- Dados não editáveis -->
-            <div class="mt-4 text-start d-flex flex-column gap-2">
+            <!-- Dados fixos / Metadados em Badges Modernos -->
+            <div class="mt-4 text-start d-flex flex-column gap-2.5">
                 <div class="info-badge">
-                    <i class="bi bi-person-badge"></i>
+                    <i class="bi bi-person-badge-fill"></i>
                     <div>
-                        <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;">CPF / Identificação</div>
-                        <strong style="color:#1e293b;">{{ current_user.cpf }}</strong>
+                        <div class="text-muted uppercase fw-bold" style="font-size:0.68rem; letter-spacing:.5px;">CPF / Identificação</div>
+                        <strong class="text-body-emphasis font-monospace">{{ current_user.cpf }}</strong>
                     </div>
                 </div>
                 <div class="info-badge">
                     <i class="bi bi-calendar3"></i>
                     <div>
-                        <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;">Membro desde</div>
-                        <strong style="color:#1e293b;">{{ current_user.data_criacao.strftime('%d/%m/%Y') }}</strong>
+                        <div class="text-muted uppercase fw-bold" style="font-size:0.68rem; letter-spacing:.5px;">Membro desde</div>
+                        <strong class="text-body-emphasis">{{ current_user.data_criacao.strftime('%d/%m/%Y') }}</strong>
                     </div>
                 </div>
                 {% if current_user.telefone %}
                 <div class="info-badge">
-                    <i class="bi bi-telephone"></i>
+                    <i class="bi bi-telephone-fill"></i>
                     <div>
-                        <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;">Telefone</div>
-                        <strong style="color:#1e293b;">{{ current_user.telefone }}</strong>
+                        <div class="text-muted uppercase fw-bold" style="font-size:0.68rem; letter-spacing:.5px;">Telefone Vinculado</div>
+                        <strong class="text-body-emphasis font-monospace">{{ current_user.telefone }}</strong>
                     </div>
                 </div>
                 {% endif %}
                 {% if current_user.email %}
                 <div class="info-badge">
-                    <i class="bi bi-envelope"></i>
+                    <i class="bi bi-envelope-fill"></i>
                     <div>
-                        <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;">E-mail</div>
-                        <strong style="color:#1e293b;">{{ current_user.email }}</strong>
+                        <div class="text-muted uppercase fw-bold" style="font-size:0.68rem; letter-spacing:.5px;">E-mail Cadastrado</div>
+                        <strong class="text-body-emphasis text-break" style="font-size: 0.85rem;">{{ current_user.email }}</strong>
                     </div>
                 </div>
                 {% endif %}
@@ -161,7 +174,7 @@
         </div>
     </div>
 
-    <!-- Coluna direita: formulários em abas -->
+    <!-- Coluna direita: Painel de configurações organizadas por Abas -->
     <div class="col-lg-8">
         <div class="card-perfil">
             <ul class="nav nav-tabs-perfil border-bottom px-3 pt-2" id="perfilTabs">
@@ -172,15 +185,15 @@
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSenha">
-                        <i class="bi bi-lock me-1"></i>Alterar Senha
+                        <i class="bi bi-lock-fill"></i> Alterar Senha
                     </button>
                 </li>
                 {% if postos_habilitados %}
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabPosto">
-                        <i class="bi bi-award me-1"></i>Posto/Graduação
+                        <i class="bi bi-award-fill"></i> Posto/Graduação
                         {% if solicitacao_pendente %}
-                        <span class="badge bg-warning text-dark ms-1" style="font-size:0.65rem;">pendente</span>
+                        <span class="badge bg-warning text-dark ms-1 rounded-pill fw-bold" style="font-size:0.65rem;">pendente</span>
                         {% endif %}
                     </button>
                 </li>
@@ -196,67 +209,67 @@
                         <input type="file" id="fotoInput" name="foto" accept="image/png,image/jpeg,image/gif,image/webp"
                                class="d-none" onchange="previewFoto(this)">
 
-                        <!-- Preview da foto selecionada -->
-                        <div id="fotoPreviewBox" class="mb-4 p-3 border rounded-3 d-none" style="background:#f0f9ff;border-color:#bee3f8!important;">
+                        <!-- Preview da foto selecionada em alerta nativo flexível -->
+                        <div id="fotoPreviewBox" class="mb-4 p-3 border rounded-3 d-none bg-info-subtle border-info-subtle">
                             <div class="d-flex align-items-center gap-3">
-                                <img id="fotoPreviewImg" src="" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #93c5fd;">
+                                <img id="fotoPreviewImg" src="" alt="" style="width:52px; height:52px; border-radius:50%; object-fit:cover;" class="border border-info">
                                 <div class="flex-grow-1">
-                                    <div style="font-size:0.83rem;font-weight:600;color:#1e40af;">Nova foto selecionada</div>
-                                    <div class="text-muted" style="font-size:0.75rem;">Clique em Salvar para confirmar</div>
+                                    <div class="text-info-emphasis fw-bold" style="font-size:0.85rem;">Nova foto selecionada!</div>
+                                    <div class="text-muted" style="font-size:0.75rem;">Clique em "Salvar Alterações" no fim da página para persistir.</div>
                                 </div>
-                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-2" onclick="cancelarFoto()">
-                                    <i class="bi bi-x"></i>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="cancelarFoto()">
+                                    <i class="bi bi-x-lg"></i>
                                 </button>
                             </div>
                         </div>
 
                         {% if current_user.foto %}
                         <div class="mb-3">
-                            <button type="button" class="btn btn-sm btn-outline-danger rounded-2" onclick="removerFoto()">
-                                <i class="bi bi-trash me-1"></i>Remover foto atual
+                            <button type="button" class="btn btn-sm btn-outline-danger px-3" style="border-radius: 8px;" onclick="removerFoto()">
+                                <i class="bi bi-trash3-fill me-1"></i>Remover foto atual
                             </button>
-                            <span id="removerFotoAviso" class="text-danger ms-2 d-none" style="font-size:0.8rem;">
-                                <i class="bi bi-exclamation-circle me-1"></i>Foto será removida ao salvar
+                            <span id="removerFotoAviso" class="text-danger ms-2 d-none fw-medium" style="font-size:0.8rem;">
+                                <i class="bi bi-exclamation-triangle-fill me-1"></i>A foto será apagada assim que salvar
                             </span>
                         </div>
                         {% endif %}
 
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="form-label fw-semibold small">Telefone de contato</label>
+                                <label class="form-label fw-bold small text-muted">Telefone de contato</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="bi bi-telephone"></i></span>
                                     <input type="text" name="telefone" class="form-control"
                                            value="{{ current_user.telefone or '' }}"
                                            placeholder="(XX) XXXXX-XXXX" maxlength="20">
                                 </div>
-                                <div class="form-text">Usado nos registros de saída como contato padrão.</div>
+                                <div class="form-text">Contato padrão utilizado em relatórios e cautelas.</div>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label fw-semibold small">E-mail</label>
+                                <label class="form-label fw-bold small text-muted">E-mail pessoal</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="bi bi-envelope"></i></span>
                                     <input type="email" name="email" class="form-control"
                                            value="{{ current_user.email or '' }}"
                                            placeholder="seu@email.com" maxlength="120">
                                 </div>
-                                <div class="form-text">Opcional, apenas para fins de contato.</div>
+                                <div class="form-text">Opcional, utilizado para comunicações gerais.</div>
                             </div>
                         </div>
 
-                        <div class="alert alert-light border mt-4 mb-3 rounded-3 py-2 px-3" style="font-size:0.82rem;color:#64748b;">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Nome, CPF, tipo e subunidade só podem ser alterados pelo administrador.
+                        <div class="alert bg-body-secondary border mt-4 mb-4 rounded-3 py-2.5 px-3" style="font-size:0.82rem; color: var(--bs-secondary-color);">
+                            <i class="bi bi-info-circle-fill text-primary me-1.5"></i>
+                            Nome de guerra, CPF e subunidade de lotação institucional só podem ser alterados por administradores.
                             {% if postos_habilitados %}
-                            O posto/graduação pode ser alterado na aba <strong>Posto/Graduação</strong> ao lado, mediante aprovação.
+                            Pedidos de mudança de patente devem ser enviados pela aba <strong>Posto/Graduação</strong>.
                             {% endif %}
                         </div>
 
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary rounded-3 px-4">
+                            <button type="submit" class="btn btn-primary px-4 fw-bold" style="border-radius: 10px;">
                                 <i class="bi bi-check-lg me-1"></i>Salvar Alterações
                             </button>
-                            <a href="{{ url_for('user.dashboard') }}" class="btn btn-light rounded-3 px-4">Cancelar</a>
+                            <a href="{{ url_for('user.dashboard') }}" class="btn btn-outline-secondary px-4 fw-bold" style="border-radius: 10px;">Cancelar</a>
                         </div>
                     </form>
                 </div>
@@ -267,14 +280,14 @@
                         <input type="hidden" name="acao" value="senha">
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold small">Senha atual <span class="text-danger">*</span></label>
+                            <label class="form-label fw-bold small text-muted">Senha cadastrada atual <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-lock"></i></span>
                                 <input type="password" name="senha_atual" class="form-control" required placeholder="••••••••">
                             </div>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label fw-semibold small">Nova senha <span class="text-danger">*</span></label>
+                            <label class="form-label fw-bold small text-muted">Nova credencial de acesso <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
                                 <input type="password" name="nova_senha" id="novaSenha" class="form-control" required
@@ -282,17 +295,17 @@
                             </div>
                         </div>
                         <div class="mb-4">
-                            <label class="form-label fw-semibold small">Confirmar nova senha <span class="text-danger">*</span></label>
+                            <label class="form-label fw-bold small text-muted">Confirme a nova credencial <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                                <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
                                 <input type="password" name="confirmar_senha" id="confirmarSenha" class="form-control" required
-                                       placeholder="Repita a nova senha" minlength="4" maxlength="72">
+                                       placeholder="Repita a nova senha exatamente igual" minlength="4" maxlength="72">
                             </div>
-                            <div id="senhaMatch" class="form-text"></div>
+                            <div id="senhaMatch" class="form-text mt-2 fw-medium"></div>
                         </div>
 
-                        <button type="submit" class="btn btn-warning rounded-3 px-4 fw-semibold">
-                            <i class="bi bi-shield-lock me-1"></i>Alterar Senha
+                        <button type="submit" class="btn btn-warning px-4 fw-bold" style="border-radius: 10px;">
+                            <i class="bi bi-shield-lock-fill me-1"></i>Atualizar Senha
                         </button>
                     </form>
                 </div>
@@ -301,35 +314,35 @@
                 <!-- Aba: Posto/Graduação -->
                 <div class="tab-pane fade" id="tabPosto">
                     {% if solicitacao_pendente %}
-                    <div class="alert alert-warning rounded-3" style="font-size:0.85rem;">
-                        <i class="bi bi-hourglass-split me-1"></i>
-                        Você tem uma solicitação de alteração para
-                        <strong>{{ solicitacao_pendente.posto_solicitado.nome if solicitacao_pendente.posto_solicitado else '' }}</strong>
-                        aguardando aprovação do super-usuário desde
-                        {{ solicitacao_pendente.data_solicitacao.strftime('%d/%m/%Y') }}.
-                        Você poderá enviar uma nova solicitação assim que esta for respondida.
+                    <div class="alert bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-3 p-3" style="font-size:0.88rem; line-height: 1.5;">
+                        <i class="bi bi-hourglass-split display-6 d-block mb-2 text-warning"></i>
+                        Existe uma solicitação de alteração para 
+                        <strong>{{ solicitacao_pendente.posto_solicitado.nome if solicitacao_pendente.posto_solicitado else '' }}</strong> 
+                        aguardando homologação do super-usuário. Enviado em: 
+                        <span class="font-monospace fw-bold">{{ solicitacao_pendente.data_solicitacao.strftime('%d/%m/%Y') }}</span>.
+                        <div class="mt-2 text-muted small">Novos pedidos serão liberados assim que o atual for concluído.</div>
                     </div>
                     {% else %}
                     <form method="POST">
                         <input type="hidden" name="acao" value="solicitar_posto">
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold small">Posto/Graduação atual</label>
+                            <label class="form-label fw-bold small text-muted">Posto/Graduação atual da conta</label>
                             <div>
                                 {% if current_user.posto_graduacao %}
-                                <span class="badge px-3 py-2" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-3 py-2 fw-bold" style="font-size: 0.85rem;">
                                     {{ current_user.posto_graduacao.nome }}
                                 </span>
                                 {% else %}
-                                <span class="text-muted">— nenhum definido —</span>
+                                <span class="text-muted small fst-italic">— Nenhum posto definido por padrão —</span>
                                 {% endif %}
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-semibold small">Novo posto/graduação <span class="text-danger">*</span></label>
+                            <label class="form-label fw-bold small text-muted">Selecione o novo Posto/Graduação <span class="text-danger">*</span></label>
                             <select name="posto_graduacao_id" class="form-select" required>
-                                <option value="">Selecione...</option>
+                                <option value="">Selecione na lista institucional...</option>
                                 {% for posto in postos %}
                                 <option value="{{ posto.id }}" {{ 'disabled' if current_user.posto_graduacao_id == posto.id else '' }}>
                                     {{ posto.sigla or posto.nome }} — {{ posto.nome }}
@@ -339,19 +352,18 @@
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label fw-semibold small">Justificativa (opcional)</label>
+                            <label class="form-label fw-bold small text-muted">Justificativa da alteração</label>
                             <textarea name="justificativa" class="form-control" rows="3" maxlength="255"
-                                      placeholder="Ex: promoção publicada em boletim, correção de cadastro..."></textarea>
+                                      placeholder="Ex: Promoção publicada em BG nº XYZ, correção cadastral..."></textarea>
                         </div>
 
-                        <div class="alert alert-light border mb-3 rounded-3 py-2 px-3" style="font-size:0.8rem;color:#64748b;">
-                            <i class="bi bi-info-circle me-1"></i>
-                            A alteração só passa a valer depois que o super-usuário aprovar o pedido.
-                            Ele será notificado automaticamente.
+                        <div class="alert bg-body-secondary border mb-3 rounded-3 py-2 px-3" style="font-size:0.8rem; color: var(--bs-secondary-color);">
+                            <i class="bi bi-shield-fill-exclamation text-primary me-1.5"></i>
+                            A alteração passará por triagem eletrônica automática de auditoria interna e precisará ser deferida por um super-usuário.
                         </div>
 
-                        <button type="submit" class="btn btn-primary rounded-3 px-4">
-                            <i class="bi bi-send me-1"></i>Enviar Solicitação
+                        <button type="submit" class="btn btn-primary px-4 fw-bold" style="border-radius: 10px;">
+                            <i class="bi bi-send-fill me-1.5"></i>Despachar Pedido
                         </button>
                     </form>
                     {% endif %}
@@ -365,7 +377,7 @@
 
 {% block extra_js %}
 <script>
-// ── Foto ──────────────────────────────────────────────────────────────────
+// ── Controle Dinâmico do Preview de Imagem ──
 function previewFoto(input) {
     if (!input.files || !input.files[0]) return;
     const reader = new FileReader();
@@ -375,13 +387,16 @@ function previewFoto(input) {
         const box = document.getElementById('fotoPreviewBox');
         const img = document.getElementById('fotoPreviewImg');
         const removerInput = document.getElementById('removerFotoInput');
+        
         preview.src = e.target.result;
         preview.classList.remove('d-none');
         if (placeholder) placeholder.classList.add('d-none');
         img.src = e.target.result;
         box.classList.remove('d-none');
         removerInput.value = '';
-        document.getElementById('removerFotoAviso') && (document.getElementById('removerFotoAviso').classList.add('d-none'));
+        
+        const aviso = document.getElementById('removerFotoAviso');
+        if (aviso) aviso.classList.add('d-none');
     };
     reader.readAsDataURL(input.files[0]);
 }
@@ -403,10 +418,13 @@ function removerFoto() {
     if (aviso) aviso.classList.remove('d-none');
     const preview = document.getElementById('avatarPreview');
     const placeholder = document.getElementById('avatarPlaceholder');
-    if (placeholder) { placeholder.classList.remove('d-none'); preview.classList.add('d-none'); }
+    if (placeholder) { 
+        placeholder.classList.remove('d-none'); 
+        preview.classList.add('d-none'); 
+    }
 }
 
-// ── Validação de senha ────────────────────────────────────────────────────
+// ── Validação e Feedback Visual de Senhas Equivalentes ──
 const novaSenha = document.getElementById('novaSenha');
 const confirmarSenha = document.getElementById('confirmarSenha');
 const senhaMatch = document.getElementById('senhaMatch');
@@ -414,13 +432,12 @@ const senhaMatch = document.getElementById('senhaMatch');
 function verificarSenhas() {
     if (!confirmarSenha.value) { senhaMatch.textContent = ''; return; }
     if (novaSenha.value === confirmarSenha.value) {
-        senhaMatch.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Senhas coincidem</span>';
+        senhaMatch.innerHTML = '<span class="text-success small fw-bold"><i class="bi bi-check-circle-fill me-1"></i>As senhas coincidem perfeitamente.</span>';
     } else {
-        senhaMatch.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Senhas não coincidem</span>';
+        senhaMatch.innerHTML = '<span class="text-danger small fw-bold"><i class="bi bi-x-circle-fill me-1"></i>As senhas digitadas divergem.</span>';
     }
 }
 if (novaSenha) novaSenha.addEventListener('input', verificarSenhas);
 if (confirmarSenha) confirmarSenha.addEventListener('input', verificarSenhas);
 </script>
 {% endblock %}
-<!-- foi removido a seção recentes de perfil e ficou pedente sua implemnteção e outra template -->
