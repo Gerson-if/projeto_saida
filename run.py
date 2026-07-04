@@ -4,8 +4,11 @@ run.py — Ponto de entrada da aplicação.
 Desenvolvimento:
     python run.py
 
-Produção (recomendado via Gunicorn):
-    gunicorn "run:app" -w 4 -b 0.0.0.0:8000
+Produção (recomendado via Gunicorn + systemd + Nginx):
+    gunicorn -c deploy/gunicorn_conf.py "run:app"
+
+    Guia completo de deploy numa VM Linux (Ubuntu/Debian), com
+    systemd, Nginx e HTTPS: veja deploy/DEPLOY.md.
 """
 
 import os

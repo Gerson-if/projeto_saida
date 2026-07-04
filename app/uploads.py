@@ -192,6 +192,91 @@ def validar_e_salvar_imagem(
     return ResultadoUpload(ok=True, nome_arquivo=nome_final)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Upload de vídeo (fundo animado da tela de login)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Vídeo não pode ser validado com Pillow, então a checagem aqui é mais
+# simples: tamanho do arquivo + assinatura binária ("magic bytes") do
+# formato real, para reduzir o risco de alguém enviar um arquivo qualquer
+# apenas renomeado para .mp4/.webm. Não decodifica o vídeo (isso exigiria
+# ffmpeg), então recomenda-se manter os arquivos curtos (poucos segundos).
+
+TAMANHO_MAXIMO_VIDEO_BYTES = 20 * 1024 * 1024  # 20 MB — suficiente para um clipe curto
+
+# (assinatura, extensão) — a extensão salva vem da assinatura detectada,
+# nunca do nome enviado pelo usuário.
+_ASSINATURAS_VIDEO = [
+    (b"\x1a\x45\xdf\xa3", "webm"),   # WebM/Matroska (EBML header)
+    (b"OggS", "ogg"),                 # Ogg
+]
+
+
+def _detectar_formato_video(cabecalho: bytes) -> Optional[str]:
+    for assinatura, extensao in _ASSINATURAS_VIDEO:
+        if cabecalho.startswith(assinatura):
+            return extensao
+    # MP4/MOV: caixa "ftyp" aparece a partir do byte 4, não no início do arquivo.
+    if len(cabecalho) >= 12 and cabecalho[4:8] == b"ftyp":
+        return "mp4"
+    return None
+
+
+def validar_e_salvar_video(
+    file_storage: Optional[FileStorage],
+    *,
+    destino_dir: str,
+    prefixo: str,
+    tamanho_maximo_bytes: int = TAMANHO_MAXIMO_VIDEO_BYTES,
+) -> ResultadoUpload:
+    """
+    Valida (por tamanho e assinatura binária) e salva um upload de vídeo
+    curto usado como plano de fundo da tela de login.
+
+    Segue o mesmo contrato de `validar_e_salvar_imagem`: se nenhum arquivo
+    foi enviado, retorna ok=True com nome_arquivo=None (mantém o valor
+    anterior); em caso de conteúdo inválido, retorna ok=False com uma
+    mensagem amigável.
+    """
+    if file_storage is None or not file_storage.filename:
+        return ResultadoUpload(ok=True, nome_arquivo=None)
+
+    tamanho = _tamanho_arquivo(file_storage)
+    if tamanho <= 0:
+        return ResultadoUpload(ok=False, erro="O arquivo enviado está vazio.")
+    if tamanho > tamanho_maximo_bytes:
+        limite_mb = tamanho_maximo_bytes / (1024 * 1024)
+        return ResultadoUpload(
+            ok=False,
+            erro=f"O vídeo excede o tamanho máximo permitido ({limite_mb:.0f} MB). Use um clipe mais curto.",
+        )
+
+    try:
+        file_storage.stream.seek(0)
+        cabecalho = file_storage.stream.read(64)
+        file_storage.stream.seek(0)
+    except OSError:
+        return ResultadoUpload(ok=False, erro="Não foi possível ler o arquivo enviado.")
+
+    extensao = _detectar_formato_video(cabecalho)
+    if not extensao:
+        return ResultadoUpload(
+            ok=False,
+            erro="Formato de vídeo não suportado ou arquivo corrompido. Use MP4, WEBM ou OGG.",
+        )
+
+    os.makedirs(destino_dir, exist_ok=True)
+    nome_final = f"{prefixo}_{uuid.uuid4().hex[:12]}.{extensao}"
+    caminho_final = os.path.join(destino_dir, nome_final)
+
+    try:
+        file_storage.save(caminho_final)
+    except OSError:
+        return ResultadoUpload(ok=False, erro="Não foi possível salvar o vídeo enviado. Tente novamente.")
+
+    return ResultadoUpload(ok=True, nome_arquivo=nome_final)
+
+
 def remover_upload_seguro(upload_folder: str, nome_arquivo: Optional[str]) -> None:
     """Remove um arquivo de upload do disco, ignorando erros e tentativas
     de path traversal (nomes contendo '/', '\\' ou '..')."""

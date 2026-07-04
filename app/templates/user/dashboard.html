@@ -509,6 +509,15 @@ document.getElementById('overlay-sucesso').addEventListener('click',function(e){
 
 {% if stats.total > 0 %}
 // ── Inicialização Gráficos (Chart.js) ──
+// Os gráficos são desenhados em <canvas> — CSS não alcança o texto deles.
+// Por isso lemos o tema atual (já aplicado no <html> antes deste script
+// rodar) e definimos explicitamente a cor dos eixos/legendas, senão o
+// Chart.js usa um cinza escuro padrão que fica ilegível em fundo escuro.
+const temaAtualGraficos = document.documentElement.getAttribute('data-theme');
+const corTextoGrafico = (temaAtualGraficos === 'dark') ? '#cbd5e1' : '#64748b';
+const corGradeGrafico  = (temaAtualGraficos === 'dark') ? 'rgba(255,255,255,0.08)' : '#e2e8f0';
+Chart.defaults.color = corTextoGrafico;
+
 const ctxStatus=document.getElementById('chartStatus');
 if(ctxStatus){
   new Chart(ctxStatus,{
@@ -518,12 +527,12 @@ if(ctxStatus){
       datasets:[{
         data:[{{ stats.agendadas }},{{ stats.em_transito }},{{ stats.retornadas }},{{ stats.canceladas }}],
         backgroundColor:['#f59e0b','#3b82f6','#10b981','#94a3b8'],
-        borderWidth:2,borderColor:'#fff',hoverOffset:4
+        borderWidth:2,borderColor:(temaAtualGraficos === 'dark' ? '#141c2f' : '#fff'),hoverOffset:4
       }]
     },
     options:{
       responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'bottom',labels:{font:{size:10,family:'system-ui'},padding:10,usePointStyle:true}}},
+      plugins:{legend:{position:'bottom',labels:{color:corTextoGrafico,font:{size:10,family:'system-ui'},padding:10,usePointStyle:true}}},
       cutout:'75%',
       onClick:(e,els)=>{
         if(!els.length) return;
@@ -551,8 +560,8 @@ if(ctxMensal){
       responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false}},
       scales:{
-        y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10,family:'system-ui'}},grid:{color:'#e2e8f0'},border:{display:false}},
-        x:{grid:{display:false},border:{display:false},ticks:{font:{size:10,family:'system-ui'}}}
+        y:{beginAtZero:true,ticks:{stepSize:1,color:corTextoGrafico,font:{size:10,family:'system-ui'}},grid:{color:corGradeGrafico},border:{display:false}},
+        x:{grid:{display:false},border:{display:false},ticks:{color:corTextoGrafico,font:{size:10,family:'system-ui'}}}
       }
     }
   });
@@ -594,7 +603,7 @@ if(ctxRitmo){
       plugins: { legend: { display: false } },
       scales: {
         y: { display: false, beginAtZero: true },
-        x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 9, family: 'system-ui' }, color: '#64748b' } }
+        x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 9, family: 'system-ui' }, color: corTextoGrafico } }
       }
     }
   });

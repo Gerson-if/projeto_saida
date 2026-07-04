@@ -50,6 +50,14 @@ def create_app(config_name: str | None = None) -> Flask:
     for folder in (app.config["UPLOAD_FOLDER"], app.config["RELATORIO_FOLDER"]):
         os.makedirs(folder, exist_ok=True)
 
+    # ── Proxy reverso (Nginx, etc.) ─────────────────────────────────────────
+    # Sem isso, atrás de um proxy reverso o Flask vê toda requisição como
+    # vinda de 127.0.0.1 e sempre em HTTP (mesmo com HTTPS ativo no proxy),
+    # o que quebra url_for(..., _external=True) e corrompe o IP nos logs.
+    if app.config.get("BEHIND_PROXY", True):
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
     # ── Inicializa extensões ───────────────────────────────────────────────
     db.init_app(app)
     migrate.init_app(app, db)
@@ -172,9 +180,22 @@ def _init_response_headers(app: Flask) -> None:
 def _init_scheduler(app: Flask) -> None:
     """
     Registra job APScheduler para atualizar status de saídas automaticamente.
-    Só inicia se não estivermos no processo de reloader do Werkzeug (evita
-    dois schedulers rodando em paralelo durante o desenvolvimento).
+
+    Duas travas contra duplicação:
+    1. Em dev, o Werkzeug reloader forka dois processos — só inicia no
+       processo "filho" (WERKZEUG_RUN_MAIN=true).
+    2. Em produção com múltiplos workers Gunicorn, cada worker é um processo
+       separado — SCHEDULER_ENABLED=false desliga o agendador em todos eles,
+       para usar `flask atualizar-status` via cron/systemd timer em vez
+       disso (veja deploy/DEPLOY.md).
     """
+    if not app.config.get("SCHEDULER_ENABLED", True):
+        app.logger.info(
+            "Agendador em processo desativado (SCHEDULER_ENABLED=false) — "
+            "configure `flask atualizar-status` via cron/systemd timer."
+        )
+        return
+
     # Em dev, o Werkzeug reloader fork dois processos. Só inicia o scheduler
     # no processo "filho" (WERKZEUG_RUN_MAIN=true) ou em produção.
     if os.environ.get("WERKZEUG_RUN_MAIN") == "false":

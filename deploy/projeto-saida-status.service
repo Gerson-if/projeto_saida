@@ -1,0 +1,25 @@
+# deploy/projeto-saida-status.service
+#
+# Executa `flask atualizar-status` uma vez. Disparado periodicamente pelo
+# projeto-saida-status.timer — use esta combinação (service+timer) em vez
+# do agendador em processo (SCHEDULER_ENABLED=true) quando o Gunicorn rodar
+# com mais de 1 worker, para o job não rodar duplicado.
+#
+# Instalação:
+#   sudo cp deploy/projeto-saida-status.service /etc/systemd/system/
+#   sudo cp deploy/projeto-saida-status.timer   /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now projeto-saida-status.timer
+
+[Unit]
+Description=Atualizacao de status de saidas (Sistema de Controle de Saidas)
+After=network.target
+
+[Service]
+Type=oneshot
+User=projeto_saida
+Group=projeto_saida
+WorkingDirectory=/opt/projeto_saida
+EnvironmentFile=/opt/projeto_saida/.env
+Environment=FLASK_APP=run.py
+ExecStart=/opt/projeto_saida/venv/bin/flask atualizar-status

@@ -117,8 +117,12 @@ class Config:
 
     # ── Upload de arquivos ─────────────────────────────────────────────────
     UPLOAD_FOLDER: str = os.path.join(basedir, "app", "static", "uploads")
-    MAX_CONTENT_LENGTH: int = 5 * 1024 * 1024   # 5 MB (limite global do Flask)
+    # 25 MB (limite global do Flask) — cobre imagens (máx. 5MB, validado em
+    # app/uploads.py) e o vídeo curto opcional de fundo da tela de login
+    # (máx. 20MB, também validado em app/uploads.py).
+    MAX_CONTENT_LENGTH: int = 25 * 1024 * 1024
     ALLOWED_EXTENSIONS: set = {"png", "jpg", "jpeg", "gif", "webp", "ico"}
+    ALLOWED_VIDEO_EXTENSIONS: set = {"mp4", "webm", "ogg"}
 
     # ── Relatórios (PDF) ───────────────────────────────────────────────────
     RELATORIO_FOLDER: str = os.path.join(basedir, "app", "static", "relatorios")
@@ -150,6 +154,26 @@ class Config:
     # ── Agendador de status ────────────────────────────────────────────────
     SCHEDULER_STATUS_INTERVAL_MINUTES: int = int(
         os.environ.get("SCHEDULER_STATUS_INTERVAL_MINUTES", 10)
+    )
+    # Em produção com múltiplos workers Gunicorn, CADA worker é um processo
+    # separado — se o agendador ficar ligado, o job de atualização de status
+    # roda uma vez POR worker (duplicado). Duas opções em produção:
+    #   1) 1 worker (--workers 1 --threads N): pode deixar ligado (padrão).
+    #   2) Vários workers: defina SCHEDULER_ENABLED=false no ambiente e
+    #      agende `flask atualizar-status` via cron/systemd timer em vez
+    #      disso (veja deploy/DEPLOY.md).
+    SCHEDULER_ENABLED: bool = os.environ.get("SCHEDULER_ENABLED", "true").lower() not in (
+        "false", "0", "no",
+    )
+
+    # ── Proxy reverso (Nginx/Cloudflare/etc.) ───────────────────────────────
+    # Quando o Flask roda atrás de um proxy que já termina o TLS, ele não
+    # vê o IP real do cliente nem o esquema (https) sem essa camada —
+    # o que quebra geração de URL externa correta e deixa os logs com o
+    # IP do proxy em vez do cliente. Ligado por padrão (é o caso comum de
+    # produção); desligue com BEHIND_PROXY=false se expuser o Flask direto.
+    BEHIND_PROXY: bool = os.environ.get("BEHIND_PROXY", "true").lower() not in (
+        "false", "0", "no",
     )
 
     # ── Proteção contra força bruta no login ───────────────────────────────

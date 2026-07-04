@@ -1,9 +1,35 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+{% set tema_org = config_sistema.get('tema_padrao', 'light') if config_sistema else 'light' %}
+<html lang="pt-br"
+      data-bs-theme="{{ 'dark' if tema_org == 'dark' else 'light' }}"
+      {% if tema_org and tema_org != 'light' %}data-theme="{{ tema_org }}"{% endif %}>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Sistema de Saídas{% endblock %}</title>
+
+    <script>
+        // Aplica a preferência de tema salva no navegador ANTES do CSS
+        // carregar, para não haver flash com o tema errado. Se o usuário
+        // nunca escolheu um tema neste navegador, mantém o padrão definido
+        // pelo administrador (já renderizado no <html> acima).
+        (function() {
+            try {
+                var t = localStorage.getItem('app_theme');
+                var html = document.documentElement;
+                if (t === 'dark') {
+                    html.setAttribute('data-bs-theme', 'dark');
+                    html.setAttribute('data-theme', 'dark');
+                } else if (t === 'olive') {
+                    html.setAttribute('data-bs-theme', 'light');
+                    html.setAttribute('data-theme', 'olive');
+                } else if (t === 'light') {
+                    html.setAttribute('data-bs-theme', 'light');
+                    html.removeAttribute('data-theme');
+                }
+            } catch (e) {}
+        })();
+    </script>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -201,6 +227,190 @@
             .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 999; }
             .sidebar-overlay.show { display: block; }
         }
+
+        /* ═══════════════════════════════════════════════════════════════
+           TEMAS — Claro (padrão) / Escuro / Verde-Oliva
+           Cada página do sistema pode definir suas próprias variáveis
+           (--bg-dashboard, --mr-surface, etc.) dentro do bloco de CSS extra da página.
+           Aqui sobrescrevemos essas MESMAS variáveis quando um tema estiver
+           ativo — como usamos um seletor mais específico (html[data-theme=...]
+           em vez de :root), o valor daqui sempre vence, não importa a ordem
+           de carregamento dos blocos de CSS.
+        ═══════════════════════════════════════════════════════════════ */
+        html[data-theme="dark"] {
+            --tema-bg:          #0b1220;
+            --tema-superficie:  #141c2f;
+            --tema-texto:       #e2e8f0;
+            --tema-texto-fraco: #93a0b8;
+            --tema-borda:       #26314a;
+            --cor-primaria:     #101a2e;
+            --cor-secundaria:   #3b82f6;
+        }
+        html[data-theme="olive"] {
+            --tema-bg:          #f2f0e4;
+            --tema-superficie:  #fbfaf3;
+            --tema-texto:       #2f3420;
+            --tema-texto-fraco: #6f6f52;
+            --tema-borda:       #ddd8bd;
+            --cor-primaria:     #3f4a2b;
+            --cor-secundaria:   #74833f;
+        }
+
+        html[data-theme="dark"],
+        html[data-theme="olive"] {
+            /* Variáveis usadas por user/dashboard.html */
+            --bg-dashboard: var(--tema-bg);
+            --bg-card:      var(--tema-superficie);
+            --text-main:    var(--tema-texto);
+            --text-muted:   var(--tema-texto-fraco);
+            --border-color: var(--tema-borda);
+            /* Variáveis usadas por user/meus_registros.html */
+            --mr-surface:    var(--tema-superficie);
+            --mr-bg:         var(--tema-bg);
+            --mr-border:     var(--tema-borda);
+            --mr-text-main:  var(--tema-texto);
+            --mr-text-muted: var(--tema-texto-fraco);
+        }
+
+        html[data-theme="dark"] body,
+        html[data-theme="olive"] body {
+            background-color: var(--tema-bg) !important;
+            color: var(--tema-texto);
+        }
+        html[data-theme="dark"] .topbar,
+        html[data-theme="olive"] .topbar {
+            background: var(--tema-superficie) !important;
+            border-bottom-color: var(--tema-borda) !important;
+        }
+        html[data-theme="dark"] .card,
+        html[data-theme="olive"] .card,
+        html[data-theme="dark"] .metric-mini,
+        html[data-theme="olive"] .metric-mini,
+        html[data-theme="dark"] .search-glass,
+        html[data-theme="olive"] .search-glass,
+        html[data-theme="dark"] .reg-card,
+        html[data-theme="olive"] .reg-card,
+        html[data-theme="dark"] .dicas-banner,
+        html[data-theme="olive"] .dicas-banner,
+        html[data-theme="dark"] .dicas-banner-topo,
+        html[data-theme="olive"] .dicas-banner-topo,
+        html[data-theme="dark"] .empty-state,
+        html[data-theme="olive"] .empty-state,
+        html[data-theme="dark"] .preview-drawer,
+        html[data-theme="olive"] .preview-drawer {
+            background-color: var(--tema-superficie) !important;
+            border-color: var(--tema-borda) !important;
+            color: var(--tema-texto) !important;
+        }
+        html[data-theme="dark"] .search-glass-foot,
+        html[data-theme="olive"] .search-glass-foot,
+        html[data-theme="dark"] .drawer-header,
+        html[data-theme="olive"] .drawer-header,
+        html[data-theme="dark"] .drawer-footer,
+        html[data-theme="olive"] .drawer-footer {
+            background-color: var(--tema-bg) !important;
+            border-color: var(--tema-borda) !important;
+        }
+        html[data-theme="dark"] .text-muted,
+        html[data-theme="olive"] .text-muted {
+            color: var(--tema-texto-fraco) !important;
+        }
+        html[data-theme="dark"] .input-modern,
+        html[data-theme="olive"] .input-modern,
+        html[data-theme="dark"] .form-control,
+        html[data-theme="olive"] .form-control,
+        html[data-theme="dark"] .form-select,
+        html[data-theme="olive"] .form-select {
+            background-color: var(--tema-superficie) !important;
+            border-color: var(--tema-borda) !important;
+            color: var(--tema-texto) !important;
+        }
+        html[data-theme="dark"] .btn-light,
+        html[data-theme="olive"] .btn-light,
+        html[data-theme="dark"] .pag-btn,
+        html[data-theme="olive"] .pag-btn,
+        html[data-theme="dark"] .btn-action,
+        html[data-theme="olive"] .btn-action,
+        html[data-theme="dark"] .s-chip,
+        html[data-theme="olive"] .s-chip {
+            background-color: var(--tema-superficie) !important;
+            border-color: var(--tema-borda) !important;
+            color: var(--tema-texto) !important;
+        }
+        html[data-theme="dark"] .info-cell,
+        html[data-theme="olive"] .info-cell,
+        html[data-theme="dark"] .preview-motivo,
+        html[data-theme="olive"] .preview-motivo {
+            background-color: var(--tema-bg) !important;
+            border-color: var(--tema-borda) !important;
+        }
+
+        /* ── CORREÇÃO DE CONTRASTE (tema escuro) ──────────────────────────
+           Muitos textos do sistema usam a classe utilitária ".text-dark"
+           do Bootstrap ou cores escuras fixas via style="color:#..." —
+           pensadas só para fundo claro. Como .card/.metric-mini/etc. viram
+           escuros no tema escuro, esse texto ficava "invisível" (texto
+           escuro sobre fundo escuro). As regras abaixo corrigem só o que
+           realmente corre esse risco — sem !important genérico
+           que pudesse quebrar rótulos (badges) que já têm seu próprio
+           par claro de fundo+texto (esses continuam intocados). ────────── */
+        html[data-theme="dark"] .text-dark:not(.badge) {
+            color: var(--tema-texto) !important;
+        }
+        html[data-theme="dark"] [style*="color:#0f172a" i],
+        html[data-theme="dark"] [style*="color: #0f172a" i],
+        html[data-theme="dark"] [style*="color:#1e293b" i],
+        html[data-theme="dark"] [style*="color: #1e293b" i],
+        html[data-theme="dark"] [style*="color:#1f2937" i],
+        html[data-theme="dark"] [style*="color: #1f2937" i] {
+            color: var(--tema-texto) !important;
+        }
+        /* Rótulos/legendas específicos que herdam o fundo do cartão em vez
+           de terem fundo próprio (por isso não usam o esquema acima). */
+        html[data-theme="dark"] .metric-mini .lbl,
+        html[data-theme="dark"] .nav-tabs-perfil .nav-link,
+        html[data-theme="dark"] .card-perfil {
+            color: var(--tema-texto) !important;
+        }
+        html[data-theme="dark"] .card-perfil {
+            background-color: var(--tema-superficie) !important;
+            border-color: var(--tema-borda) !important;
+        }
+        /* Rede de segurança: títulos/rótulos sem cor própria herdam a cor
+           correta do tema em vez do preto padrão do navegador. */
+        html[data-theme="dark"] h1, html[data-theme="dark"] h2,
+        html[data-theme="dark"] h3, html[data-theme="dark"] h4,
+        html[data-theme="dark"] h5, html[data-theme="dark"] h6,
+        html[data-theme="dark"] strong, html[data-theme="dark"] label,
+        html[data-theme="dark"] .form-label {
+            color: var(--tema-texto);
+        }
+        /* Tabelas: o Bootstrap (data-bs-theme="dark") já ajusta fundo/texto
+           padrão de .table automaticamente; aqui só garantimos as linhas
+           em hover e o cabeçalho quando usam classes/estilos específicos
+           do sistema (não vêm de graça do Bootstrap). */
+        html[data-theme="dark"] .table > :not(caption) > * > * {
+            border-bottom-color: var(--tema-borda);
+        }
+        html[data-theme="dark"] ::placeholder { color: var(--tema-texto-fraco) !important; opacity: 1; }
+        html[data-theme="dark"] [style*="background:#f8fafc" i],
+        html[data-theme="dark"] [style*="background: #f8fafc" i] {
+            background-color: var(--tema-superficie) !important;
+            border-color: var(--tema-borda) !important;
+        }
+
+        /* ── SELETOR DE TEMA (menu no topo) ── */
+        .theme-swatch {
+            width: 16px; height: 16px; border-radius: 50%;
+            display: inline-block; flex-shrink: 0;
+            border: 1px solid rgba(0,0,0,0.15);
+        }
+        .theme-swatch-light { background: linear-gradient(135deg, #fff 50%, #dbeafe 50%); }
+        .theme-swatch-dark  { background: linear-gradient(135deg, #0b1220 50%, #26314a 50%); }
+        .theme-swatch-olive { background: linear-gradient(135deg, #3f4a2b 50%, #a9b384 50%); }
+        .theme-option { display: flex; align-items: center; gap: 0.6rem; }
+        .theme-option .bi-check-lg { margin-left: auto; color: #16a34a; display: none; }
+        .theme-option.active .bi-check-lg { display: inline-block; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -317,6 +527,32 @@
                 <i class="bi bi-calendar3 me-1"></i>{{ now.strftime('%d/%m/%Y') }}
             </span>
             <div class="dropdown">
+                <button class="btn btn-sm btn-light d-flex align-items-center justify-content-center" data-bs-toggle="dropdown" title="Tema da interface" style="width:34px;height:34px;border-radius:8px;">
+                    <i class="bi bi-palette2"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="min-width:200px;">
+                    <li><h6 class="dropdown-header">Tema da interface</h6></li>
+                    <li>
+                        <a class="dropdown-item theme-option" href="#" onclick="aplicarTema('light'); return false;" id="themeOpt-light">
+                            <span class="theme-swatch theme-swatch-light"></span> Claro
+                            <i class="bi bi-check-lg"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item theme-option" href="#" onclick="aplicarTema('dark'); return false;" id="themeOpt-dark">
+                            <span class="theme-swatch theme-swatch-dark"></span> Escuro
+                            <i class="bi bi-check-lg"></i>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item theme-option" href="#" onclick="aplicarTema('olive'); return false;" id="themeOpt-olive">
+                            <span class="theme-swatch theme-swatch-olive"></span> Verde-Oliva
+                            <i class="bi bi-check-lg"></i>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="dropdown">
                 <button class="btn btn-sm btn-light dropdown-toggle d-flex align-items-center gap-2" data-bs-toggle="dropdown">
                     {% if current_user.foto %}
                         <img src="{{ url_for('static', filename='uploads/' + current_user.foto) }}" class="user-avatar" style="width:28px;height:28px;" alt="">
@@ -415,6 +651,43 @@
     document.querySelectorAll('.toast').forEach(el => {
         new bootstrap.Toast(el, { delay: 4500 }).show();
     });
+
+    // ── Seletor de tema (claro / escuro / verde-oliva) ──
+    const THEME_STORAGE_KEY = 'app_theme';
+
+    function aplicarTema(tema) {
+        if (!['dark', 'olive', 'light'].includes(tema)) tema = 'light';
+        try {
+            const jaAtivo = localStorage.getItem(THEME_STORAGE_KEY) || 'light';
+            if (jaAtivo === tema) return; // já está nesse tema, nada a fazer
+            localStorage.setItem(THEME_STORAGE_KEY, tema);
+        } catch (e) {}
+        // Recarrega a página: garante que TUDO fique consistente com o novo
+        // tema, inclusive elementos desenhados em <canvas> (gráficos) que só
+        // leem a cor uma vez, no carregamento — trocar só os atributos do
+        // <html> sem recarregar deixaria esses gráficos com a cor antiga.
+        window.location.reload();
+    }
+
+    function marcarTemaAtivo(tema) {
+        document.querySelectorAll('.theme-option').forEach(el => el.classList.remove('active'));
+        const ativo = document.getElementById('themeOpt-' + tema);
+        if (ativo) ativo.classList.add('active');
+    }
+
+    (function initTemaMenu() {
+        let temaAtual = 'light';
+        try {
+            const salvo = localStorage.getItem(THEME_STORAGE_KEY);
+            if (salvo) {
+                temaAtual = salvo;
+            } else {
+                const atual = document.documentElement.getAttribute('data-theme');
+                temaAtual = atual || 'light';
+            }
+        } catch (e) {}
+        marcarTemaAtivo(temaAtual);
+    })();
 </script>
 {% block extra_js %}{% endblock %}
 </body>

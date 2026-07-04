@@ -1,0 +1,14 @@
+# deploy/projeto-saida-status.timer
+# Dispara projeto-saida-status.service a cada 10 minutos.
+# Ajuste OnUnitActiveSec se mudar SCHEDULER_STATUS_INTERVAL_MINUTES.
+
+[Unit]
+Description=Dispara a atualizacao de status de saidas periodicamente
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+Unit=projeto-saida-status.service
+
+[Install]
+WantedBy=timers.target

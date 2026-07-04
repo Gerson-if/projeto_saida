@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta
 from functools import wraps
 
 from flask import (
-    Blueprint, current_app, flash, redirect,
+    Blueprint, current_app, flash, jsonify, redirect,
     render_template, request, url_for,
 )
 from flask_login import current_user, login_required
@@ -17,7 +17,11 @@ from app.models import (
     ConfigSistema, PostoGraduacao, Registro, SolicitacaoPostoGraduacao,
     StatusSaida, Subunidade, TipoUsuario, Usuario,
 )
-from app.uploads import validar_e_salvar_imagem, remover_upload_seguro
+from app.uploads import (
+    validar_e_salvar_imagem,
+    validar_e_salvar_video,
+    remover_upload_seguro,
+)
 from app.validators import (
     validar_nome,
     validar_cpf_ou_identificacao,
@@ -50,6 +54,20 @@ def _save_upload(field_name: str, prefix: str) -> tuple[str | None, str | None]:
     """
     file = request.files.get(field_name)
     resultado = validar_e_salvar_imagem(
+        file,
+        destino_dir=current_app.config["UPLOAD_FOLDER"],
+        prefixo=prefix,
+    )
+    if not resultado.ok:
+        return None, resultado.erro
+    return resultado.nome_arquivo, None
+
+
+def _save_video_upload(field_name: str, prefix: str) -> tuple[str | None, str | None]:
+    """Mesmo contrato de `_save_upload`, mas para o vídeo curto opcional
+    usado como plano de fundo da tela de login."""
+    file = request.files.get(field_name)
+    resultado = validar_e_salvar_video(
         file,
         destino_dir=current_app.config["UPLOAD_FOLDER"],
         prefixo=prefix,
@@ -826,10 +844,14 @@ def responder_solicitacao(id):
 # Saídas
 # ─────────────────────────────────────────────────────────────────────────────
 
-@admin_bp.route("/saidas")
-@login_required
-@admin_required
-def listar_saidas():
+SAIDAS_ADMIN_POR_PAGINA = 5
+
+
+def _query_saidas_admin_filtrada():
+    """Monta a query filtrada de saídas (admin) a partir dos parâmetros GET
+    atuais. Reaproveitada por `listar_saidas` (1ª página, renderizada no
+    servidor) e por `api_saidas` (páginas seguintes, carregadas via "Ver
+    mais" sem recarregar a tela)."""
     busca         = sanitizar_texto(request.args.get("busca", ""), max_len=100)
     status_filtro = request.args.get("status", "")
     data_inicio   = request.args.get("data_inicio", "")
@@ -859,19 +881,82 @@ def listar_saidas():
     if data_fim_dt:
         query = query.filter(Registro.data_saida <= data_fim_dt)
 
-    saidas = query.order_by(Registro.data_registro.desc()).all()
+    query = query.order_by(Registro.data_registro.desc())
+    contexto_filtros = {
+        "busca": busca, "status_filtro": status_filtro,
+        "data_inicio": data_inicio, "data_fim": data_fim,
+        "subunidade_id": subunidade_id,
+    }
+    return query, contexto_filtros
+
+
+@admin_bp.route("/saidas")
+@login_required
+@admin_required
+def listar_saidas():
+    query, filtros = _query_saidas_admin_filtrada()
+
+    page = max(1, parse_int_seguro(request.args.get("page", "1"), minimo=1) or 1)
+    per_page = SAIDAS_ADMIN_POR_PAGINA
+
+    total = query.count()
+    saidas = query.offset((page - 1) * per_page).limit(per_page).all()
+    tem_mais = (page * per_page) < total
+
     subunidades = Subunidade.query.filter_by(ativa=True).order_by(Subunidade.nome).all()
     return render_template(
         "admin/saidas.html",
         saidas=saidas,
-        busca=busca,
-        status_filtro=status_filtro,
-        data_inicio=data_inicio,
-        data_fim=data_fim,
+        total=total,
+        page=page,
+        per_page=per_page,
+        tem_mais=tem_mais,
         subunidades=subunidades,
-        subunidade_id=subunidade_id,
         StatusSaida=StatusSaida,
+        **filtros,
     )
+
+
+def _saida_admin_para_dict(saida: Registro) -> dict:
+    return {
+        "id": saida.id,
+        "militar_nome": saida.usuario.nome if saida.usuario else "—",
+        "militar_cpf": saida.cpf_usuario,
+        "local": saida.local,
+        "motivo": saida.motivo,
+        "data_saida": saida.data_saida.strftime("%d/%m/%Y") if saida.data_saida else None,
+        "data_retorno": saida.data_retorno.strftime("%d/%m/%Y") if saida.data_retorno else None,
+        "status": saida.status,
+        "status_label": saida.status_label,
+        "status_badge": saida.status_badge,
+        "status_atualizado_em": (
+            saida.status_atualizado_em.strftime("%d/%m") if saida.status_atualizado_em else None
+        ),
+    }
+
+
+@admin_bp.route("/saidas/api")
+@login_required
+@admin_required
+def api_saidas():
+    """Endpoint AJAX usado pelo botão "Ver mais" — carrega a próxima
+    página de saídas sem recarregar a tela inteira, evitando despejar
+    todos os registros de uma vez na tabela."""
+    query, _ = _query_saidas_admin_filtrada()
+
+    page = max(1, parse_int_seguro(request.args.get("page", "1"), minimo=1) or 1)
+    per_page = SAIDAS_ADMIN_POR_PAGINA
+
+    total = query.count()
+    saidas = query.offset((page - 1) * per_page).limit(per_page).all()
+    tem_mais = (page * per_page) < total
+
+    return jsonify({
+        "saidas": [_saida_admin_para_dict(s) for s in saidas],
+        "total": total,
+        "page": page,
+        "tem_mais": tem_mais,
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -936,6 +1021,56 @@ def configuracoes():
             if nome_arquivo:
                 valor_antigo = ConfigSistema.get(campo_img)
                 ConfigSistema.set(campo_img, nome_arquivo)
+                remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], valor_antigo)
+
+        # ── Tema padrão da interface (claro / escuro / verde-oliva) ────────
+        # É apenas o valor inicial: cada usuário pode trocar seu próprio
+        # tema a qualquer momento (fica salvo no navegador dele), sem
+        # afetar esta preferência padrão da organização.
+        tema_padrao = request.form.get("tema_padrao", "light")
+        if tema_padrao not in ("light", "dark", "olive"):
+            tema_padrao = "light"
+        ConfigSistema.set("tema_padrao", tema_padrao)
+
+        # ── Aparência da tela de login (fundo em imagem ou vídeo curto) ────
+        login_bg_tipo = request.form.get("login_bg_tipo", "")
+        if login_bg_tipo not in ("", "imagem", "video"):
+            login_bg_tipo = ""
+        ConfigSistema.set("login_bg_tipo", login_bg_tipo)
+
+        login_bg_posicao = request.form.get("login_bg_posicao", "centro")
+        if login_bg_posicao not in ("topo", "centro", "base"):
+            login_bg_posicao = "centro"
+        ConfigSistema.set("login_bg_posicao", login_bg_posicao)
+
+        overlay = parse_int_seguro(request.form.get("login_bg_overlay", "55"), minimo=0)
+        if overlay is None:
+            overlay = 55
+        overlay = max(0, min(overlay, 90))
+        ConfigSistema.set("login_bg_overlay", str(overlay))
+
+        if request.form.get("remover_login_bg_imagem") == "1":
+            remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], ConfigSistema.get("login_bg_imagem"))
+            ConfigSistema.set("login_bg_imagem", "")
+        else:
+            nome_imagem, erro_imagem = _save_upload("login_bg_imagem", "login_bg")
+            if erro_imagem:
+                flash(f"Imagem de fundo do login: {erro_imagem}", "danger")
+            elif nome_imagem:
+                valor_antigo = ConfigSistema.get("login_bg_imagem")
+                ConfigSistema.set("login_bg_imagem", nome_imagem)
+                remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], valor_antigo)
+
+        if request.form.get("remover_login_bg_video") == "1":
+            remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], ConfigSistema.get("login_bg_video"))
+            ConfigSistema.set("login_bg_video", "")
+        else:
+            nome_video, erro_video = _save_video_upload("login_bg_video", "login_bg")
+            if erro_video:
+                flash(f"Vídeo de fundo do login: {erro_video}", "danger")
+            elif nome_video:
+                valor_antigo = ConfigSistema.get("login_bg_video")
+                ConfigSistema.set("login_bg_video", nome_video)
                 remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], valor_antigo)
 
         flash("Configurações salvas com sucesso!", "success")

@@ -420,7 +420,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// --- GRÁFICO OPERACIONAL MANTIDO SEM ALTERAÇÃO ESTRUTURAL ---
+// --- GRÁFICO OPERACIONAL ---
+// Canvas não recebe tema via CSS — cor da borda entre fatias é ajustada
+// manualmente conforme o tema atual, para não destacar demais no escuro.
+const temaAtualGraficoAdmin = document.documentElement.getAttribute('data-theme');
 const ctxPizza = document.getElementById('graficoPizza');
 if (ctxPizza) {
     const labelsStatus = [];
@@ -445,7 +448,7 @@ if (ctxPizza) {
                 data: dadosStatus,
                 backgroundColor: coresStatus,
                 borderWidth: 3,
-                borderColor: '#ffffff',
+                borderColor: (temaAtualGraficoAdmin === 'dark') ? '#141c2f' : '#ffffff',
                 hoverOffset: 4
             }]
         },
