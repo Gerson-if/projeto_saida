@@ -40,6 +40,17 @@
                 <label class="form-label small fw-semibold">Data fim</label>
                 <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ data_fim }}">
             </div>
+            {% if subunidades %}
+            <div class="col-sm-4 col-md-2">
+                <label class="form-label small fw-semibold">Subunidade</label>
+                <select name="subunidade" class="form-select form-select-sm">
+                    <option value="">Todas</option>
+                    {% for s in subunidades %}
+                    <option value="{{ s.id }}" {% if subunidade_id|string == s.id|string %}selected{% endif %}>{{ s.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
             <div class="col-auto">
                 <button type="submit" class="btn btn-primary btn-sm">
                     <i class="bi bi-search me-1"></i>Filtrar
@@ -76,7 +87,7 @@
                         <th>Status</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="corpoTabelaSaidas">
                     {% for saida in saidas %}
                     <tr>
                         <td class="ps-3 text-muted" style="font-size:0.8rem;">{{ saida.id }}</td>
@@ -109,16 +120,113 @@
                         </td>
                     </tr>
                     {% else %}
-                    <tr><td colspan="7" class="text-center py-4 text-muted">Nenhuma saída encontrada.</td></tr>
+                    <tr id="linhaVazia"><td colspan="7" class="text-center py-4 text-muted">Nenhuma saída encontrada.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
     {% if saidas %}
-    <div class="card-footer text-muted small py-2 px-3">
-        {{ saidas|length }} registro(s) encontrado(s)
+    <div class="card-footer d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 px-3">
+        <span class="text-muted small" id="contadorSaidas">
+            Exibindo {{ saidas|length }} de {{ total }} registro(s)
+        </span>
+        {% if tem_mais %}
+        <button type="button" class="btn btn-sm px-3 rounded-pill fw-semibold"
+                style="background-color:#f1f5f9;color:#475569;border:1px solid #cbd5e1;"
+                id="btnVerMaisSaidas" onclick="carregarMaisSaidas()">
+            <i class="bi bi-chevron-down me-1"></i>Ver mais registros
+        </button>
+        {% endif %}
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── "Ver mais" — carrega a próxima página de saídas sem recarregar a tela ──
+let paginaAtualSaidas = {{ page }};
+const totalSaidas = {{ total }};
+const porPaginaSaidas = {{ per_page }};
+
+function _escSaidas(str) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(str || ''));
+    return d.innerHTML;
+}
+
+function carregarMaisSaidas() {
+    const btn = document.getElementById('btnVerMaisSaidas');
+    const proximaPagina = paginaAtualSaidas + 1;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Carregando…';
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    params.set('page', proximaPagina);
+
+    fetch(`{{ url_for('admin.api_saidas') }}?${params.toString()}`)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('corpoTabelaSaidas');
+            const linhaVazia = document.getElementById('linhaVazia');
+            if (linhaVazia) linhaVazia.remove();
+
+            data.saidas.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="ps-3 text-muted" style="font-size:0.8rem;">${s.id}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="user-avatar-placeholder" style="width:28px;height:28px;font-size:0.7rem;">
+                                ${_escSaidas(s.militar_nome).charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                                <div style="font-size:0.85rem;font-weight:500;">${_escSaidas(s.militar_nome)}</div>
+                                <div class="text-muted" style="font-size:0.72rem;">${_escSaidas(s.militar_cpf)}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="font-size:0.85rem;">${_escSaidas(s.local)}</td>
+                    <td style="font-size:0.82rem;max-width:200px;">
+                        <span class="text-truncate d-inline-block" style="max-width:180px;" title="${_escSaidas(s.motivo)}">
+                            ${_escSaidas(s.motivo)}
+                        </span>
+                    </td>
+                    <td style="font-size:0.85rem;">${s.data_saida || '—'}</td>
+                    <td style="font-size:0.85rem;">${s.data_retorno || '—'}</td>
+                    <td>
+                        <span class="badge bg-${s.status_badge}">${_escSaidas(s.status_label)}</span>
+                        ${s.status_atualizado_em ? `
+                        <div class="text-muted" style="font-size:0.68rem;">
+                            <i class="bi bi-robot"></i> ${s.status_atualizado_em}
+                        </div>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            paginaAtualSaidas = data.page;
+            const exibidos = Math.min(paginaAtualSaidas * porPaginaSaidas, data.total);
+            const contador = document.getElementById('contadorSaidas');
+            if (contador) contador.textContent = `Exibindo ${exibidos} de ${data.total} registro(s)`;
+
+            if (!data.tem_mais && btn) {
+                btn.remove();
+            } else if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-chevron-down me-1"></i>Ver mais registros';
+            }
+        })
+        .catch(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Tentar novamente';
+            }
+        });
+}
+</script>
 {% endblock %}

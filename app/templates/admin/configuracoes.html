@@ -99,6 +99,44 @@
         </div>
     </div>
 
+    <!-- Tema padrão da interface -->
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0 fw-semibold"><i class="bi bi-palette2 me-2"></i>Tema Padrão da Interface</h6></div>
+            <div class="card-body">
+                <small class="text-muted d-block mb-3">
+                    Define o tema inicial exibido para quem acessa pela primeira vez.
+                    Cada usuário pode trocar o próprio tema a qualquer momento pelo
+                    ícone <i class="bi bi-palette2"></i> no topo da tela, sem afetar esta configuração.
+                </small>
+                <div class="row g-2">
+                    {% set tema_atual = configs.get('tema_padrao', 'light') %}
+                    <div class="col-4">
+                        <input type="radio" class="btn-check" name="tema_padrao" id="temaLight" value="light" {{ 'checked' if tema_atual == 'light' or not tema_atual }}>
+                        <label class="btn btn-outline-secondary btn-sm w-100 d-flex flex-column align-items-center gap-1 py-2" for="temaLight">
+                            <span class="theme-swatch theme-swatch-light" style="width:20px;height:20px;"></span>
+                            Claro
+                        </label>
+                    </div>
+                    <div class="col-4">
+                        <input type="radio" class="btn-check" name="tema_padrao" id="temaDark" value="dark" {{ 'checked' if tema_atual == 'dark' }}>
+                        <label class="btn btn-outline-secondary btn-sm w-100 d-flex flex-column align-items-center gap-1 py-2" for="temaDark">
+                            <span class="theme-swatch theme-swatch-dark" style="width:20px;height:20px;"></span>
+                            Escuro
+                        </label>
+                    </div>
+                    <div class="col-4">
+                        <input type="radio" class="btn-check" name="tema_padrao" id="temaOlive" value="olive" {{ 'checked' if tema_atual == 'olive' }}>
+                        <label class="btn btn-outline-secondary btn-sm w-100 d-flex flex-column align-items-center gap-1 py-2" for="temaOlive">
+                            <span class="theme-swatch theme-swatch-olive" style="width:20px;height:20px;"></span>
+                            Verde-Oliva
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Hierarquia (Posto/Graduação) -->
     <div class="col-lg-6">
         <div class="card h-100">
@@ -175,6 +213,111 @@
         </div>
     </div>
 
+    <!-- Fundo da tela de Login -->
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0 fw-semibold"><i class="bi bi-window-stack me-2"></i>Fundo da Tela de Login</h6></div>
+            <div class="card-body">
+                {% set login_bg_tipo = configs.get('login_bg_tipo', '') %}
+                <small class="text-muted d-block mb-3">
+                    Escolha um plano de fundo para a tela de login: o gradiente padrão,
+                    uma imagem ajustável ou um vídeo curto em loop.
+                </small>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-4">
+                        <input type="radio" class="btn-check" name="login_bg_tipo" id="loginBgNenhum" value="" onchange="atualizarFundoLogin()" {{ 'checked' if not login_bg_tipo }}>
+                        <label class="btn btn-outline-secondary btn-sm w-100" for="loginBgNenhum">
+                            <i class="bi bi-gradient-fill me-1"></i>Gradiente padrão
+                        </label>
+                    </div>
+                    <div class="col-sm-4">
+                        <input type="radio" class="btn-check" name="login_bg_tipo" id="loginBgImagem" value="imagem" onchange="atualizarFundoLogin()" {{ 'checked' if login_bg_tipo == 'imagem' }}>
+                        <label class="btn btn-outline-secondary btn-sm w-100" for="loginBgImagem">
+                            <i class="bi bi-image me-1"></i>Imagem
+                        </label>
+                    </div>
+                    <div class="col-sm-4">
+                        <input type="radio" class="btn-check" name="login_bg_tipo" id="loginBgVideo" value="video" onchange="atualizarFundoLogin()" {{ 'checked' if login_bg_tipo == 'video' }}>
+                        <label class="btn btn-outline-secondary btn-sm w-100" for="loginBgVideo">
+                            <i class="bi bi-camera-video me-1"></i>Vídeo curto
+                        </label>
+                    </div>
+                </div>
+
+                <div class="row g-4">
+                    <!-- Bloco Imagem -->
+                    <div class="col-md-6" id="blocoLoginImagem" style="{{ '' if login_bg_tipo == 'imagem' else 'display:none;' }}">
+                        <label class="form-label fw-semibold small">Imagem de fundo</label>
+
+                        <div id="preview-atual-login_bg_imagem" class="mb-2 p-2 border rounded text-center {% if not configs.get('login_bg_imagem') %}d-none{% endif %}" style="background:#f8f9fa;">
+                            <img id="img-atual-login_bg_imagem"
+                                 src="{% if configs.get('login_bg_imagem') %}{{ url_for('static', filename='uploads/' + configs.get('login_bg_imagem')) }}{% endif %}"
+                                 style="max-height:100px;max-width:100%;object-fit:cover;border-radius:6px;" alt="Fundo do login">
+                            <div class="text-muted mt-1" style="font-size:0.7rem;">{{ configs.get('login_bg_imagem','') }}</div>
+                            <button type="button" class="btn btn-sm btn-danger mt-1" style="font-size:0.7rem;padding:2px 8px;"
+                                    onclick="removerImagem('login_bg_imagem')">
+                                <i class="bi bi-trash me-1"></i>Remover
+                            </button>
+                            <input type="hidden" name="remover_login_bg_imagem" id="remover_login_bg_imagem" value="">
+                        </div>
+
+                        <div id="preview-novo-login_bg_imagem" class="mb-2 p-2 border rounded text-center d-none" style="background:#e8f4fd;border-color:#bee3f8!important;">
+                            <img id="img-novo-login_bg_imagem" src="" style="max-height:100px;max-width:100%;object-fit:cover;border-radius:6px;" alt="">
+                            <div class="text-muted mt-1" style="font-size:0.68rem;">Pré-visualização (não salvo ainda)</div>
+                        </div>
+
+                        <input type="file" name="login_bg_imagem" id="file-login_bg_imagem" class="form-control form-control-sm"
+                               accept="image/png,image/jpeg,image/gif,image/webp" onchange="previewImagem('login_bg_imagem', this)">
+                        <small class="text-muted">Recomendado: paisagem, alta resolução. Máx. 5MB.</small>
+                    </div>
+
+                    <!-- Bloco Vídeo -->
+                    <div class="col-md-6" id="blocoLoginVideo" style="{{ '' if login_bg_tipo == 'video' else 'display:none;' }}">
+                        <label class="form-label fw-semibold small">Vídeo de fundo (curto, em loop)</label>
+
+                        {% if configs.get('login_bg_video') %}
+                        <div class="mb-2 p-2 border rounded text-center" style="background:#f8f9fa;">
+                            <video src="{{ url_for('static', filename='uploads/' + configs.get('login_bg_video')) }}"
+                                   style="max-height:100px;max-width:100%;border-radius:6px;" muted loop autoplay playsinline></video>
+                            <div class="text-muted mt-1" style="font-size:0.7rem;">{{ configs.get('login_bg_video') }}</div>
+                            <button type="button" class="btn btn-sm btn-danger mt-1" style="font-size:0.7rem;padding:2px 8px;"
+                                    onclick="document.getElementById('remover_login_bg_video').value='1'; this.closest('div.mb-2').classList.add('d-none');">
+                                <i class="bi bi-trash me-1"></i>Remover
+                            </button>
+                        </div>
+                        {% endif %}
+                        <input type="hidden" name="remover_login_bg_video" id="remover_login_bg_video" value="">
+
+                        <input type="file" name="login_bg_video" class="form-control form-control-sm"
+                               accept="video/mp4,video/webm,video/ogg">
+                        <small class="text-muted">Formatos: MP4, WEBM ou OGG — máx. 20MB. Use um clipe bem curto (poucos segundos) para não pesar o carregamento.</small>
+                    </div>
+
+                    <!-- Ajustes comuns -->
+                    <div class="col-md-6" id="blocoLoginAjustes" style="{{ 'display:none;' if not login_bg_tipo }}">
+                        <label class="form-label fw-semibold small">Posição da imagem/vídeo</label>
+                        <select name="login_bg_posicao" class="form-select form-select-sm mb-3">
+                            {% set pos_atual = configs.get('login_bg_posicao', 'centro') %}
+                            <option value="topo" {{ 'selected' if pos_atual == 'topo' }}>Topo</option>
+                            <option value="centro" {{ 'selected' if pos_atual == 'centro' or not pos_atual }}>Centro</option>
+                            <option value="base" {{ 'selected' if pos_atual == 'base' }}>Base</option>
+                        </select>
+
+                        <label class="form-label fw-semibold small">
+                            Escurecimento sobre a imagem/vídeo
+                            <span class="text-muted fw-normal">(para o texto continuar legível)</span>
+                        </label>
+                        <input type="range" class="form-range" name="login_bg_overlay" min="0" max="90" step="5"
+                               value="{{ configs.get('login_bg_overlay', '55') }}"
+                               oninput="document.getElementById('overlayVal').textContent = this.value + '%'">
+                        <div class="text-muted small">Atual: <span id="overlayVal">{{ configs.get('login_bg_overlay', '55') }}%</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <div class="mt-4 d-flex gap-2">
@@ -214,6 +357,14 @@ function previewImagem(campo, input) {
     reader.readAsDataURL(file);
     // Cancelar remoção se o usuário escolheu novo arquivo
     document.getElementById('remover_' + campo).value = '';
+}
+
+// Alterna os blocos de imagem/vídeo/ajustes conforme o tipo de fundo do login escolhido
+function atualizarFundoLogin() {
+    const tipo = document.querySelector('input[name="login_bg_tipo"]:checked').value;
+    document.getElementById('blocoLoginImagem').style.display = (tipo === 'imagem') ? '' : 'none';
+    document.getElementById('blocoLoginVideo').style.display = (tipo === 'video') ? '' : 'none';
+    document.getElementById('blocoLoginAjustes').style.display = tipo ? '' : 'none';
 }
 
 // Remover imagem existente
