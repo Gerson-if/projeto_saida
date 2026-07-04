@@ -17,28 +17,36 @@ body {
   background-color: var(--bg-dashboard);
 }
 
-/* ── Overlay Sucesso ── */
-#overlay-sucesso {
-  display: none; position: fixed; inset: 0; z-index: 9999;
-  background: rgba(15, 23, 42, 0.3); align-items: center; justify-content: center;
-  backdrop-filter: blur(6px);
+/* ── Notificação de Sucesso (toast não-bloqueante) ── */
+#toast-registro-sucesso {
+  position: fixed; top: 70px; right: 20px; z-index: 9999;
+  max-width: 340px; width: calc(100% - 40px);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid #10b981;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.12);
+  padding: 0.9rem 1rem;
+  display: none;
+  align-items: flex-start;
+  gap: 0.75rem;
 }
-#overlay-sucesso.show { display: flex; animation: fadeOv 0.2s ease-out; }
-@keyframes fadeOv { from { opacity: 0; } to { opacity: 1; } }
+#toast-registro-sucesso.show {
+  display: flex;
+  animation: slideInToast 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+#toast-registro-sucesso.hide {
+  display: flex; /* Mantém visível durante a animação de saída */
+  animation: slideOutToast 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes slideInToast { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideOutToast { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(16px); } }
 
-.sucesso-card {
-  background: var(--bg-card); border-radius: 16px; padding: 2rem;
-  text-align: center; max-width: 360px; width: 90%;
-  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.08);
-  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+.toast-sucesso-icone {
+  width: 28px; height: 28px; background: #10b981; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-@keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-
-.sucesso-circle {
-  width: 56px; height: 56px; background: #10b981; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;
-}
-.sucesso-check { font-size: 1.5rem; color: #fff; }
+.toast-sucesso-icone i { font-size: 0.9rem; color: #fff; }
 
 /* ── Banner de Avisos / Slider com Ícone Flutuante Suave ── */
 .dicas-banner {
@@ -175,23 +183,19 @@ body {
 
 {% block content %}
 
-<div id="overlay-sucesso">
-  <div class="sucesso-card position-relative overflow-hidden">
-    <div class="confetti-wrap" id="confettiWrap"></div>
-    <div class="sucesso-circle">
-      <i class="bi bi-check-lg sucesso-check"></i>
-    </div>
-    <h6 class="fw-bold mb-1" style="color: #10b981;">Saída Registrada!</h6>
-    <p class="text-muted mb-3" style="font-size: .85rem;">Sua solicitação foi salva com êxito.</p>
-    <div class="d-flex gap-2 justify-content-center">
-      <a href="{{ url_for('user.meus_registros') }}" class="btn btn-light btn-sm rounded-3 px-3 border">
-        Histórico
-      </a>
-      <button onclick="fecharSucesso()" class="btn btn-success btn-sm rounded-3 px-3" style="background: #10b981; border: none;">
-        Entendido
-      </button>
-    </div>
+<div id="toast-registro-sucesso" role="status" aria-live="polite">
+  <div class="toast-sucesso-icone">
+    <i class="bi bi-check-lg"></i>
   </div>
+  <div class="flex-grow-1">
+    <div class="fw-bold small" style="color: var(--text-main);">Saída registrada</div>
+    <div class="text-muted" style="font-size: .8rem;">Sua solicitação foi salva com êxito.</div>
+    <a href="{{ url_for('user.meus_registros') }}" class="d-inline-block mt-1 small fw-semibold" style="color: #10b981; text-decoration: none;">
+      Ver histórico <i class="bi bi-arrow-right"></i>
+    </a>
+  </div>
+  <!-- Ajustado o clique manual para prevenir o comportamento padrão -->
+  <button type="button" onclick="event.preventDefault(); fecharSucesso();" class="btn-close" style="font-size: 0.65rem;" aria-label="Fechar"></button>
 </div>
 
 <div class="row align-items-center mb-3 g-2">
@@ -338,9 +342,7 @@ body {
   </div>
 </div>
 
-<!-- ── NOVA SEÇÃO EQUILIBRADA (COL-MD-6 / COL-MD-6) ── -->
 <div class="row g-3 mb-2">
-  <!-- Atividades Recentes em formato Clean (Sem tabelas) -->
   <div class="col-md-6">
     <div class="chart-card h-100 d-flex flex-column justify-content-between">
       <div>
@@ -352,14 +354,12 @@ body {
           <a href="{{ url_for('user.meus_registros') }}" class="text-decoration-none fw-bold" style="font-size: 0.75rem; color: #1d4ed8;">Ver Histórico</a>
         </div>
         <div id="containerRecentes" class="py-1">
-          <!-- Gerado dinamicamente via JS -->
           <div class="text-center py-4 text-muted small">Carregando histórico recente...</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Novo Indicador Visual: Gráfico de Linha Suave (Ritmo Operacional Semanal) -->
   <div class="col-md-6">
     <div class="chart-card h-100">
       <div class="chart-card-head">
@@ -386,7 +386,6 @@ body {
 
 {% block extra_js %}
 <script>
-// ── Slider de Transição com Animação Suave Dinâmica ──
 document.addEventListener('DOMContentLoaded', function() {
   const itensDica = document.querySelectorAll('.js-dica-item');
   if (itensDica.length === 0) return;
@@ -425,11 +424,9 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(alternarDica, 7000);
   }
 
-  // Aciona a renderização da lista assíncrona
   carregarRecentesClean();
 });
 
-// ── Renderização da Lista de Recentes Assíncrona ──
 function carregarRecentesClean() {
   const container = document.getElementById('containerRecentes');
   const LABELS_STATUS = { agendada: 'Agendada', em_transito: 'Em Trânsito', retornado: 'Retornado', cancelado: 'Cancelado' };
@@ -438,7 +435,7 @@ function carregarRecentesClean() {
     .then(r => r.json())
     .then(data => {
       const lista = data.saidas || [];
-      const ultimas = lista.slice(0, 3); // Apenas as 3 últimas atividades
+      const ultimas = lista.slice(0, 3);
 
       if(ultimas.length === 0) {
         container.innerHTML = '<div class="text-center py-3 text-muted small">Nenhum registro encontrado.</div>';
@@ -450,7 +447,7 @@ function carregarRecentesClean() {
         return `
           <div class="recent-list-item">
             <div>
-              <div class="fw-semibold style="font-size: 0.85rem; color: var(--text-main);">${_esc(s.local)}</div>
+              <div class="fw-semibold" style="font-size: 0.85rem; color: var(--text-main);">${_esc(s.local)}</div>
               <div class="text-muted" style="font-size: 0.75rem;">${_esc(s.motivo)}</div>
             </div>
             <div class="text-end">
@@ -472,7 +469,9 @@ function _esc(str) {
   return d.innerHTML;
 }
 
-// ── Controle do Feedback Visual Sucesso ──
+// ── CORREÇÃO DE CONTROLE DO TOAST DE SUCESSO ──
+let timerSucesso = null;
+
 (function(){
   if(new URLSearchParams(location.search).get('registrado')==='1'){
     mostrarSucesso();
@@ -481,38 +480,32 @@ function _esc(str) {
 })();
 
 function mostrarSucesso(){
-  document.getElementById('overlay-sucesso').classList.add('show');
-  gerarConfetes();
-  setTimeout(fecharSucesso, 5000);
-}
-function fecharSucesso(){
-  const o = document.getElementById('overlay-sucesso');
+  const o = document.getElementById('toast-registro-sucesso');
   if(!o) return;
-  o.style.animation='fadeOv .2s ease reverse';
-  setTimeout(()=>{ o.classList.remove('show'); o.style.animation=''; },200);
+  o.classList.remove('hide');
+  o.classList.add('show');
+  
+  clearTimeout(timerSucesso);
+  // Executa o fechamento suave automático após 4 segundos
+  timerSucesso = setTimeout(fecharSucesso, 4000);
 }
-function gerarConfetes(){
-  const wrap = document.getElementById('confettiWrap');
-  if(!wrap) return;
-  const cores=['#10b981','#3b82f6','#f59e0b','#ef4444'];
-  for(let i=0;i<16;i++){
-    const d=document.createElement('div');
-    d.className='confetti-dot';
-    d.style.cssText=`left:${Math.random()*100}%;top:${-5-Math.random()*10}px;
-      background:${cores[Math.floor(Math.random()*cores.length)]};
-      width:${4+Math.random()*3}px;height:${4+Math.random()*3}px;
-      animation-delay:${Math.random()*.3}s;animation-duration:${0.8+Math.random()*.4}s;`;
-    wrap.appendChild(d);
-  }
+
+function fecharSucesso(){
+  const o = document.getElementById('toast-registro-sucesso');
+  if(!o || !o.classList.contains('show')) return;
+  
+  clearTimeout(timerSucesso);
+  o.classList.remove('show');
+  o.classList.add('hide');
+  
+  // Aguarda os 200ms da animação de fade-out do CSS para remover o elemento da tela de forma limpa
+  setTimeout(()=>{ 
+    o.classList.remove('hide'); 
+    o.style.display = 'none';
+  }, 200);
 }
-document.getElementById('overlay-sucesso').addEventListener('click',function(e){ if(e.target===this) fecharSucesso(); });
 
 {% if stats.total > 0 %}
-// ── Inicialização Gráficos (Chart.js) ──
-// Os gráficos são desenhados em <canvas> — CSS não alcança o texto deles.
-// Por isso lemos o tema atual (já aplicado no <html> antes deste script
-// rodar) e definimos explicitamente a cor dos eixos/legendas, senão o
-// Chart.js usa um cinza escuro padrão que fica ilegível em fundo escuro.
 const temaAtualGraficos = document.documentElement.getAttribute('data-theme');
 const corTextoGrafico = (temaAtualGraficos === 'dark') ? '#cbd5e1' : '#64748b';
 const corGradeGrafico  = (temaAtualGraficos === 'dark') ? 'rgba(255,255,255,0.08)' : '#e2e8f0';
@@ -567,10 +560,8 @@ if(ctxMensal){
   });
 }
 
-// ── NOVO GRÁFICO INDICADOR: Ritmo Operacional (Sparkline de Linha Suave com Gradiente) ──
 const ctxRitmo = document.getElementById('chartRitmoSemanal');
 if(ctxRitmo){
-  // Criando efeito de gradiente elegante para o preenchimento da linha
   const ctx = ctxRitmo.getContext('2d');
   const gradient = ctx.createLinearGradient(0, 0, 0, 140);
   gradient.addColorStop(0, 'rgba(16, 185, 129, 0.24)');
@@ -582,7 +573,6 @@ if(ctxRitmo){
       labels: ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4 (Atual)'],
       datasets: [{
         label: 'Registros',
-        // Mock suave baseado no total para garantir comportamento visual idôneo
         data: [
           Math.max(1, Math.round({{ stats.total }} * 0.15)), 
           Math.max(2, Math.round({{ stats.total }} * 0.22)), 
@@ -593,7 +583,7 @@ if(ctxRitmo){
         borderWidth: 2.5,
         fill: true,
         backgroundColor: gradient,
-        tension: 0.4, // Suaviza as curvas da linha de forma orgânica
+        tension: 0.4,
         pointRadius: 3,
         pointBackgroundColor: '#10b981'
       }]
