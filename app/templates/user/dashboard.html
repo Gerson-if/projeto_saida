@@ -17,28 +17,35 @@ body {
   background-color: var(--bg-dashboard);
 }
 
-/* ── Overlay Sucesso ── */
-#overlay-sucesso {
-  display: none; position: fixed; inset: 0; z-index: 9999;
-  background: rgba(15, 23, 42, 0.3); align-items: center; justify-content: center;
-  backdrop-filter: blur(6px);
+/* ── Notificação de Sucesso (toast não-bloqueante) ── */
+#toast-registro-sucesso {
+  position: fixed; top: 70px; right: 20px; z-index: 9999;
+  max-width: 340px; width: calc(100% - 40px);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid #10b981;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.12);
+  padding: 0.9rem 1rem;
+  display: none;
+  align-items: flex-start;
+  gap: 0.75rem;
 }
-#overlay-sucesso.show { display: flex; animation: fadeOv 0.2s ease-out; }
-@keyframes fadeOv { from { opacity: 0; } to { opacity: 1; } }
+#toast-registro-sucesso.show {
+  display: flex;
+  animation: slideInToast 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#toast-registro-sucesso.hide {
+  animation: slideOutToast 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes slideInToast { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideOutToast { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(16px); } }
 
-.sucesso-card {
-  background: var(--bg-card); border-radius: 16px; padding: 2rem;
-  text-align: center; max-width: 360px; width: 90%;
-  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.08);
-  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+.toast-sucesso-icone {
+  width: 28px; height: 28px; background: #10b981; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-@keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-
-.sucesso-circle {
-  width: 56px; height: 56px; background: #10b981; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;
-}
-.sucesso-check { font-size: 1.5rem; color: #fff; }
+.toast-sucesso-icone i { font-size: 0.9rem; color: #fff; }
 
 /* ── Banner de Avisos / Slider com Ícone Flutuante Suave ── */
 .dicas-banner {
@@ -175,23 +182,18 @@ body {
 
 {% block content %}
 
-<div id="overlay-sucesso">
-  <div class="sucesso-card position-relative overflow-hidden">
-    <div class="confetti-wrap" id="confettiWrap"></div>
-    <div class="sucesso-circle">
-      <i class="bi bi-check-lg sucesso-check"></i>
-    </div>
-    <h6 class="fw-bold mb-1" style="color: #10b981;">Saída Registrada!</h6>
-    <p class="text-muted mb-3" style="font-size: .85rem;">Sua solicitação foi salva com êxito.</p>
-    <div class="d-flex gap-2 justify-content-center">
-      <a href="{{ url_for('user.meus_registros') }}" class="btn btn-light btn-sm rounded-3 px-3 border">
-        Histórico
-      </a>
-      <button onclick="fecharSucesso()" class="btn btn-success btn-sm rounded-3 px-3" style="background: #10b981; border: none;">
-        Entendido
-      </button>
-    </div>
+<div id="toast-registro-sucesso" role="status" aria-live="polite">
+  <div class="toast-sucesso-icone">
+    <i class="bi bi-check-lg"></i>
   </div>
+  <div class="flex-grow-1">
+    <div class="fw-bold small" style="color: var(--text-main);">Saída registrada</div>
+    <div class="text-muted" style="font-size: .8rem;">Sua solicitação foi salva com êxito.</div>
+    <a href="{{ url_for('user.meus_registros') }}" class="d-inline-block mt-1 small fw-semibold" style="color: #10b981; text-decoration: none;">
+      Ver histórico <i class="bi bi-arrow-right"></i>
+    </a>
+  </div>
+  <button type="button" onclick="fecharSucesso()" class="btn-close" style="font-size: 0.65rem;" aria-label="Fechar"></button>
 </div>
 
 <div class="row align-items-center mb-3 g-2">
@@ -480,32 +482,22 @@ function _esc(str) {
   }
 })();
 
+let timerSucesso = null;
 function mostrarSucesso(){
-  document.getElementById('overlay-sucesso').classList.add('show');
-  gerarConfetes();
-  setTimeout(fecharSucesso, 5000);
+  const o = document.getElementById('toast-registro-sucesso');
+  if(!o) return;
+  o.classList.remove('hide');
+  o.classList.add('show');
+  clearTimeout(timerSucesso);
+  timerSucesso = setTimeout(fecharSucesso, 4500);
 }
 function fecharSucesso(){
-  const o = document.getElementById('overlay-sucesso');
-  if(!o) return;
-  o.style.animation='fadeOv .2s ease reverse';
-  setTimeout(()=>{ o.classList.remove('show'); o.style.animation=''; },200);
+  const o = document.getElementById('toast-registro-sucesso');
+  if(!o || !o.classList.contains('show')) return;
+  clearTimeout(timerSucesso);
+  o.classList.add('hide');
+  setTimeout(()=>{ o.classList.remove('show','hide'); }, 200);
 }
-function gerarConfetes(){
-  const wrap = document.getElementById('confettiWrap');
-  if(!wrap) return;
-  const cores=['#10b981','#3b82f6','#f59e0b','#ef4444'];
-  for(let i=0;i<16;i++){
-    const d=document.createElement('div');
-    d.className='confetti-dot';
-    d.style.cssText=`left:${Math.random()*100}%;top:${-5-Math.random()*10}px;
-      background:${cores[Math.floor(Math.random()*cores.length)]};
-      width:${4+Math.random()*3}px;height:${4+Math.random()*3}px;
-      animation-delay:${Math.random()*.3}s;animation-duration:${0.8+Math.random()*.4}s;`;
-    wrap.appendChild(d);
-  }
-}
-document.getElementById('overlay-sucesso').addEventListener('click',function(e){ if(e.target===this) fecharSucesso(); });
 
 {% if stats.total > 0 %}
 // ── Inicialização Gráficos (Chart.js) ──

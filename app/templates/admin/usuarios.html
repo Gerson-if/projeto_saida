@@ -271,11 +271,11 @@
 {% block extra_js %}
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // ── Lógica do Limite de 8 registros (Ver Mais) ──
+    // ── Lógica do Limite de 5 registros (Ver Mais) ──
     const tabela = document.getElementById('tabelaUsuarios');
     if (tabela) {
         const rows = tabela.querySelectorAll('tbody tr.user-row');
-        const limite = 8;
+        const limite = 5;
         
         if (rows.length > limite) {
             for (let i = limite; i < rows.length; i++) {
