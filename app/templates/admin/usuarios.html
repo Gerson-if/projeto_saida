@@ -34,19 +34,34 @@
     transition: background-color 0.2s ease;
 }
 
-/* ── Avatares de Alto Impacto ── */
+/* ── Avatares de Alto Impacto Corrigidos e Modernizados ── */
 .avatar-container {
-    width: 38px;
-    height: 38px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--bs-primary);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    color: #ffffff; /* Mantido branco pois o fundo do avatar padrão é escuro/azul */
+    font-size: 0.95rem;
+    line-height: 1;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    flex-shrink: 0; /* Impede que o avatar deforme em telas menores */
+    user-select: none;
+    text-transform: uppercase;
+}
+
+/* Classes de Cores Modernas para as Iniciais (substituindo cores sólidas brutas) */
+.avatar-admin {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 2px solid #334155;
+}
+
+.avatar-user {
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    border: 2px solid #60a5fa;
 }
 
 /* Paginador Ver Mais */
@@ -156,10 +171,10 @@
                             <div class="d-flex align-items-center gap-3">
                                 {% if u.foto %}
                                     <img src="{{ url_for('static', filename='uploads/' + u.foto) }}"
-                                         class="avatar-container" alt="">
+                                         class="avatar-container" style="border: 2px solid var(--bs-primary);" alt="">
                                 {% else %}
-                                    <div class="avatar-container" style="background: {{ '#1e293b' if u.is_admin else '#2563eb' }}; border-color: {{ '#0f172a' if u.is_admin else '#1d4ed8' }};">
-                                        {{ u.nome[0].upper() }}
+                                    <div class="avatar-container {{ 'avatar-admin' if u.is_admin else 'avatar-user' }}">
+                                        <span>{{ u.nome[0].upper() }}</span>
                                     </div>
                                 {% endif %}
                                 <div>
