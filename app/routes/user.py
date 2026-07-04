@@ -470,6 +470,12 @@ def perfil():
                 flash("Senha atual incorreta.", "danger")
             elif len(nova_senha) < 4:
                 flash("A nova senha deve ter pelo menos 4 caracteres.", "danger")
+            elif len(nova_senha.encode("utf-8")) > 72:
+                # bcrypt não aceita senhas com mais de 72 bytes — sem esta
+                # checagem, set_senha() lançava uma exceção não tratada
+                # (ValueError) e a requisição terminava em erro 500 genérico
+                # em vez de uma mensagem clara para o usuário.
+                flash("A nova senha deve ter no máximo 72 caracteres.", "danger")
             elif nova_senha != confirmar:
                 flash("As senhas não coincidem.", "danger")
             else:
