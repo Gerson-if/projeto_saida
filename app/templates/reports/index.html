@@ -3,11 +3,21 @@
 
 {% block extra_css %}
 <style>
+:root{
+    --rp-accent: var(--cor-secundaria, #3b82f6);
+    --rp-surface: #ffffff;
+    --rp-border: #e2e8f0;
+}
+html[data-theme="dark"], html[data-theme="olive"]{
+    --rp-surface: var(--tema-superficie);
+    --rp-border: var(--tema-borda);
+}
+
 /* ── Estilização dos Cards de Relatório ── */
 .report-card {
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--rp-border);
     border-radius: 16px;
-    background: #ffffff;
+    background: var(--rp-surface);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -15,10 +25,10 @@
 .report-card:hover {
     transform: translateY(-4px);
     box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
-    border-color: #cbd5e1;
+    border-color: color-mix(in srgb, var(--rp-accent) 45%, var(--rp-border));
 }
 
-/* Ícones Circulares */
+/* Ícones Circulares — fundo translúcido, acompanha qualquer tema */
 .report-icon-wrapper {
     display: flex;
     align-items: center;
@@ -28,6 +38,14 @@
     border-radius: 50%;
     margin-bottom: 1.5rem;
     transition: transform 0.3s ease;
+}
+.report-icon-wrapper.icon-accent {
+    background: color-mix(in srgb, var(--rp-accent) 16%, transparent);
+    color: var(--rp-accent);
+}
+.report-icon-wrapper.icon-success {
+    background: color-mix(in srgb, #16a34a 16%, transparent);
+    color: #16a34a;
 }
 
 .report-card:hover .report-icon-wrapper {
@@ -57,21 +75,24 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header mb-4">
-    <h4 class="mb-0 fw-bold text-dark">
-        <i class="bi bi-file-earmark-bar-graph me-2" style="color:var(--cor-secundaria, #3b82f6);"></i>Central de Relatórios
-    </h4>
-    <small class="text-muted">Filtre, analise e extraia os registros do sistema nos formatos PDF e CSV</small>
+<div class="page-header d-flex align-items-center gap-3 mb-4">
+    <div class="report-icon-wrapper icon-accent" style="width:48px;height:48px;margin-bottom:0;">
+        <i class="bi bi-file-earmark-bar-graph" style="font-size:1.3rem;"></i>
+    </div>
+    <div>
+        <h4 class="mb-0 fw-bold">Central de Relatórios</h4>
+        <small class="text-muted">Filtre, analise e extraia os registros do sistema nos formatos PDF e CSV</small>
+    </div>
 </div>
 
 <div class="row g-4">
     <div class="col-md-6">
         <div class="card report-card h-100">
             <div class="card-body d-flex flex-column align-items-center text-center p-5">
-                <div class="report-icon-wrapper" style="background: #e0f2fe;">
-                    <i class="bi bi-calendar-range" style="color: #0284c7; font-size: 1.75rem;"></i>
+                <div class="report-icon-wrapper icon-accent">
+                    <i class="bi bi-calendar-range" style="font-size: 1.75rem;"></i>
                 </div>
-                <h5 class="fw-bold text-dark mb-2">Relatório por Período</h5>
+                <h5 class="fw-bold mb-2">Relatório por Período</h5>
                 <p class="text-muted px-2 mb-4" style="font-size: 0.875rem; line-height: 1.5;">
                     Realize buscas customizadas combinando intervalos flexíveis de datas, subunidades específicas, usuários e múltiplos status.
                 </p>
@@ -86,10 +107,10 @@
     <div class="col-md-6">
         <div class="card report-card h-100">
             <div class="card-body d-flex flex-column align-items-center text-center p-5">
-                <div class="report-icon-wrapper" style="background: #dcfce7;">
-                    <i class="bi bi-calendar-date" style="color: #16a34a; font-size: 1.75rem;"></i>
+                <div class="report-icon-wrapper icon-success">
+                    <i class="bi bi-calendar-date" style="font-size: 1.75rem;"></i>
                 </div>
-                <h5 class="fw-bold text-dark mb-2">Relatório por Data Exata</h5>
+                <h5 class="fw-bold mb-2">Relatório por Data Exata</h5>
                 <p class="text-muted px-2 mb-4" style="font-size: 0.875rem; line-height: 1.5;">
                     Consulte de forma rápida e pontual movimentações mapeadas em um dia específico do calendário, ideal para auditorias diárias.
                 </p>

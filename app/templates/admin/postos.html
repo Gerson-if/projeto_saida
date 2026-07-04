@@ -3,28 +3,44 @@
 
 {% block extra_css %}
 <style>
+:root{
+    --rp-accent: var(--cor-secundaria, #3b82f6);
+    --rp-surface: #ffffff;
+    --rp-surface-alt: #f8fafc;
+    --rp-border: #cbd5e1;
+    --rp-text: #1e293b;
+    --rp-text-muted: #64748b;
+}
+html[data-theme="dark"], html[data-theme="olive"]{
+    --rp-surface: var(--tema-superficie);
+    --rp-surface-alt: var(--tema-bg);
+    --rp-border: var(--tema-borda);
+    --rp-text: var(--tema-texto);
+    --rp-text-muted: var(--tema-texto-fraco);
+}
+
 /* ── Estilos Gerais do Card e Tabela com Maior Contraste ── */
 .card {
-    border: 1px solid #cbd5e1; /* Bordas mais visíveis */
+    border: 1px solid var(--rp-border);
     border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Sombra ligeiramente mais marcada */
-    background: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    background: var(--rp-surface);
 }
 .table > :not(caption) > * > * {
     padding: 0.85rem 1.1rem;
     vertical-align: middle;
 }
 .table thead th {
-    background-color: #f1f5f9; /* Fundo do cabeçalho mais escuro */
-    color: #1e293b; /* Texto do cabeçalho quase preto */
+    background-color: var(--rp-surface-alt);
+    color: var(--rp-text);
     font-weight: 700;
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 2px solid #cbd5e1;
+    border-bottom: 2px solid var(--rp-border);
 }
 .table tbody tr {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--rp-border);
 }
 
 /* ── Elementos Reordenáveis (Drag and Drop) ── */
@@ -33,24 +49,24 @@
     transition: background-color 0.2s ease;
 }
 .draggable-row:hover {
-    background-color: #f8fafc !important; /* Destaque sutil ao passar o mouse */
+    background-color: var(--rp-surface-alt) !important;
 }
 .draggable-row:active {
     cursor: grabbing;
 }
 .draggable-row.dragging {
     opacity: 0.7;
-    background-color: #e2f5e9 !important; /* Tom de verde mais vivo no arrasto */
+    background-color: rgba(34, 197, 94, 0.18) !important; /* verde translúcido — funciona em qualquer tema */
     border: 2px dashed #15803d;
 }
 .drag-handle {
-    color: #64748b; /* Grip mais escuro para melhor visualização */
+    color: var(--rp-text-muted);
     cursor: grab;
     padding-right: 8px;
     font-size: 1.25rem;
 }
 .drag-handle:hover {
-    color: #1e293b;
+    color: var(--rp-text);
 }
 
 /* Paginador Ver Mais */
@@ -64,18 +80,19 @@
     padding: 0.65rem 1.75rem;
     font-weight: 700;
     font-size: 0.875rem;
-    color: #1d4ed8; /* Azul mais forte e contrastante */
-    background: #dbeafe; /* Fundo azul mais visível */
-    border: 1px dashed #2563eb;
+    color: var(--rp-accent);
+    background: color-mix(in srgb, var(--rp-accent) 12%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--rp-accent) 45%, transparent);
     border-radius: 30px;
     transition: all 0.25s ease;
     cursor: pointer;
 }
 .btn-ver-mais:hover {
-    background: #1d4ed8;
+    background: var(--rp-accent);
     color: #fff;
     border-style: solid;
-    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
+    border-color: var(--rp-accent);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--rp-accent) 30%, transparent);
     transform: translateY(-1px);
 }
 </style>
@@ -98,10 +115,13 @@
 {% if config_sistema.get('postos_habilitados') != '1' %}
 <div class="alert alert-warning d-flex align-items-center gap-3 mb-4 border border-warning shadow-sm" style="border-radius: 10px; background-color: #fffbeb;">
     <i class="bi bi-exclamation-triangle-fill fs-4 text-warning"></i>
-    <div class="text-dark fw-medium small">
-        O recurso de Posto/Graduação está <strong class="text-danger">desativado</strong> no momento — o campo não aparece
+    <!-- Este alerta mantém a cor de aviso fixa em qualquer tema (padrão comum
+         para alertas), então o texto também precisa ficar fixo em vez de usar
+         .text-dark — que o tema escuro clareia e ficaria ilegível aqui. -->
+    <div class="fw-medium small" style="color:#78350f;">
+        O recurso de Posto/Graduação está <strong style="color:#b91c1c;">desativado</strong> no momento — o campo não aparece
         no cadastro de usuários. Você pode organizar os níveis abaixo normalmente e
-        ativá-lo em <a href="{{ url_for('admin.configuracoes') }}" class="alert-link text-decoration-underline">Configurações → Hierarquia</a>.
+        ativá-lo em <a href="{{ url_for('admin.configuracoes') }}" class="alert-link text-decoration-underline" style="color:#78350f;">Configurações → Hierarquia</a>.
     </div>
 </div>
 {% endif %}
