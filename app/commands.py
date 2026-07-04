@@ -15,7 +15,10 @@ import click
 from flask.cli import with_appcontext
 
 from app import db
-from app.models import ConfigSistema, MotivoCancelamento, Registro, StatusSaida, Subunidade, TipoUsuario, Usuario
+from app.models import (
+    ConfigSistema, MotivoCancelamento, PostoGraduacao, Registro,
+    StatusSaida, Subunidade, TipoUsuario, Usuario,
+)
 
 
 def register_commands(app) -> None:
@@ -39,6 +42,7 @@ def register_commands(app) -> None:
             ("dica_2", "Mantenha contato com a unidade durante a viagem.", "Dica de viagem segura 2"),
             ("dica_3", "Respeite os horários de retorno estabelecidos.", "Dica de viagem segura 3"),
             ("dica_4", "Em caso de imprevisto, comunique imediatamente a unidade.", "Dica de viagem segura 4"),
+            ("postos_habilitados", "0", "Exibe o campo Posto/Graduação no cadastro de usuários (0=desligado, 1=ligado)"),
         ]
         for chave, valor, desc in defaults:
             if not ConfigSistema.query.filter_by(chave=chave).first():
@@ -176,6 +180,28 @@ def register_commands(app) -> None:
         subs = Subunidade.query.all()
         for i, u in enumerate(Usuario.query.filter_by(tipo=TipoUsuario.USUARIO).all()):
             u.subunidade_id = subs[i % len(subs)].id if subs else None
+
+        # Postos/Graduações padrão (nível maior = mais alto na hierarquia)
+        postos_padrao = [
+            ("Soldado", "SD", 1),
+            ("Cabo", "CB", 2),
+            ("3º Sargento", "3ºSGT", 3),
+            ("2º Sargento", "2ºSGT", 4),
+            ("1º Sargento", "1ºSGT", 5),
+            ("Subtenente", "ST", 6),
+            ("2º Tenente", "2ºTEN", 7),
+            ("1º Tenente", "1ºTEN", 8),
+            ("Capitão", "CAP", 9),
+        ]
+        for nome, sigla, nivel in postos_padrao:
+            if not PostoGraduacao.query.filter_by(nome=nome).first():
+                db.session.add(PostoGraduacao(nome=nome, sigla=sigla, nivel=nivel))
+        db.session.flush()
+
+        # Vincular usuários de teste aos postos/graduações
+        postos = PostoGraduacao.query.order_by(PostoGraduacao.nivel).all()
+        for i, u in enumerate(Usuario.query.filter_by(tipo=TipoUsuario.USUARIO).all()):
+            u.posto_graduacao_id = postos[i % len(postos)].id if postos else None
 
         db.session.commit()
         click.echo("✅ Dados de exemplo inseridos com sucesso!")

@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block title %}Solicitações de Alteração{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+        <h4 class="mb-0 fw-bold">
+            <i class="bi bi-bell me-2" style="color:var(--cor-secundaria);"></i>
+            Solicitações de Alteração de Posto/Graduação
+        </h4>
+        <small class="text-muted">Pedidos enviados pelos próprios militares — aprove ou rejeite abaixo</small>
+    </div>
+    <div class="btn-group btn-group-sm" role="group">
+        <a href="{{ url_for('admin.listar_solicitacoes', status='pendente') }}"
+           class="btn btn-outline-warning {{ 'active' if status_filtro == 'pendente' else '' }}">Pendentes</a>
+        <a href="{{ url_for('admin.listar_solicitacoes', status='aprovada') }}"
+           class="btn btn-outline-success {{ 'active' if status_filtro == 'aprovada' else '' }}">Aprovadas</a>
+        <a href="{{ url_for('admin.listar_solicitacoes', status='rejeitada') }}"
+           class="btn btn-outline-danger {{ 'active' if status_filtro == 'rejeitada' else '' }}">Rejeitadas</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">Militar</th>
+                        <th>Posto/Graduação atual</th>
+                        <th>Posto/Graduação solicitado</th>
+                        <th>Justificativa</th>
+                        <th>Enviado em</th>
+                        <th>Status</th>
+                        <th class="text-end pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in solicitacoes %}
+                    <tr>
+                        <td class="ps-3">
+                            <div class="fw-semibold" style="font-size:0.875rem;">{{ s.usuario.nome if s.usuario else '—' }}</div>
+                            <div class="text-muted" style="font-size:0.78rem;">{{ s.usuario.cpf if s.usuario else '' }}</div>
+                        </td>
+                        <td>
+                            {% if s.posto_atual %}
+                                <span class="badge bg-secondary">{{ s.posto_atual.sigla or s.posto_atual.nome }}</span>
+                            {% else %}
+                                <span class="text-muted">— nenhum —</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-primary">{{ s.posto_solicitado.sigla or s.posto_solicitado.nome if s.posto_solicitado else '—' }}</span>
+                        </td>
+                        <td style="max-width:220px;font-size:0.82rem;" class="text-muted">
+                            {{ s.justificativa or '—' }}
+                        </td>
+                        <td style="font-size:0.82rem;">{{ s.data_solicitacao.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>
+                            <span class="badge bg-{{ s.status_badge }}">{{ s.status_label }}</span>
+                            {% if s.status != 'pendente' and s.respondido_por %}
+                            <div class="text-muted" style="font-size:0.72rem;">
+                                por {{ s.respondido_por.nome }} em {{ s.data_resposta.strftime('%d/%m/%Y') if s.data_resposta else '' }}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-3">
+                            {% if s.status == 'pendente' %}
+                            <button type="button" class="btn btn-sm btn-outline-success me-1" title="Aprovar"
+                                    onclick="abrirModalResposta('{{ url_for('admin.responder_solicitacao', id=s.id) }}', 'aprovar', '{{ s.usuario.nome|e if s.usuario else '' }}')">
+                                <i class="bi bi-check-lg"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" title="Rejeitar"
+                                    onclick="abrirModalResposta('{{ url_for('admin.responder_solicitacao', id=s.id) }}', 'rejeitar', '{{ s.usuario.nome|e if s.usuario else '' }}')">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                            {% else %}
+                            <span class="text-muted small">
+                                {{ s.resposta_obs or '—' }}
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                            Nenhuma solicitação {{ 'pendente' if status_filtro == 'pendente' else ('aprovada' if status_filtro == 'aprovada' else 'rejeitada') }} no momento.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de resposta (aprovar/rejeitar) -->
+<div class="modal fade" id="modalResposta" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="formResposta">
+                <input type="hidden" name="decisao" id="respostaDecisao" value="">
+                <div class="modal-header">
+                    <h6 class="modal-title" id="respostaTitulo">Responder solicitação</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3" id="respostaDescricao"></p>
+                    <label class="form-label fw-semibold small">Observação (opcional)</label>
+                    <textarea name="observacao" class="form-control" rows="3" maxlength="255"
+                              placeholder="Visível apenas nos registros internos."></textarea>
+                </div>
+                <div class="modal-footer gap-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="respostaBotao">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function abrirModalResposta(url, decisao, nome) {
+    document.getElementById('formResposta').action = url;
+    document.getElementById('respostaDecisao').value = decisao;
+    const aprovar = decisao === 'aprovar';
+    document.getElementById('respostaTitulo').textContent = aprovar ? 'Aprovar solicitação' : 'Rejeitar solicitação';
+    document.getElementById('respostaDescricao').textContent =
+        (aprovar
+            ? `Confirmar aprovação da alteração de posto/graduação de "${nome}"? O cadastro será atualizado imediatamente.`
+            : `Confirmar rejeição da solicitação de "${nome}"? O posto/graduação atual será mantido.`);
+    const botao = document.getElementById('respostaBotao');
+    botao.className = 'btn ' + (aprovar ? 'btn-success' : 'btn-danger');
+    botao.textContent = aprovar ? 'Aprovar' : 'Rejeitar';
+    new bootstrap.Modal(document.getElementById('modalResposta')).show();
+}
+</script>
+{% endblock %}

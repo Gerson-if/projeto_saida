@@ -3,27 +3,57 @@
 
 {% block extra_css %}
 <style>
-@media print {
-    #sidebar, .topbar, .page-header a, form, .btn, .toast-container { display: none !important; }
-    #main-content { margin-left: 0 !important; }
-    .card { box-shadow: none !important; border: 1px solid #dee2e6 !important; break-inside: avoid; }
-    .table { font-size: 0.8rem; }
-    body { background: #fff; }
-    @page { margin: 1.5cm; }
+/* ── Ajustes Gerais e Responsividade ── */
+.card {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+.card-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 1rem 1.25rem;
+}
+.table > :not(caption) > * > * {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+}
+.table thead th {
+    background-color: #f8fafc;
+    color: #475569;
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #e2e8f0;
 }
 
-/* ── Status Selector moderno ── */
+/* Efeito de transição suave para as linhas ocultas */
+.table tbody tr {
+    transition: all 0.3s ease-in-out;
+}
+.tr-hidden {
+    display: none !important;
+    opacity: 0;
+    transform: translateY(-10px);
+}
+.tr-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ── Status Selector Modernizado ── */
 .status-selector-wrap {
     background: #f8fafc;
     border: 1.5px solid #e2e8f0;
     border-radius: 14px;
-    padding: 1rem 1.1rem 0.9rem;
+    padding: 1.25rem;
 }
 .status-selector-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.7rem;
+    margin-bottom: 0.85rem;
 }
 .status-selector-label {
     font-size: 0.78rem;
@@ -35,99 +65,182 @@
 .status-resumo-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
-    padding: 0.18rem 0.65rem;
-    border-radius: 20px;
-    font-size: 0.72rem;
+    gap: 0.35rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 50px;
+    font-size: 0.75rem;
     font-weight: 600;
     background: #e2e8f0;
     color: #475569;
-    transition: all .2s;
+    transition: all .2s ease;
 }
-.status-resumo-pill.tem-filtro { background: #dbeafe; color: #1e40af; }
-.status-chips-row { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.status-resumo-pill.tem-filtro {
+    background: #dbeafe;
+    color: #1e40af;
+}
+.status-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
 
+/* Chip Base */
 .schip {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.35rem 0.85rem;
+    gap: 0.5rem;
+    padding: 0.45rem 1rem;
     border-radius: 50px;
-    border: 2px solid #cbd5e1;
+    border: 2px solid #e2e8f0;
     background: #fff;
-    font-size: 0.8rem;
+    font-size: 0.825rem;
     font-weight: 600;
+    color: #475569;
     cursor: pointer;
     user-select: none;
     transition: all .18s cubic-bezier(0.4,0,0.2,1);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
 }
-.schip:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+.schip:hover { 
+    transform: translateY(-1px); 
+    border-color: #cbd5e1;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+}
 .schip input[type=checkbox] { display: none; }
-.schip .schip-dot { width:8px; height:8px; border-radius:50%; background:#cbd5e1; transition:all .18s; flex-shrink:0; }
-.schip .schip-check { display:none; font-size:0.7rem; }
-.schip.active .schip-check { display:inline; }
+.schip .schip-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    transition: all .18s;
+    flex-shrink: 0;
+}
+.schip .schip-check {
+    display: none;
+    font-size: 0.75rem;
+}
 
-.schip-todos { border-color:#94a3b8; color:#475569; }
-.schip-todos .schip-dot { background:#94a3b8; }
-.schip-todos.active { border-color:#334155; background:#334155; color:#fff; box-shadow:0 4px 12px rgba(51,65,85,.3); }
-.schip-todos.active .schip-dot { background:#fff; }
+/* Chip "Todos" */
+.schip-todos { border-color: #cbd5e1; }
+.schip-todos.active {
+    border-color: #334155;
+    background: #334155;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(51,65,85,0.25);
+}
+.schip-todos.active .schip-dot { background: #fff; }
 
-.schip-agendada { border-color:#fbbf24; color:#92400e; }
-.schip-agendada .schip-dot { background:#fbbf24; }
-.schip-agendada.active { background:#f59e0b; border-color:#d97706; color:#fff; box-shadow:0 4px 12px rgba(245,158,11,.35); }
+/* Configurações de Cores dos Chips Dinâmicos */
+.schip-agendada { border-color: #fef3c7; color: #b45309; }
+.schip-agendada .schip-dot { background: #fbbf24; }
+.schip-agendada.active { background: #d97706; border-color: #b45309; color: #fff; box-shadow: 0 4px 12px rgba(217,119,6,0.25); }
 
-.schip-em_transito { border-color:#60a5fa; color:#1e40af; }
-.schip-em_transito .schip-dot { background:#60a5fa; }
-.schip-em_transito.active { background:#3b82f6; border-color:#2563eb; color:#fff; box-shadow:0 4px 12px rgba(59,130,246,.35); }
+.schip-em_transito { border-color: #dbeafe; color: #1d4ed8; }
+.schip-em_transito .schip-dot { background: #60a5fa; }
+.schip-em_transito.active { background: #2563eb; border-color: #1d4ed8; color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,0.25); }
 
-.schip-retornado { border-color:#4ade80; color:#14532d; }
-.schip-retornado .schip-dot { background:#4ade80; }
-.schip-retornado.active { background:#22c55e; border-color:#16a34a; color:#fff; box-shadow:0 4px 12px rgba(34,197,94,.35); }
+.schip-retornado { border-color: #dcfce7; color: #15803d; }
+.schip-retornado .schip-dot { background: #4ade80; }
+.schip-retornado.active { background: #16a34a; border-color: #15803d; color: #fff; box-shadow: 0 4px 12px rgba(22,163,74,0.25); }
 
-.schip-cancelado { border-color:#94a3b8; color:#475569; }
-.schip-cancelado .schip-dot { background:#94a3b8; }
-.schip-cancelado.active { background:#64748b; border-color:#475569; color:#fff; box-shadow:0 4px 12px rgba(100,116,139,.35); }
+.schip-cancelado { border-color: #fee2e2; color: #b91c1c; }
+.schip-cancelado .schip-dot { background: #f87171; }
+.schip-cancelado.active { background: #dc2626; border-color: #b91c1c; color: #fff; box-shadow: 0 4px 12px rgba(220,38,38,0.25); }
 
-.schip-finalizado { border-color:#6b7280; color:#1f2937; }
-.schip-finalizado .schip-dot { background:#6b7280; }
-.schip-finalizado.active { background:#374151; border-color:#1f2937; color:#fff; box-shadow:0 4px 12px rgba(55,65,81,.35); }
+.schip-finalizado { border-color: #f1f5f9; color: #475569; }
+.schip-finalizado .schip-dot { background: #94a3b8; }
+.schip-finalizado.active { background: #475569; border-color: #334155; color: #fff; box-shadow: 0 4px 12px rgba(71,85,105,0.25); }
 
-.schip.active .schip-dot { background: rgba(255,255,255,0.7); }
-.schip-todos.active .schip-dot { background:#fff; }
+.schip.active .schip-check { display: inline-block; }
+.schip.active .schip-dot { background: rgba(255,255,255,0.8) !important; }
 
-.status-progress-bar { height:3px; border-radius:2px; background:#e2e8f0; margin-top:0.75rem; overflow:hidden; }
-.status-progress-fill { height:100%; background:linear-gradient(90deg,#3b82f6,#22c55e); border-radius:2px; transition:width .3s ease; }
+/* Barra de Progresso */
+.status-progress-bar {
+    height: 4px;
+    border-radius: 4px;
+    background: #e2e8f0;
+    margin-top: 1rem;
+    overflow: hidden;
+}
+.status-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #10b981);
+    border-radius: 4px;
+    transition: width .3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Botão Ver Mais Animado */
+.btn-ver-mais {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #2563eb;
+    background: #eff6ff;
+    border: 1px dashed #bfdbfe;
+    border-radius: 30px;
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+.btn-ver-mais:hover {
+    background: #2563eb;
+    color: #fff;
+    border-style: solid;
+    border-color: #2563eb;
+    box-shadow: 0 4px 12px rgba(37,99,235,0.2);
+    transform: translateY(-1px);
+}
+.btn-ver-mais i {
+    transition: transform 0.3s ease;
+}
+.btn-ver-mais:hover i {
+    transform: translateY(2px);
+}
+
+/* Print Overrides */
+@media print {
+    #sidebar, .topbar, .page-header a, form, .btn, .toast-container, .badge, .container-ver-mais { display: none !important; }
+    .tr-hidden { display: table-row !important; opacity: 1 !important; transform: none !important; }
+    #main-content { margin-left: 0 !important; padding: 0 !important; }
+    .card { box-shadow: none !important; border: 1px solid #cbd5e1 !important; break-inside: avoid; }
+    .table { font-size: 0.75rem; }
+    .table th { background-color: #f1f5f9 !important; color: #000 !important; }
+    body { background: #fff; color: #000; }
+    @page { margin: 1cm; }
+}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-header d-flex align-items-center gap-3 mb-4">
-    <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-light">
+    <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-light border" style="border-radius: 8px;">
         <i class="bi bi-arrow-left"></i>
     </a>
     <div>
-        <h4 class="mb-0 fw-bold">
-            <i class="bi bi-calendar-date me-2" style="color:var(--cor-secundaria);"></i>Relatório por Data Exata
+        <h4 class="mb-0 fw-bold text-dark">
+            <i class="bi bi-calendar-date me-2" style="color:var(--cor-secundaria, #3b82f6);"></i>Relatório por Data Exata
         </h4>
         <small class="text-muted">Busque registros de uma data específica</small>
     </div>
 </div>
 
 <div class="card mb-4">
-    <div class="card-header">
-        <h6 class="mb-0 fw-semibold"><i class="bi bi-funnel me-2"></i>Filtros</h6>
+    <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-funnel text-muted"></i>
+        <h6 class="mb-0 fw-bold text-secondary">Parâmetros de Busca</h6>
     </div>
-    <div class="card-body">
+    <div class="card-body p-4">
         <form method="POST" id="formRelatorio">
             <div class="row g-3">
                 <div class="col-md-3">
-                    <label class="form-label">Data <span class="text-danger">*</span></label>
+                    <label class="form-label fw-semibold text-secondary small">Data <span class="text-danger">*</span></label>
                     <input type="date" name="data_exata" class="form-control"
                            value="{{ filtros.get('data_exata', '') }}" required>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Subunidade</label>
+                    <label class="form-label fw-semibold text-secondary small">Subunidade</label>
                     <select name="subunidade_id" class="form-select">
                         <option value="">Todas as subunidades</option>
                         {% for sub in subunidades %}
@@ -138,7 +251,7 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Usuário (opcional)</label>
+                    <label class="form-label fw-semibold text-secondary small">Usuário (opcional)</label>
                     <select name="usuario_id" class="form-select">
                         <option value="">Todos os usuários</option>
                         {% for u in usuarios %}
@@ -149,11 +262,24 @@
                     </select>
                 </div>
 
-                <!-- Seletor de Categorias de Status — redesenhado -->
-                <div class="col-12">
+                {% if postos_habilitados and postos %}
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold text-secondary small">Nível de Hierarquia</label>
+                    <select name="posto_graduacao_id" class="form-select">
+                        <option value="">Todos os níveis</option>
+                        {% for posto in postos %}
+                        <option value="{{ posto.id }}" {{ 'selected' if filtros.get('posto_graduacao_id') == posto.id|string }}>
+                            {{ posto.sigla or posto.nome }} — {{ posto.nome }} (nível {{ posto.nivel }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <div class="col-12 mt-4">
                     <div class="status-selector-wrap">
                         <div class="status-selector-header">
-                            <span class="status-selector-label"><i class="bi bi-tags me-1"></i>Categorias de Status</span>
+                            <span class="status-selector-label"><i class="bi bi-tags me-1"></i>Filtrar por Status</span>
                             <span class="status-resumo-pill" id="statusResumoPill">
                                 <i class="bi bi-check2-all"></i>
                                 <span id="statusResumoTexto">Todos incluídos</span>
@@ -161,7 +287,7 @@
                         </div>
 
                         <div class="status-chips-row" id="statusGrid">
-                            <label class="schip schip-todos" id="chipTodos" title="Selecionar todos">
+                            <label class="schip schip-todos" id="chipTodos" title="Selecionar todos os status">
                                 <span class="schip-dot"></span>
                                 <i class="bi bi-check2-all schip-check"></i>
                                 Todos
@@ -170,7 +296,7 @@
                             {% set status_selecionados = filtros.get('status_list', []) %}
                             {% for valor, label in status_opcoes %}
                             {% set icons = {'agendada':'bi-clock','em_transito':'bi-truck','retornado':'bi-house-check','cancelado':'bi-x-circle','finalizado':'bi-check-circle'} %}
-                            <label class="schip schip-{{ valor }}" data-valor="{{ valor }}">
+                            <label class="schip schip-{{ valor }}" data-valor="{{ valor }}" title="{{ label }}">
                                 <span class="schip-dot"></span>
                                 <i class="bi {{ icons.get(valor, 'bi-circle') }} schip-check"></i>
                                 <input type="checkbox" name="status[]" value="{{ valor }}"
@@ -190,16 +316,16 @@
                 </div>
             </div>
 
-            <div class="d-flex flex-wrap gap-2 mt-3">
+            <div class="d-flex flex-wrap gap-2 mt-4 pt-2 border-top">
                 <input type="hidden" name="formato" id="formatoInput" value="visualizar">
-                <button type="submit" class="btn btn-primary" onclick="setFormato('visualizar')">
-                    <i class="bi bi-search me-1"></i>Visualizar
+                <button type="submit" class="btn btn-primary px-4" onclick="setFormato('visualizar')">
+                    <i class="bi bi-search me-2"></i>Visualizar
                 </button>
-                <button type="submit" class="btn btn-danger" onclick="setFormato('pdf')">
-                    <i class="bi bi-file-earmark-pdf me-1"></i>Baixar PDF
+                <button type="submit" class="btn btn-outline-danger" onclick="setFormato('pdf')">
+                    <i class="bi bi-file-earmark-pdf me-2"></i>Exportar PDF
                 </button>
-                <button type="submit" class="btn btn-success" onclick="setFormato('csv')">
-                    <i class="bi bi-file-earmark-spreadsheet me-1"></i>Baixar CSV
+                <button type="submit" class="btn btn-outline-success" onclick="setFormato('csv')">
+                    <i class="bi bi-file-earmark-spreadsheet me-2"></i>Exportar CSV
                 </button>
             </div>
         </form>
@@ -207,66 +333,96 @@
 </div>
 
 {% if saidas is defined and request.method == 'POST' %}
-<div class="card">
-    <div class="card-header d-flex align-items-center justify-content-between">
-        <span class="fw-semibold" style="font-size:0.875rem;">
-            <i class="bi bi-table me-2"></i>Resultados
+<div class="card mb-5">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2 py-3">
+        <span class="fw-bold text-secondary" style="font-size:0.9rem;">
+            <i class="bi bi-list-check me-2 text-primary"></i>Registros Encontrados
         </span>
-        <span class="badge bg-primary">{{ saidas|length }} registros</span>
+        <span class="badge bg-primary px-3 py-2 rounded-pill fw-semibold">{{ saidas|length }} itens</span>
     </div>
     <div class="card-body p-0">
         {% if saidas %}
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover align-middle mb-0" id="tabelaResultados">
                 <thead>
                     <tr>
-                        <th class="ps-3">#</th>
-                        <th>Usuário</th>
+                        <th class="ps-4 text-center" style="width: 60px;">#</th>
+                        <th>Usuário / CPF</th>
+                        {% if postos_habilitados %}
+                        <th>Posto/Grad.</th>
+                        {% endif %}
                         <th>Subunidade</th>
-                        <th>Local</th>
+                        <th>Local Destino</th>
                         <th>Motivo</th>
-                        <th>Saída</th>
-                        <th>Retorno</th>
-                        <th>Telefone</th>
-                        <th>Status</th>
+                        <th>Data Saída</th>
+                        <th>Data Retorno</th>
+                        <th>Contato</th>
+                        <th class="pe-4 text-end">Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for saida in saidas %}
                     <tr>
-                        <td class="ps-3 text-muted">{{ loop.index }}</td>
+                        <td class="ps-4 text-center text-muted small fw-medium">{{ loop.index }}</td>
                         <td>
-                            <div class="fw-medium" style="font-size:0.875rem;">
+                            <div class="fw-bold text-dark" style="font-size:0.875rem;">
                                 {{ saida.usuario.nome if saida.usuario else '-' }}
                             </div>
-                            <div class="text-muted" style="font-size:0.72rem;">{{ saida.cpf_usuario }}</div>
+                            <div class="text-muted" style="font-size:0.75rem; letter-spacing: 0.3px;">{{ saida.cpf_usuario }}</div>
                         </td>
-                        <td style="font-size:0.82rem;">
+                        {% if postos_habilitados %}
+                        <td>
+                            {% if saida.usuario and saida.usuario.posto_graduacao %}
+                                <span class="badge bg-light text-dark border px-2 py-1.5" style="font-size: 0.75rem;"
+                                      title="Nível de hierarquia: {{ saida.usuario.posto_graduacao.nivel }}">
+                                    <i class="bi bi-award text-muted me-1"></i>
+                                    {{ saida.usuario.posto_graduacao.sigla or saida.usuario.posto_graduacao.nome }}
+                                </span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </td>
+                        {% endif %}
+                        <td>
                             {% if saida.usuario and saida.usuario.subunidade %}
-                                <span class="badge bg-secondary">{{ saida.usuario.subunidade.sigla or saida.usuario.subunidade.nome }}</span>
-                            {% else %}—{% endif %}
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1.5" style="font-size: 0.75rem;">
+                                    {{ saida.usuario.subunidade.sigla or saida.usuario.subunidade.nome }}
+                                </span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
                         </td>
-                        <td style="font-size:0.875rem;">{{ saida.local }}</td>
-                        <td style="font-size:0.8rem;max-width:180px;" class="text-truncate">{{ saida.motivo }}</td>
-                        <td style="font-size:0.875rem;">
+                        <td style="font-size:0.875rem;" class="fw-medium text-dark">{{ saida.local }}</td>
+                        <td style="font-size:0.825rem; max-width:200px;" class="text-truncate text-muted" title="{{ saida.motivo }}">
+                            {{ saida.motivo }}
+                        </td>
+                        <td style="font-size:0.875rem;" class="text-dark">
                             {{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '-' }}
                         </td>
-                        <td style="font-size:0.875rem;">
+                        <td style="font-size:0.875rem;" class="text-dark">
                             {{ saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else '—' }}
                         </td>
-                        <td style="font-size:0.82rem;">{{ saida.telefone_contato or '—' }}</td>
-                        <td>
-                            <span class="badge bg-{{ saida.status_badge }}">{{ saida.status_label }}</span>
+                        <td style="font-size:0.825rem;" class="text-muted">{{ saida.telefone_contato or '—' }}</td>
+                        <td class="pe-4 text-end">
+                            <span class="badge bg-{{ saida.status_badge }} px-2.5 py-1.5 rounded-pill fw-semibold" style="font-size: 0.75rem;">
+                                {{ saida.status_label }}
+                            </span>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+
+        {# Container do Botão Ver Mais #}
+        <div class="text-center py-4 container-ver-mais d-none" id="containerVerMais">
+            <button type="button" class="btn-ver-mais" id="btnVerMais">
+                <span>Ver mais registros</span>
+                <i class="bi bi-chevron-down"></i>
+            </button>
+        </div>
+
         {% else %}
-        <div class="text-center py-5 text-muted">
-            <i class="bi bi-calendar-x display-5 d-block mb-2"></i>
-            Nenhum registro encontrado.
+        <div class="text-center py-5 my-3 text-muted">
+            <i class="bi bi-calendar-x h1 d-block mb-3 text-black-50"></i>
+            <h5 class="fw-semibold text-dark mb-1">Nenhum resultado encontrado</h5>
+            <p class="small mb-0">Tente ajustar a data exata ou mudar os filtros selecionados.</p>
         </div>
         {% endif %}
     </div>
@@ -276,8 +432,42 @@
 
 {% block extra_js %}
 <script>
-function setFormato(fmt) { document.getElementById('formatoInput').value = fmt; }
+function setFormato(fmt) {
+    document.getElementById('formatoInput').value = fmt;
+}
 
+// ── Lógica de Limitação de Linhas (Ver Mais) ──
+document.addEventListener("DOMContentLoaded", function() {
+    const formatoInput = document.getElementById('formatoInput');
+    const tabela = document.getElementById('tabelaResultados');
+    
+    if (tabela && formatoInput && formatoInput.value === 'visualizar') {
+        const rows = tabela.querySelectorAll('tbody tr');
+        const limite = 8;
+        
+        if (rows.length > limite) {
+            for (let i = limite; i < rows.length; i++) {
+                rows[i].classList.add('tr-hidden');
+            }
+            
+            const containerBtn = document.getElementById('containerVerMais');
+            const btnVerMais = document.getElementById('btnVerMais');
+            containerBtn.classList.remove('d-none');
+            
+            btnVerMais.addEventListener('click', function() {
+                for (let i = limite; i < rows.length; i++) {
+                    rows[i].classList.remove('tr-hidden');
+                    setTimeout(() => {
+                        rows[i].classList.add('tr-visible');
+                    }, (i - limite) * 30); 
+                }
+                containerBtn.style.display = 'none';
+            });
+        }
+    }
+});
+
+// ── Lógica Original dos Status Multi-chips ──
 (function() {
     const chips = document.querySelectorAll('.schip[data-valor]');
     const chipTodos = document.getElementById('chipTodos');
@@ -288,11 +478,13 @@ function setFormato(fmt) { document.getElementById('formatoInput').value = fmt; 
     const totalChips = chips.length;
 
     const LABELS = {
-        agendada:'Agendada', em_transito:'Em Trânsito',
-        retornado:'Retornado', cancelado:'Cancelado', finalizado:'Finalizado'
+        agendada: 'Agendada', em_transito: 'Em Trânsito',
+        retornado: 'Retornado', cancelado: 'Cancelado', finalizado: 'Finalizado'
     };
 
-    function getChecked() { return [...chips].filter(c => c.querySelector('input').checked); }
+    function getChecked() {
+        return [...chips].filter(c => c.querySelector('input').checked);
+    }
 
     function atualizarUI() {
         const marcados = getChecked();
@@ -300,7 +492,11 @@ function setFormato(fmt) { document.getElementById('formatoInput').value = fmt; 
         const todos = qtd === 0 || qtd === totalChips;
 
         chipTodos.classList.toggle('active', todos);
-        chips.forEach(chip => chip.classList.toggle('active', chip.querySelector('input').checked));
+
+        chips.forEach(chip => {
+            const checked = chip.querySelector('input').checked;
+            chip.classList.toggle('active', checked);
+        });
 
         if (todos) {
             resumoPill.classList.remove('tem-filtro');
@@ -313,12 +509,14 @@ function setFormato(fmt) { document.getElementById('formatoInput').value = fmt; 
             resumoTexto.textContent = `${qtd} selecionados`;
         }
 
-        progressFill.style.width = (todos ? 100 : (qtd / totalChips) * 100) + '%';
+        const pct = todos ? 100 : (qtd / totalChips) * 100;
+        progressFill.style.width = pct + '%';
+
         todosInput.value = todos ? '1' : '0';
     }
 
-    chipTodos.addEventListener('click', () => {
-        chips.forEach(c => c.querySelector('input').checked = false);
+    chipTodos.addEventListener('click', function() {
+        chips.forEach(chip => chip.querySelector('input').checked = false);
         atualizarUI();
     });
 

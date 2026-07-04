@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Novo' if acao == 'novo' else 'Editar' }} Posto/Graduação{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h4 class="mb-0 fw-bold">
+        <i class="bi bi-award me-2" style="color:var(--cor-secundaria);"></i>
+        {{ 'Novo Posto/Graduação' if acao == 'novo' else 'Editar Posto/Graduação' }}
+    </h4>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body p-4">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Nome <span class="text-danger">*</span></label>
+                        <input type="text" name="nome" class="form-control" maxlength="60"
+                               value="{{ posto.nome if posto else '' }}"
+                               placeholder="Ex: Soldado, Cabo, 3º Sargento, Tenente..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Sigla</label>
+                        <input type="text" name="sigla" class="form-control" maxlength="20"
+                               value="{{ posto.sigla if posto and posto.sigla else '' }}"
+                               placeholder="Ex: SD, CB, 3ºSGT, TEN">
+                        <div class="form-text">Sigla curta para exibição em listas e relatórios.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Nível hierárquico <span class="text-danger">*</span></label>
+                        <input type="number" name="nivel" class="form-control" min="0" max="999" step="1"
+                               value="{{ posto.nivel if posto is defined and posto else 0 }}" required>
+                        <div class="form-text">
+                            Usado apenas para ordenar a lista (do mais alto para o mais baixo).
+                            Quanto maior o número, mais alto o posto/graduação na hierarquia.
+                        </div>
+                    </div>
+                    {% if acao == 'editar' %}
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" name="ativo" id="ativo"
+                               {{ 'checked' if posto.ativo else '' }}>
+                        <label class="form-check-label" for="ativo">Posto/Graduação ativo</label>
+                    </div>
+                    {% endif %}
+                    <div class="d-flex gap-2 justify-content-end mt-4">
+                        <a href="{{ url_for('admin.listar_postos') }}" class="btn btn-secondary">Cancelar</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i>
+                            {{ 'Criar' if acao == 'novo' else 'Salvar Alterações' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

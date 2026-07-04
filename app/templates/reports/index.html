@@ -1,45 +1,101 @@
 {% extends 'base.html' %}
 {% block title %}Relatórios{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ── Estilização dos Cards de Relatório ── */
+.report-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.report-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
+    border-color: #cbd5e1;
+}
+
+/* Ícones Circulares */
+.report-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    margin-bottom: 1.5rem;
+    transition: transform 0.3s ease;
+}
+
+.report-card:hover .report-icon-wrapper {
+    transform: scale(1.05);
+}
+
+/* Ajustes nos botões para formato pill moderno */
+.btn-report {
+    padding: 0.55rem 1.75rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border-radius: 50px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s ease;
+}
+
+.btn-report i {
+    transition: transform 0.2s ease;
+}
+
+.btn-report:hover i {
+    transform: translateX(3px);
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header">
-    <h4 class="mb-0 fw-bold">
-        <i class="bi bi-file-earmark-bar-graph me-2" style="color:var(--cor-secundaria);"></i>Central de Relatórios
+<div class="page-header mb-4">
+    <h4 class="mb-0 fw-bold text-dark">
+        <i class="bi bi-file-earmark-bar-graph me-2" style="color:var(--cor-secundaria, #3b82f6);"></i>Central de Relatórios
     </h4>
-    <small class="text-muted">Gere relatórios em PDF e CSV</small>
+    <small class="text-muted">Filtre, analise e extraia os registros do sistema nos formatos PDF e CSV</small>
 </div>
 
-<div class="row g-3">
+<div class="row g-4">
     <div class="col-md-6">
-        <div class="card h-100">
+        <div class="card report-card h-100">
             <div class="card-body d-flex flex-column align-items-center text-center p-5">
-                <div class="stat-icon mb-3" style="background:#dbeafe;width:64px;height:64px;">
-                    <i class="bi bi-calendar-range" style="color:#1d4ed8;font-size:1.6rem;"></i>
+                <div class="report-icon-wrapper" style="background: #e0f2fe;">
+                    <i class="bi bi-calendar-range" style="color: #0284c7; font-size: 1.75rem;"></i>
                 </div>
-                <h5 class="fw-bold">Relatório por Período</h5>
-                <p class="text-muted" style="font-size:0.875rem;">
-                    Filtre as saídas por intervalo de datas, usuário e status.
-                    Exporte em PDF ou CSV.
+                <h5 class="fw-bold text-dark mb-2">Relatório por Período</h5>
+                <p class="text-muted px-2 mb-4" style="font-size: 0.875rem; line-height: 1.5;">
+                    Realize buscas customizadas combinando intervalos flexíveis de datas, subunidades específicas, usuários e múltiplos status.
                 </p>
-                <a href="{{ url_for('reports.por_periodo') }}" class="btn btn-primary mt-auto">
-                    <i class="bi bi-arrow-right me-1"></i>Acessar
+                <a href="{{ url_for('reports.por_periodo') }}" class="btn btn-primary btn-report mt-auto">
+                    <span>Acessar</span>
+                    <i class="bi bi-arrow-right"></i>
                 </a>
             </div>
         </div>
     </div>
+    
     <div class="col-md-6">
-        <div class="card h-100">
+        <div class="card report-card h-100">
             <div class="card-body d-flex flex-column align-items-center text-center p-5">
-                <div class="stat-icon mb-3" style="background:#dcfce7;width:64px;height:64px;">
-                    <i class="bi bi-calendar-date" style="color:#15803d;font-size:1.6rem;"></i>
+                <div class="report-icon-wrapper" style="background: #dcfce7;">
+                    <i class="bi bi-calendar-date" style="color: #16a34a; font-size: 1.75rem;"></i>
                 </div>
-                <h5 class="fw-bold">Relatório por Data Exata</h5>
-                <p class="text-muted" style="font-size:0.875rem;">
-                    Busque todos os registros de uma data específica.
-                    Exporte em PDF ou CSV.
+                <h5 class="fw-bold text-dark mb-2">Relatório por Data Exata</h5>
+                <p class="text-muted px-2 mb-4" style="font-size: 0.875rem; line-height: 1.5;">
+                    Consulte de forma rápida e pontual movimentações mapeadas em um dia específico do calendário, ideal para auditorias diárias.
                 </p>
-                <a href="{{ url_for('reports.data_exata') }}" class="btn btn-success mt-auto">
-                    <i class="bi bi-arrow-right me-1"></i>Acessar
+                <a href="{{ url_for('reports.data_exata') }}" class="btn btn-success btn-report mt-auto text-white">
+                    <span>Acessar</span>
+                    <i class="bi bi-arrow-right"></i>
                 </a>
             </div>
         </div>

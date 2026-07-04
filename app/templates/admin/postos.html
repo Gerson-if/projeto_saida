@@ -1,0 +1,295 @@
+{% extends 'base.html' %}
+{% block title %}Postos/Graduações{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Estilos Gerais do Card e Tabela com Maior Contraste ── */
+.card {
+    border: 1px solid #cbd5e1; /* Bordas mais visíveis */
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Sombra ligeiramente mais marcada */
+    background: #ffffff;
+}
+.table > :not(caption) > * > * {
+    padding: 0.85rem 1.1rem;
+    vertical-align: middle;
+}
+.table thead th {
+    background-color: #f1f5f9; /* Fundo do cabeçalho mais escuro */
+    color: #1e293b; /* Texto do cabeçalho quase preto */
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #cbd5e1;
+}
+.table tbody tr {
+    border-bottom: 1px solid #e2e8f0;
+}
+
+/* ── Elementos Reordenáveis (Drag and Drop) ── */
+.draggable-row {
+    cursor: grab;
+    transition: background-color 0.2s ease;
+}
+.draggable-row:hover {
+    background-color: #f8fafc !important; /* Destaque sutil ao passar o mouse */
+}
+.draggable-row:active {
+    cursor: grabbing;
+}
+.draggable-row.dragging {
+    opacity: 0.7;
+    background-color: #e2f5e9 !important; /* Tom de verde mais vivo no arrasto */
+    border: 2px dashed #15803d;
+}
+.drag-handle {
+    color: #64748b; /* Grip mais escuro para melhor visualização */
+    cursor: grab;
+    padding-right: 8px;
+    font-size: 1.25rem;
+}
+.drag-handle:hover {
+    color: #1e293b;
+}
+
+/* Paginador Ver Mais */
+.table tbody tr.tr-hidden {
+    display: none !important;
+}
+.btn-ver-mais {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.75rem;
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: #1d4ed8; /* Azul mais forte e contrastante */
+    background: #dbeafe; /* Fundo azul mais visível */
+    border: 1px dashed #2563eb;
+    border-radius: 30px;
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+.btn-ver-mais:hover {
+    background: #1d4ed8;
+    color: #fff;
+    border-style: solid;
+    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
+    transform: translateY(-1px);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+        <h4 class="mb-0 fw-bold text-dark">
+            <i class="bi bi-award text-dark me-2"></i>
+            Postos/Graduações
+        </h4>
+        <small class="text-secondary fw-medium">Gerencie os níveis de hierarquia. Arraste as linhas para reordenar o nível de importância.</small>
+    </div>
+    <a href="{{ url_for('admin.novo_posto') }}" class="btn btn-primary btn-sm px-3 fw-bold" style="border-radius: 8px;">
+        <i class="bi bi-plus-circle me-1"></i> Novo Posto/Graduação
+    </a>
+</div>
+
+{% if config_sistema.get('postos_habilitados') != '1' %}
+<div class="alert alert-warning d-flex align-items-center gap-3 mb-4 border border-warning shadow-sm" style="border-radius: 10px; background-color: #fffbeb;">
+    <i class="bi bi-exclamation-triangle-fill fs-4 text-warning"></i>
+    <div class="text-dark fw-medium small">
+        O recurso de Posto/Graduação está <strong class="text-danger">desativado</strong> no momento — o campo não aparece
+        no cadastro de usuários. Você pode organizar os níveis abaixo normalmente e
+        ativá-lo em <a href="{{ url_for('admin.configuracoes') }}" class="alert-link text-decoration-underline">Configurações → Hierarquia</a>.
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle" id="tabelaPostos">
+                <thead>
+                    <tr>
+                        <th style="width: 45px;"></th>
+                        <th class="ps-2" style="width: 60px;">#</th>
+                        <th>Nome</th>
+                        <th>Sigla</th>
+                        <th>Nível</th>
+                        <th>Usuários</th>
+                        <th>Status</th>
+                        <th class="text-end pe-4" style="width: 130px;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="sortableBody">
+                    {% for posto in postos %}
+                    <tr class="draggable-row" draggable="true" data-id="{{ posto.id }}">
+                        <td class="text-center"><i class="bi bi-grip-vertical drag-handle"></i></td>
+                        <td class="ps-2 text-dark fw-bold small">{{ posto.id }}</td>
+                        <td class="fw-bold text-dark" style="font-size: 0.95rem;">{{ posto.nome }}</td>
+                        <td>
+                            {% if posto.sigla %}
+                            <span class="badge bg-secondary text-white border border-secondary px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">
+                                {{ posto.sigla }}
+                            </span>
+                            {% else %}<span class="text-muted fw-bold">—</span>{% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info text-dark border border-info px-2.5 py-1.5 font-monospace fw-bold" style="font-size: 0.75rem; background-color: #cff4fc !important;" title="Quanto maior, mais alto na hierarquia">
+                                {{ posto.nivel }}
+                            </span>
+                        </td>
+                        <td>
+                            {% set qtd = posto.total_usuarios %}
+                            <span class="badge bg-primary text-white border border-primary px-2.5 py-1.5 fw-bold" style="font-size: 0.75rem;">{{ qtd }}</span>
+                            {% if qtd > 0 %}
+                            <small class="text-dark fw-bold ms-1">vínculo(s)</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if posto.ativo %}
+                            <span class="badge bg-success text-white px-3 py-1.5 rounded-pill fw-bold" style="font-size: 0.75rem; background-color: #15803d !important;">Ativo</span>
+                            {% else %}
+                            <span class="badge bg-secondary text-white px-3 py-1.5 rounded-pill fw-bold" style="font-size: 0.75rem; background-color: #64748b !important;">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            <div class="d-inline-flex gap-2">
+                                <a href="{{ url_for('admin.editar_posto', id=posto.id) }}"
+                                   class="btn btn-sm btn-primary" style="border-radius: 6px;" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% set qtd = posto.total_usuarios %}
+                                <button type="button" class="btn btn-sm btn-danger" style="border-radius: 6px;" title="Excluir"
+                                        onclick="confirmarExclusaoPosto(
+                                            '{{ url_for('admin.excluir_posto', id=posto.id) }}',
+                                            '{{ posto.nome | e }}', {{ qtd }}
+                                        )">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-dark">
+                            <i class="bi bi-award fs-1 d-block mb-2 text-secondary"></i>
+                            <span class="fw-bold d-block mb-2">Nenhum posto/graduação cadastrado.</span>
+                            <a href="{{ url_for('admin.novo_posto') }}" class="btn btn-primary btn-sm px-4 fw-bold">
+                                <i class="bi bi-plus-circle me-1"></i>Criar o primeiro
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Container do Botão Ver Mais #}
+        <div class="text-center py-4 d-none" id="containerVerMais">
+            <button type="button" class="btn-ver-mais" id="btnVerMais">
+                <span>Ver mais registros</span>
+                <i class="bi bi-chevron-down"></i>
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<form id="form-excluir-posto" method="POST" style="display:none;"></form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmarExclusaoPosto(url, nome, qtdUsuarios) {
+    let mensagem;
+    if (qtdUsuarios > 0) {
+        mensagem =
+            `Você está prestes a excluir o posto/graduação "${nome}".\n\n` +
+            `⚠️  Atenção: ${qtdUsuarios} usuário(s) estão vinculados a ele.\n` +
+            `Eles serão desvinculados (sem posto/graduação), mas suas contas e registros serão mantidos.\n\n` +
+            `Deseja continuar?`;
+    } else {
+        mensagem = `Excluir o posto/graduação "${nome}"?\n\nEssa ação não pode ser desfeita.`;
+    }
+    if (!confirm(mensagem)) return;
+    const form = document.getElementById('form-excluir-posto');
+    form.action = url;
+    form.submit();
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    // ── 1. Lógica do Limite de 8 registros (Ver Mais) ──
+    const tbody = document.getElementById('sortableBody');
+    if (tbody) {
+        const rows = tbody.querySelectorAll('.draggable-row');
+        const limite = 8;
+        
+        if (rows.length > limite) {
+            for (let i = limite; i < rows.length; i++) {
+                rows[i].classList.add('tr-hidden');
+            }
+            const containerBtn = document.getElementById('containerVerMais');
+            const btnVerMais = document.getElementById('btnVerMais');
+            containerBtn.classList.remove('d-none');
+            
+            btnVerMais.addEventListener('click', function() {
+                for (let i = limite; i < rows.length; i++) {
+                    rows[i].classList.remove('tr-hidden');
+                }
+                containerBtn.style.display = 'none';
+            });
+        }
+    }
+
+    // ── 2. Lógica de Drag and Drop (Arrastar para Reordenar) ──
+    const sortableList = document.getElementById('sortableBody');
+    let dragRow = null;
+
+    if (sortableList) {
+        sortableList.addEventListener('dragstart', function(e) {
+            dragRow = e.target.closest('.draggable-row');
+            if (dragRow) {
+                dragRow.classList.add('dragging');
+            }
+        });
+
+        sortableList.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            const afterElement = getDragAfterElement(sortableList, e.clientY);
+            const currentDragging = document.querySelector('.dragging');
+            if (currentDragging) {
+                if (afterElement == null) {
+                    sortableList.appendChild(currentDragging);
+                } else {
+                    sortableList.insertBefore(currentDragging, afterElement);
+                }
+            }
+        });
+
+        sortableList.addEventListener('dragend', function() {
+            if (dragRow) {
+                dragRow.classList.remove('dragging');
+                
+                const novaOrdemIds = [...sortableList.querySelectorAll('.draggable-row')].map(tr => tr.dataset.id);
+                console.log("Nova ordem gerada:", novaOrdemIds);
+            }
+        });
+    }
+
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.draggable-row:not(.dragging)')];
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+});
+</script>
+{% endblock %}

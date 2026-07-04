@@ -23,7 +23,7 @@ from reportlab.platypus import (
 )
 
 from app import db
-from app.models import ConfigSistema, Registro, Subunidade, Usuario
+from app.models import ConfigSistema, PostoGraduacao, Registro, Subunidade, Usuario
 from app.validators import parse_int_seguro, validar_data
 
 reports_bp = Blueprint("reports", __name__)
@@ -56,10 +56,18 @@ def admin_required(f):
 def get_saidas_filtradas(
     data_inicio=None, data_fim=None, usuario_id=None,
     status_list=None, busca_exata=None, subunidade_id=None,
+    posto_graduacao_id=None, ordenar_por_hierarquia=False,
 ):
     """Retorna registros de saída com base nos filtros fornecidos.
     
     status_list: lista de status para filtrar. None ou lista vazia = todos.
+    posto_graduacao_id: filtra apenas saídas de usuários vinculados a esse
+        nível de hierarquia (posto/graduação). None = todos os níveis.
+    ordenar_por_hierarquia: quando True, ordena o resultado do nível de
+        hierarquia mais alto para o mais baixo (usuários sem posto/graduação
+        vinculado ficam agrupados ao final); dentro de cada nível, mantém a
+        ordenação cronológica (mais recentes primeiro). Só deve ser usado
+        quando o recurso de Posto/Graduação estiver habilitado no sistema.
     """
     query = Registro.query.join(Usuario, Registro.cpf_usuario == Usuario.cpf)
 
@@ -89,12 +97,31 @@ def get_saidas_filtradas(
         if usuario:
             query = query.filter(Registro.cpf_usuario == usuario.cpf)
 
+    posto_id_valido = parse_int_seguro(posto_graduacao_id, minimo=1) if posto_graduacao_id else None
+    if posto_id_valido is not None:
+        query = query.filter(Usuario.posto_graduacao_id == posto_id_valido)
+
     # Filtro de múltiplos status
     status_filtrados = [s for s in (status_list or []) if s in STATUS_VALIDOS]
     if status_filtrados:
         query = query.filter(Registro.status.in_(status_filtrados))
 
-    return query.order_by(Registro.data_saida.desc()).all()
+    if ordenar_por_hierarquia:
+        # outerjoin para não excluir usuários sem posto/graduação vinculado
+        # — eles ficam agrupados ao final da listagem (nivel is None por
+        # último), em vez de sumirem do relatório.
+        query = query.outerjoin(
+            PostoGraduacao, Usuario.posto_graduacao_id == PostoGraduacao.id
+        )
+        query = query.order_by(
+            PostoGraduacao.nivel.is_(None).asc(),
+            PostoGraduacao.nivel.desc(),
+            Registro.data_saida.desc(),
+        )
+    else:
+        query = query.order_by(Registro.data_saida.desc())
+
+    return query.all()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -116,8 +143,19 @@ def _load_image_safe(filepath: str, max_w_cm: float, max_h_cm: float):
     return Image(filepath, width=orig_w * ratio, height=orig_h * ratio)
 
 
-def gerar_pdf_relatorio(saidas: list, titulo: str = "Relatório de Saídas", subtitulo: str = ""):
-    """Gera e retorna um buffer BytesIO com o PDF do relatório."""
+def gerar_pdf_relatorio(
+    saidas: list,
+    titulo: str = "Relatório de Saídas",
+    subtitulo: str = "",
+    postos_habilitados: bool = False,
+):
+    """Gera e retorna um buffer BytesIO com o PDF do relatório.
+
+    postos_habilitados: quando True, inclui a coluna de Posto/Graduação do
+    militar — só faz sentido mostrar isso se o recurso estiver ligado nas
+    Configurações (ver ConfigSistema "postos_habilitados"), já que nem
+    toda instalação usa postos/graduações.
+    """
     from xml.sax.saxutils import escape as _xml_escape
 
     def _p(texto: str, estilo) -> Paragraph:
@@ -230,7 +268,10 @@ def gerar_pdf_relatorio(saidas: list, titulo: str = "Relatório de Saídas", sub
     ctr_style  = ParagraphStyle("CtrStyle",  fontName="Helvetica", fontSize=7.5,
                                 alignment=TA_CENTER, leading=9)
 
-    headers    = ["#", "Nome", "CPF", "Subunidade", "Telefone", "Motivo", "Local", "Saída", "Retorno", "Status"]
+    headers    = ["#", "Nome"]
+    if postos_habilitados:
+        headers.append("Posto/Grad.")
+    headers += ["CPF", "Subunidade", "Telefone", "Motivo", "Local", "Saída", "Retorno", "Status"]
     data_rows  = [[_p(h, col_style) for h in headers]]
 
     STATUS_COLORS = {
@@ -251,11 +292,19 @@ def gerar_pdf_relatorio(saidas: list, titulo: str = "Relatório de Saídas", sub
         if saida.usuario and saida.usuario.subunidade:
             sub_nome = saida.usuario.subunidade.sigla or saida.usuario.subunidade.nome
 
+        posto_nome = ""
+        if postos_habilitados and saida.usuario and saida.usuario.posto_graduacao:
+            posto_nome = saida.usuario.posto_graduacao.sigla or saida.usuario.posto_graduacao.nome
+
         motivo_txt = saida.motivo or ""
         local_txt  = saida.local or ""
-        data_rows.append([
+        linha = [
             _p(str(i), ctr_style),
             _p(saida.usuario.nome if saida.usuario else "-", cell_style),
+        ]
+        if postos_habilitados:
+            linha.append(_p(posto_nome or "-", ctr_style))
+        linha += [
             _p(saida.cpf_usuario or "-", ctr_style),
             _p(sub_nome or "-", ctr_style),
             _p(saida.telefone_contato or "-", ctr_style),
@@ -264,9 +313,16 @@ def gerar_pdf_relatorio(saidas: list, titulo: str = "Relatório de Saídas", sub
             _p(saida.data_saida.strftime("%d/%m/%Y") if saida.data_saida else "-", ctr_style),
             _p(saida.data_retorno.strftime("%d/%m/%Y") if saida.data_retorno else "-", ctr_style),
             _p(saida.status_label, st_style),
-        ])
+        ]
+        data_rows.append(linha)
 
-    col_widths = [0.7*cm, 3.3*cm, 2.3*cm, 1.8*cm, 2.3*cm, 4.5*cm, 3.0*cm, 2.0*cm, 2.0*cm, 1.9*cm]
+    if postos_habilitados:
+        # Espaço extra da coluna "Posto/Grad." é descontado do Nome e do
+        # Motivo, que são as colunas com mais folga, para a tabela inteira
+        # continuar cabendo na página A4 paisagem.
+        col_widths = [0.7*cm, 2.6*cm, 1.8*cm, 2.3*cm, 1.8*cm, 2.3*cm, 4.0*cm, 3.0*cm, 2.0*cm, 2.0*cm, 1.9*cm]
+    else:
+        col_widths = [0.7*cm, 3.3*cm, 2.3*cm, 1.8*cm, 2.3*cm, 4.5*cm, 3.0*cm, 2.0*cm, 2.0*cm, 1.9*cm]
     table = Table(data_rows, colWidths=col_widths, repeatRows=1)
     table.setStyle(TableStyle([
         ("BACKGROUND",    (0, 0), (-1, 0),  cor_primaria),
@@ -300,23 +356,34 @@ def gerar_pdf_relatorio(saidas: list, titulo: str = "Relatório de Saídas", sub
     return buffer
 
 
-def _escrever_csv(saidas: list) -> bytes:
-    """Gera CSV de saídas e retorna como bytes UTF-8-sig."""
+def _escrever_csv(saidas: list, postos_habilitados: bool = False) -> bytes:
+    """Gera CSV de saídas e retorna como bytes UTF-8-sig.
+
+    postos_habilitados: quando True, inclui a coluna de Posto/Graduação.
+    """
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "#", "Nome", "CPF", "Subunidade", "Telefone",
+    cabecalho = ["#", "Nome"]
+    if postos_habilitados:
+        cabecalho.append("Posto/Graduação")
+    cabecalho += [
+        "CPF", "Subunidade", "Telefone",
         "Motivo", "Local", "Endereço", "Saída", "Retorno", "Status", "Registro",
-    ])
+    ]
+    writer.writerow(cabecalho)
     for i, s in enumerate(saidas, 1):
         sub_nome = (
             (s.usuario.subunidade.sigla or s.usuario.subunidade.nome)
             if s.usuario and s.usuario.subunidade
             else "-"
         )
-        writer.writerow([
-            i,
-            s.usuario.nome if s.usuario else "-",
+        linha = [i, s.usuario.nome if s.usuario else "-"]
+        if postos_habilitados:
+            posto_nome = "-"
+            if s.usuario and s.usuario.posto_graduacao:
+                posto_nome = s.usuario.posto_graduacao.sigla or s.usuario.posto_graduacao.nome
+            linha.append(posto_nome)
+        linha += [
             s.cpf_usuario,
             sub_nome,
             s.telefone_contato or "-",
@@ -327,7 +394,8 @@ def _escrever_csv(saidas: list) -> bytes:
             s.data_retorno.strftime("%d/%m/%Y") if s.data_retorno else "-",
             s.status_label,
             s.data_registro.strftime("%d/%m/%Y %H:%M") if s.data_registro else "-",
-        ])
+        ]
+        writer.writerow(linha)
     output.seek(0)
     return output.getvalue().encode("utf-8-sig")
 
@@ -372,21 +440,25 @@ def index():
 def por_periodo():
     usuarios    = Usuario.query.order_by(Usuario.nome).all()
     subunidades = Subunidade.query.filter_by(ativa=True).order_by(Subunidade.nome).all()
+    postos_habilitados = (ConfigSistema.get("postos_habilitados", "0") or "0") == "1"
+    postos      = PostoGraduacao.listar_ativos() if postos_habilitados else []
     saidas      = []
     filtros     = {}
 
     if request.method == "POST":
-        data_inicio   = request.form.get("data_inicio", "")
-        data_fim      = request.form.get("data_fim", "")
-        usuario_id    = request.form.get("usuario_id") or None
-        subunidade_id = request.form.get("subunidade_id") or None
-        formato       = request.form.get("formato", "visualizar")
-        status_list   = _parse_status_list(request.form)
+        data_inicio         = request.form.get("data_inicio", "")
+        data_fim            = request.form.get("data_fim", "")
+        usuario_id          = request.form.get("usuario_id") or None
+        subunidade_id       = request.form.get("subunidade_id") or None
+        posto_graduacao_id  = request.form.get("posto_graduacao_id") or None
+        formato             = request.form.get("formato", "visualizar")
+        status_list         = _parse_status_list(request.form)
 
         filtros = {
             "data_inicio": data_inicio, "data_fim": data_fim,
             "usuario_id": usuario_id,
             "subunidade_id": subunidade_id,
+            "posto_graduacao_id": posto_graduacao_id,
             "status_list": status_list,
             "status_todos": request.form.get("status_todos", "1"),
         }
@@ -400,6 +472,7 @@ def por_periodo():
             return render_template(
                 "reports/periodo.html",
                 usuarios=usuarios, subunidades=subunidades,
+                postos=postos, postos_habilitados=postos_habilitados,
                 saidas=saidas, filtros=filtros,
                 status_opcoes=STATUS_OPCOES,
             )
@@ -408,6 +481,8 @@ def por_periodo():
             data_inicio=data_inicio, data_fim=data_fim,
             usuario_id=usuario_id, status_list=status_list,
             subunidade_id=subunidade_id,
+            posto_graduacao_id=posto_graduacao_id if postos_habilitados else None,
+            ordenar_por_hierarquia=postos_habilitados,
         )
 
         partes = []
@@ -420,12 +495,21 @@ def por_periodo():
             sub = db.session.get(Subunidade, sub_id_valida)
             if sub:
                 partes.append(f"Subunidade: {sub.sigla or sub.nome}")
+        if postos_habilitados:
+            posto_id_valida = parse_int_seguro(posto_graduacao_id, minimo=1) if posto_graduacao_id else None
+            if posto_id_valida:
+                posto = db.session.get(PostoGraduacao, posto_id_valida)
+                if posto:
+                    partes.append(f"Nível: {posto.sigla or posto.nome}")
         partes.append(_status_label_resumido(status_list))
         subtitulo = " | ".join(partes)
 
         ts = datetime.now().strftime("%Y%m%d_%H%M")
         if formato == "pdf":
-            buffer = gerar_pdf_relatorio(saidas, titulo="Relatório de Saídas por Período", subtitulo=subtitulo)
+            buffer = gerar_pdf_relatorio(
+                saidas, titulo="Relatório de Saídas por Período", subtitulo=subtitulo,
+                postos_habilitados=postos_habilitados,
+            )
             return send_file(
                 buffer, as_attachment=True,
                 download_name=f"relatorio_periodo_{ts}.pdf",
@@ -433,7 +517,7 @@ def por_periodo():
             )
         elif formato == "csv":
             return send_file(
-                io.BytesIO(_escrever_csv(saidas)), as_attachment=True,
+                io.BytesIO(_escrever_csv(saidas, postos_habilitados=postos_habilitados)), as_attachment=True,
                 download_name=f"relatorio_periodo_{ts}.csv",
                 mimetype="text/csv",
             )
@@ -441,6 +525,7 @@ def por_periodo():
     return render_template(
         "reports/periodo.html",
         usuarios=usuarios, subunidades=subunidades,
+        postos=postos, postos_habilitados=postos_habilitados,
         saidas=saidas, filtros=filtros,
         status_opcoes=STATUS_OPCOES,
     )
@@ -452,19 +537,23 @@ def por_periodo():
 def data_exata():
     usuarios    = Usuario.query.order_by(Usuario.nome).all()
     subunidades = Subunidade.query.filter_by(ativa=True).order_by(Subunidade.nome).all()
+    postos_habilitados = (ConfigSistema.get("postos_habilitados", "0") or "0") == "1"
+    postos      = PostoGraduacao.listar_ativos() if postos_habilitados else []
     saidas      = []
     filtros     = {}
 
     if request.method == "POST":
-        data          = request.form.get("data_exata", "")
-        usuario_id    = request.form.get("usuario_id") or None
-        subunidade_id = request.form.get("subunidade_id") or None
-        formato       = request.form.get("formato", "visualizar")
-        status_list   = _parse_status_list(request.form)
+        data                = request.form.get("data_exata", "")
+        usuario_id          = request.form.get("usuario_id") or None
+        subunidade_id       = request.form.get("subunidade_id") or None
+        posto_graduacao_id  = request.form.get("posto_graduacao_id") or None
+        formato             = request.form.get("formato", "visualizar")
+        status_list         = _parse_status_list(request.form)
 
         filtros = {
             "data_exata": data, "usuario_id": usuario_id,
             "subunidade_id": subunidade_id,
+            "posto_graduacao_id": posto_graduacao_id,
             "status_list": status_list,
             "status_todos": request.form.get("status_todos", "1"),
         }
@@ -476,6 +565,7 @@ def data_exata():
             return render_template(
                 "reports/data_exata.html",
                 usuarios=usuarios, subunidades=subunidades,
+                postos=postos, postos_habilitados=postos_habilitados,
                 saidas=saidas, filtros=filtros,
                 status_opcoes=STATUS_OPCOES,
             )
@@ -483,6 +573,8 @@ def data_exata():
         saidas = get_saidas_filtradas(
             busca_exata=data, usuario_id=usuario_id,
             status_list=status_list, subunidade_id=subunidade_id,
+            posto_graduacao_id=posto_graduacao_id if postos_habilitados else None,
+            ordenar_por_hierarquia=postos_habilitados,
         )
 
         data_arquivo = data_dt.strftime("%Y%m%d") if data_dt else datetime.now().strftime("%Y%m%d")
@@ -495,11 +587,20 @@ def data_exata():
             sub = db.session.get(Subunidade, sub_id_valida)
             if sub:
                 partes.append(f"Subunidade: {sub.sigla or sub.nome}")
+        if postos_habilitados:
+            posto_id_valida = parse_int_seguro(posto_graduacao_id, minimo=1) if posto_graduacao_id else None
+            if posto_id_valida:
+                posto = db.session.get(PostoGraduacao, posto_id_valida)
+                if posto:
+                    partes.append(f"Nível: {posto.sigla or posto.nome}")
         partes.append(_status_label_resumido(status_list))
         subtitulo = " | ".join(partes)
 
         if formato == "pdf":
-            buffer = gerar_pdf_relatorio(saidas, titulo="Relatório de Saídas por Data", subtitulo=subtitulo)
+            buffer = gerar_pdf_relatorio(
+                saidas, titulo="Relatório de Saídas por Data", subtitulo=subtitulo,
+                postos_habilitados=postos_habilitados,
+            )
             return send_file(
                 buffer, as_attachment=True,
                 download_name=f"relatorio_data_{data_arquivo}.pdf",
@@ -507,7 +608,7 @@ def data_exata():
             )
         elif formato == "csv":
             return send_file(
-                io.BytesIO(_escrever_csv(saidas)), as_attachment=True,
+                io.BytesIO(_escrever_csv(saidas, postos_habilitados=postos_habilitados)), as_attachment=True,
                 download_name=f"relatorio_data_{data_arquivo}.csv",
                 mimetype="text/csv",
             )
@@ -515,6 +616,7 @@ def data_exata():
     return render_template(
         "reports/data_exata.html",
         usuarios=usuarios, subunidades=subunidades,
+        postos=postos, postos_habilitados=postos_habilitados,
         saidas=saidas, filtros=filtros,
         status_opcoes=STATUS_OPCOES,
     )
