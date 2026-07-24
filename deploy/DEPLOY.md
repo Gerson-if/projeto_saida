@@ -30,18 +30,22 @@ sem o script avisar e pedir de novo):
 - Diretório de instalação, usuário de sistema, URL do repositório
   (todos têm um padrão sensato — só apertar Enter já funciona).
 - **Como expor o sistema para os usuários** (veja a tabela abaixo).
-- Banco de dados: SQLite (padrão, mais simples) ou MariaDB.
 - Quantos workers do Gunicorn.
 - Nome, CPF (ou identificador) e senha do primeiro administrador.
 - Se quer configurar backup automático diário agora.
 
 A partir daí é 100% automático: instala tudo que falta, cria o usuário
-de sistema, clona o código, sobe o banco, gera o `.env` com uma
-`SECRET_KEY` própria, registra os serviços systemd, configura o Nginx,
-emite o certificado e roda um diagnóstico final — conferindo a cada
-etapa se o serviço realmente subiu e está respondendo, não só se o
-comando "deu certo" na aparência. Se algo falhar no meio, o script para
-com uma mensagem clara em vez de seguir em frente com algo quebrado.
+de sistema, clona o código, sobe o **MariaDB** (banco e usuário próprios
+da aplicação, criados na hora), gera o `.env` com uma `SECRET_KEY`
+própria, registra os serviços systemd, configura o Nginx, emite o
+certificado e roda um diagnóstico final — conferindo a cada etapa se o
+serviço realmente subiu e está respondendo, não só se o comando "deu
+certo" na aparência. Se algo falhar no meio, o script para com uma
+mensagem clara em vez de seguir em frente com algo quebrado.
+
+O banco de produção é sempre MariaDB — SQLite (usado só em desenvolvimento,
+veja o README principal) não aguenta bem escrita concorrente de vários
+usuários/workers Gunicorn ao mesmo tempo, então não é uma opção aqui.
 
 Já tem o projeto clonado em algum lugar? Funciona do mesmo jeito:
 ```bash
@@ -91,10 +95,10 @@ sudo bash deploy/install.sh --action ssl --https-mode letsencrypt --domain saida
 sudo bash deploy/install.sh --action backup
 ```
 Pergunta a retenção (dias) e o horário, e a partir daí roda sozinho
-todo dia via cron do usuário de sistema: dump do MariaDB (ou cópia do
-SQLite) + `app/static/uploads/` (logos, fotos, fundo do login)
-compactados em `instance/backups/`, com os backups mais antigos que a
-retenção escolhida apagados automaticamente. Para testar manualmente:
+todo dia via cron do usuário de sistema: dump do MariaDB (`mysqldump`) +
+`app/static/uploads/` (logos, fotos, fundo do login) compactados em
+`instance/backups/`, com os backups mais antigos que a retenção
+escolhida apagados automaticamente. Para testar manualmente:
 ```bash
 sudo -u projeto_saida bash /opt/projeto_saida/deploy/backup.sh
 ```
@@ -196,9 +200,11 @@ para colocar o sistema no ar** — é isso que a seção 1 já faz.
   do Gunicorn (8000) nunca é exposta — escuta só em `127.0.0.1`.
 - **Usuário de sistema dedicado** (`projeto_saida` por padrão): sem
   shell de login, roda a aplicação com privilégios mínimos.
-- **Banco de dados:** SQLite em `instance/` (dev/uso pequeno) ou
-  MariaDB com banco e usuário dedicados criados na hora
-  (`CREATE DATABASE` / `CREATE USER` com senha gerada aleatoriamente).
+- **Banco de dados:** sempre MariaDB, com banco e usuário dedicados
+  criados na hora (`CREATE DATABASE` / `CREATE USER` com senha gerada
+  aleatoriamente). SQLite é usado só em desenvolvimento (`setup_dev.sh`);
+  em produção o instalador nem pergunta, e `ProductionConfig.validate()`
+  (`config.py`) recusa subir se `DATABASE_URL` apontar para SQLite.
 - **`.env` de produção:** gerado com `SECRET_KEY` própria da instalação
   (nunca a string de exemplo do repositório), `DATABASE_URL`,
   `BEHIND_PROXY=true` e a config de workers/agendador coerente com o
@@ -212,8 +218,8 @@ para colocar o sistema no ar** — é isso que a seção 1 já faz.
   caminhos substituídos para o domínio/diretório escolhidos.
 - **HTTPS:** Certbot (Let's Encrypt) ou certificado autoassinado com SAN
   correto (IP ou domínio), conforme a seção 2.
-- **Backup:** `deploy/backup.sh` gerado sob medida (MariaDB ou SQLite) +
-  cron do usuário de sistema, conforme a seção 3.
+- **Backup:** `deploy/backup.sh` gerado sob medida (`mysqldump`) + cron
+  do usuário de sistema, conforme a seção 3.
 
 Se mesmo assim você quiser montar tudo isso manualmente (por exemplo,
 para adaptar a um provedor com particularidades bem específicas), o
