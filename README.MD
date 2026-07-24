@@ -155,16 +155,6 @@ manutenção são chamados pelo próprio instalador:
 
 ## Atualização — Segurança, sessão e concorrência
 
-Se você já tinha o projeto instalado antes desta atualização, rode uma vez:
-
-```bash
-python migrate_v3.py
-```
-
-Isso adiciona as colunas de proteção contra força bruta no login à tabela
-`usuarios`. Instalações novas (`flask init-db`) já criam essas colunas
-automaticamente.
-
 Principais mudanças:
 
 - **SECRET_KEY própria por instalação**: se `SECRET_KEY` não estiver no
