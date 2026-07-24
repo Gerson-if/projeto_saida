@@ -19,11 +19,15 @@ cada script estão comentados nos próprios arquivos e em `deploy/DEPLOY.md`.
 ## Funcionalidades
 
 - **Status automático**: o sistema atualiza os status `Agendada → Em Trânsito → Retornado` com base nas datas, sem necessidade de intervenção do administrador.
+- **Gestão de subunidades**: organização dos militares por subunidade, com filtros correspondentes nas listagens, relatórios e dashboard.
+- **Cancelamento com motivo e histórico preservado**: motivos configuráveis pelo admin (veja [Comandos CLI](#comandos-cli) e a tela *Motivos de Cancelamento*), com observação livre e o registro cancelado mantido no histórico em vez de removido.
+- **Regras de edição e finalização automática**: edição de saídas respeitando o status atual, com finalização automática quando a data de retorno expira.
 - **Dashboard analítica**: indicadores de militares presentes, em trânsito, retornados no dia, próximas saídas e gráfico de distribuição de status.
 - **Motivos sugeridos**: o formulário de saída oferece opções pré-definidas com campo livre (até 300 caracteres).
-- **Identidade visual configurável**: nome do sistema, cores, logo, brasão e favicon configuráveis pelo painel admin.
+- **Identidade visual configurável**: nome do sistema, cores, logo, brasão e favicon configuráveis pelo painel admin, com temas claro/escuro/oliva.
 - **Favicon dinâmico**: favicon exibido na aba do navegador, definido pelo admin.
-- **Relatórios PDF**: por período ou data exata.
+- **Relatórios PDF**: por período ou data exata, com layout otimizado para impressão.
+- **Sidebar recolhível**: mais espaço de tela em telas menores ou por preferência do usuário.
 - **Assets estáticos locais**: Bootstrap, ícones, Chart.js e a fonte Inter
   são compilados localmente em `app/static/vendor/` (por
   `scripts/build_static_assets.sh`, chamado automaticamente por
@@ -33,14 +37,6 @@ cada script estão comentados nos próprios arquivos e em `deploy/DEPLOY.md`.
   instalada.
 
 ---
-## Atualização — Versão 3
-
-Esta versão traz melhorias significativas na organização e usabilidade do sistema, incluindo gerenciamento de **subunidades**, controle de **cancelamento com histórico preservado**, novas regras de **edição e finalização automática das saídas**, além de uma **dashboard mais completa** com gráficos e informações aprimoradas.
-
-Também foram adicionadas melhorias na interface, como **sidebar recolhível**, correções de **favicon**, otimizações para **impressão de relatórios** e ajustes gerais de estabilidade e experiência do usuário.
-
-Além disso, o processo de instalação foi atualizado com orientações para configuração do **MariaDB**, criação do banco de dados e validação da conexão antes da inicialização da aplicação, tornando o ambiente de desenvolvimento mais simples e confiável.
-
 
 ## Requisitos
 
@@ -110,18 +106,34 @@ curl -fsSL https://raw.githubusercontent.com/Gerson-if/projeto_saida/main/deploy
 sudo bash install.sh
 ```
 
-Abre um menu guiado que cuida da instalação inteira: pacotes do sistema,
-usuário dedicado, firewall, banco de dados (SQLite ou MariaDB), Gunicorn +
-systemd, Nginx, **HTTPS grátis** (com domínio próprio via Let's Encrypt, sem
-domínio via `SEU-IP.sslip.io`, ou autoassinado usando o IP da VM
-diretamente) e **backup automático diário**. Também compila os assets
-estáticos localmente, então a aplicação não depende de nenhum CDN externo
-depois de instalada. Para atualizar depois, com backup e reversão
-automáticos se algo falhar:
+Abre um menu guiado que cuida da instalação inteira, sem exigir configuração
+manual em nenhuma etapa:
+
+- **Pacotes do sistema, usuário dedicado, firewall**: instalados/configurados
+  automaticamente, com validação de cada resposta digitada no menu.
+- **Banco de dados**: SQLite ou MariaDB, com banco e usuário criados na hora
+  quando aplicável.
+- **Gunicorn + systemd + Nginx**: serviço registrado e checado (rede, disco,
+  portas, serviço realmente respondendo) antes e depois de cada etapa.
+- **HTTPS grátis**: com domínio próprio via Let's Encrypt, sem domínio via
+  `SEU-IP.sslip.io`, ou autoassinado usando o IP da VM diretamente (SAN
+  correto, não só CN).
+- **Backup automático diário**: `deploy/install.sh --action backup` configura
+  dump do banco + `app/static/uploads/` via cron, com retenção configurável.
+- **Assets estáticos locais**: mesma compilação de `scripts/build_static_assets.sh`
+  usada em desenvolvimento — a aplicação não depende de nenhum CDN externo
+  depois de instalada.
+
+Para atualizar depois:
 
 ```bash
 sudo bash deploy/install.sh --action update
 ```
+
+Faz backup do banco antes de qualquer mudança, atualiza só por
+fast-forward e **reverte tudo sozinho** (código, banco, dependências) se a
+migração, a instalação de dependências ou o health-check pós-restart
+falharem — pensado para nunca deixar a produção parada num estado quebrado.
 
 Detalhes completos, todas as opções e o que cada etapa faz por baixo dos
 panos: **[deploy/DEPLOY.md](deploy/DEPLOY.md)**.
@@ -153,70 +165,30 @@ manutenção são chamados pelo próprio instalador:
 
 ---
 
-## Atualização — Segurança, sessão e concorrência
-
-Principais mudanças:
+## Segurança
 
 - **SECRET_KEY própria por instalação**: se `SECRET_KEY` não estiver no
   `.env`, o sistema gera uma chave aleatória e a guarda em
-  `instance/secret_key` (nunca versionada). Antes, o projeto usava uma
-  string fixa no código-fonte como padrão — qualquer pessoa que lesse o
-  repositório conhecia essa chave e poderia, teoricamente, forjar um cookie
-  de sessão válido para qualquer usuário sem fazer login. Em produção, a
-  `SECRET_KEY` continua sendo obrigatória via variável de ambiente.
+  `instance/secret_key` (nunca versionada) — nenhuma chave fixa fica exposta
+  no código-fonte. Em produção, a `SECRET_KEY` é obrigatória via variável de
+  ambiente (`config.py::ProductionConfig.validate()` recusa subir sem ela).
 - **Cookies de sessão explicitamente protegidos** (`HttpOnly`, `SameSite=Lax`,
   `Secure` em produção, nome de cookie próprio, expiração configurável) e
   `session_protection = "strong"` no Flask-Login, que invalida a sessão se o
-  IP/navegador mudar no meio do caminho.
-  Toda página autenticada agora responde com `Cache-Control: no-store`, para
-  que nenhum proxy/navegador guarde em cache uma página com dados de sessão.
+  IP/navegador mudar no meio do caminho. Toda página autenticada responde com
+  `Cache-Control: no-store`, para que nenhum proxy/navegador guarde em cache
+  uma página com dados de sessão.
 - **Bloqueio por tentativas de login** (`LOGIN_MAX_TENTATIVAS`,
   `LOGIN_BLOQUEIO_MINUTOS` no `.env`), com contador atômico no banco — não
   perde incrementos mesmo com tentativas simultâneas.
 - **SQLite em modo WAL + busy_timeout**: reduz drasticamente os erros de
   "database is locked" quando vários usuários (ou o job automático de
   status) gravam no banco ao mesmo tempo.
-- **`commit_seguro()`** (`app/db_utils.py`): substitui os antigos
-  `try/except Exception: db.session.rollback()` espalhados pelas rotas.
-  Agora, qualquer falha real ao salvar é **logada** em
-  `instance/logs/app.log` (antes era descartada silenciosamente), erros de
-  lock transitório são reexecutados automaticamente, e conflitos de dados
-  duplicados mostram uma mensagem específica.
-
----
-
-## Atualização — Deploy automatizado, HTTPS flexível e assets locais
-
-O processo de instalação/deploy e a interface deixaram de depender de
-configuração manual ou de serviços externos:
-
-- **Instalador guiado (`deploy/install.sh`)**: um único comando cuida da
-  instalação de produção inteira numa VM/VPS Ubuntu — pacotes do sistema,
-  usuário dedicado, firewall, banco de dados, systemd, Nginx, HTTPS e
-  backup, com um menu interativo, validação de cada resposta digitada e
-  checagens automáticas (rede, disco, portas, serviço realmente
-  respondendo) antes e depois de cada etapa. Veja
-  [Deploy em produção](#deploy-em-produção) e `deploy/DEPLOY.md`.
-- **HTTPS sem exigir domínio**: além de domínio próprio (Let's Encrypt),
-  agora dá pra expor o sistema só pelo IP da VM/VPS — com certificado
-  autoassinado (SAN correto, não só CN) ou, sem abrir mão de um
-  certificado real, usando `SEU-IP.sslip.io`.
-- **Atualização segura**: `deploy/install.sh --action update` faz backup
-  do banco antes de qualquer mudança, atualiza só por fast-forward, e
-  **reverte tudo sozinho** (código, banco, dependências) se a migração,
-  a instalação de dependências ou o health-check pós-restart falharem —
-  pensado para nunca deixar a produção parada num estado quebrado.
-- **Backup automático diário**: `deploy/install.sh --action backup`
-  configura dump do banco + `app/static/uploads/` via cron, com retenção
-  configurável.
-- **Assets estáticos locais**: Bootstrap, Bootstrap Icons, Chart.js e a
-  fonte Inter deixaram de ser carregados de CDN externo
-  (`cdn.jsdelivr.net`, `fonts.googleapis.com`) e passaram a ser
-  compilados localmente em `app/static/vendor/` por
-  `scripts/build_static_assets.sh` — chamado automaticamente por
-  `setup_dev.sh` e por `deploy/install.sh`. Páginas carregam mais rápido
-  (sem handshake TLS extra para outros domínios) e a aplicação continua
-  funcionando mesmo se a VM perder acesso à internet depois de instalada.
+- **`commit_seguro()`** (`app/db_utils.py`): centraliza o commit em todas as
+  rotas. Qualquer falha real ao salvar é **logada** em
+  `instance/logs/app.log`, erros de lock transitório são reexecutados
+  automaticamente, e conflitos de dados duplicados mostram uma mensagem
+  específica ao usuário em vez de um erro genérico.
 
 ---
 
