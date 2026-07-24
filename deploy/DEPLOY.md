@@ -1,339 +1,211 @@
-# Deploy em produção — VM Ubuntu
+# Deploy em produção — VM/VPS Ubuntu
 
-Guia passo a passo para subir o sistema numa VM Ubuntu "do zero", com
-Gunicorn + Nginx + MariaDB + HTTPS (Let's Encrypt) + systemd.
+O `deploy/install.sh` é responsável pelo deploy inteiro: pacotes do
+sistema, usuário dedicado, firewall, banco de dados, `.env`, systemd,
+Nginx, HTTPS (grátis, com ou sem domínio) e backup automático. Não há
+nenhum passo manual — nem editar `nginx.conf`, nem os arquivos `.service`,
+nem o `.env`. Se em algum momento você precisar editar algo à mão para a
+instalação funcionar, é um bug do script, não uma etapa esperada.
 
-**Recomendado apenas para Ubuntu 22.04 LTS ou 24.04 LTS.** O instalador
-guiado (próxima seção) detecta outras distros (Debian, CentOS, etc.) e
-avisa antes de continuar — não são testadas nem recomendadas, os nomes de
-pacotes e caminhos mudam e o resultado pode ficar inconsistente.
+**Recomendado apenas para Ubuntu 22.04 LTS ou 24.04 LTS.** Rodando em
+outra distro (Debian, CentOS, etc.) o script avisa e pede confirmação
+explícita antes de continuar — não é testado nem recomendado nelas.
 
-> **Atalho:** se você não quer configurar nada na mão, use o instalador
-> guiado (`deploy/install.sh`) — ele faz todos os passos abaixo por você,
-> incluindo HTTPS grátis e backup automático, com um menu interativo,
-> validação dos dados digitados e checagens automáticas antes/depois de
-> cada etapa (rede, disco, portas, serviço realmente respondendo):
-> ```bash
-> git clone https://github.com/Gerson-if/projeto_saida.git
-> cd projeto_saida
-> sudo bash deploy/install.sh
-> ```
-> Ele mostra um menu com as opções: instalação completa, emitir/renovar
-> HTTPS, configurar backup automático, atualizar uma instalação existente
-> (com backup e reversão automáticos se algo falhar) e diagnóstico. Cada
-> opção também pode ser chamada direto por flag, ex.:
-> `sudo bash deploy/install.sh --action update` (atalho: `deploy/update.sh`).
-> O guia manual abaixo continua útil para entender o que o script faz por
-> baixo dos panos, ou se preferir configurar cada etapa você mesmo.
+---
 
-### Domínio, IP ou VPS sem domínio — como o instalador decide o HTTPS
+## 1. Instalação — um único comando
 
-Ao rodar a instalação completa, o script pergunta como você quer expor o
-sistema (ou aceita via `--https-mode` + `--domain` para pular a pergunta):
+Não precisa nem clonar o repositório antes: o próprio script faz isso.
+Na VM/VPS nova, como root ou um usuário com sudo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Gerson-if/projeto_saida/main/deploy/install.sh -o install.sh
+sudo bash install.sh
+```
+
+Isso abre um menu interativo. Para a instalação completa, ele pergunta
+(com validação de cada resposta, então não dá pra digitar algo inválido
+sem o script avisar e pedir de novo):
+
+- Diretório de instalação, usuário de sistema, URL do repositório
+  (todos têm um padrão sensato — só apertar Enter já funciona).
+- **Como expor o sistema para os usuários** (veja a tabela abaixo).
+- Banco de dados: SQLite (padrão, mais simples) ou MariaDB.
+- Quantos workers do Gunicorn.
+- Nome, CPF (ou identificador) e senha do primeiro administrador.
+- Se quer configurar backup automático diário agora.
+
+A partir daí é 100% automático: instala tudo que falta, cria o usuário
+de sistema, clona o código, sobe o banco, gera o `.env` com uma
+`SECRET_KEY` própria, registra os serviços systemd, configura o Nginx,
+emite o certificado e roda um diagnóstico final — conferindo a cada
+etapa se o serviço realmente subiu e está respondendo, não só se o
+comando "deu certo" na aparência. Se algo falhar no meio, o script para
+com uma mensagem clara em vez de seguir em frente com algo quebrado.
+
+Já tem o projeto clonado em algum lugar? Funciona do mesmo jeito:
+```bash
+cd projeto_saida
+sudo bash deploy/install.sh
+```
+
+### Pré-requisitos
+
+- Uma VM/VPS Ubuntu com pelo menos 1 vCPU / 1 GB RAM.
+- Acesso root ou sudo via SSH.
+- Domínio: **opcional** (veja a tabela abaixo).
+- **Único item fora do alcance do script:** se a VM estiver atrás de um
+  firewall do provedor de nuvem (grupo de segurança AWS/GCP/Azure/
+  Oracle/etc.), libere as portas 80 e 443 nele também — isso é
+  configuração do provedor, fora da própria VM, e nenhum script rodando
+  dentro da VM consegue alterar isso por você.
+
+---
+
+## 2. Domínio, IP ou VPS sem domínio — como decidir o HTTPS
+
+O instalador pergunta isso no menu (ou aceita via `--https-mode` +
+`--domain`, para pular a pergunta em automação):
 
 | Situação | Opção no menu | O que acontece |
 |---|---|---|
 | Tenho um domínio apontando para a VM/VPS | 1 | Certificado real via Let's Encrypt, grátis |
 | Não tenho domínio, mas quero HTTPS de verdade | 2 | Usa `SEU-IP.sslip.io` — resolve sozinho para o IP da VM, sem mexer em DNS, e ainda ganha certificado real do Let's Encrypt |
-| Quero acessar só pelo IP da VM/VPS mesmo | 3 | Certificado autoassinado, com o SAN (Subject Alternative Name) já correto para IP — o navegador avisa "conexão não é segura" na primeira visita, mas é só aceitar o aviso uma vez |
+| Quero acessar só pelo IP da VM/VPS mesmo | 3 | Certificado autoassinado, com o SAN (Subject Alternative Name) já correto para IP — o navegador avisa "conexão não é segura" na primeira visita, é só aceitar o aviso uma vez |
 | Ambiente de teste, sem HTTPS por enquanto | 4 | Só HTTP — não recomendado para produção |
 
-Muda de ideia depois? Rode só a parte de HTTPS de novo, sem reinstalar tudo:
+Mudou de ideia depois? Troca sem reinstalar tudo:
 ```bash
-# Trocar para HTTPS autoassinado usando o IP da VM
+# Passar a usar HTTPS autoassinado com o IP da VM
 sudo bash deploy/install.sh --action ssl --https-mode selfsigned --domain 203.0.113.10
 
-# Trocar para Let's Encrypt de verdade quando conseguir um domínio
+# Passar a usar Let's Encrypt de verdade quando conseguir um domínio
 sudo bash deploy/install.sh --action ssl --https-mode letsencrypt --domain saida.exemplo.com.br --email voce@exemplo.com
 ```
 
 ---
 
-## 0. Antes de começar
+## 3. Backup automático
 
-- Uma VM/VPS com pelo menos 1 vCPU / 1GB RAM (o app é leve).
-- Acesso root/sudo via SSH.
-- Domínio: **opcional**. Ele só é obrigatório se você quiser HTTPS via
-  Let's Encrypt com um domínio próprio (seção "Domínio, IP ou VPS sem
-  domínio" logo abaixo explica as alternativas — incluindo acesso direto
-  pelo IP da VM/VPS, com ou sem HTTPS autoassinado).
-
----
-
-## 1. Pacotes do sistema
-
-```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y python3 python3-venv python3-pip git \
-    nginx mariadb-server mariadb-client libmariadb-dev \
-    build-essential pkg-config certbot python3-certbot-nginx ufw cron \
-    libssl-dev libffi-dev python3-dev zlib1g-dev libjpeg-dev
-```
-As últimas quatro bibliotecas (`libssl-dev`, `libffi-dev`, `python3-dev`,
-`zlib1g-dev`, `libjpeg-dev`) só são necessárias se o `pip` precisar
-compilar `cryptography`/`Pillow` na hora por não haver uma wheel pronta
-para a arquitetura da VM — instalar de qualquer forma evita descobrir
-isso no meio da instalação.
-
-## 2. Firewall
-
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 'Nginx Full'   # libera 80 e 443
-sudo ufw enable
-```
-A porta do Gunicorn (8000) **não** é liberada — ela só escuta em
-`127.0.0.1`, acessível apenas pelo Nginx na mesma máquina.
-
-## 3. Usuário de sistema dedicado
-
-Rodar a aplicação com um usuário próprio (sem shell de login, sem
-privilégios) limita o estrago em caso de falha de segurança.
-
-```bash
-sudo useradd --system --create-home --shell /usr/sbin/nologin projeto_saida
-sudo mkdir -p /opt/projeto_saida
-sudo chown projeto_saida:projeto_saida /opt/projeto_saida
-```
-
-## 4. Banco de dados (MariaDB)
-
-O `ProductionConfig` (config.py) exige `DATABASE_URL` — SQLite é só para
-desenvolvimento. Crie o banco e um usuário dedicado:
-
-```bash
-sudo mysql -u root <<'SQL'
-CREATE DATABASE projeto_saida CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'projeto_saida'@'localhost' IDENTIFIED BY 'TROQUE-ESTA-SENHA';
-GRANT ALL PRIVILEGES ON projeto_saida.* TO 'projeto_saida'@'localhost';
-FLUSH PRIVILEGES;
-SQL
-```
-
-## 5. Código da aplicação
-
-```bash
-sudo -u projeto_saida -H bash <<'EOF'
-cd /opt/projeto_saida
-git clone https://github.com/Gerson-if/projeto_saida.git
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-EOF
-```
-(Se você não usa git para distribuir o código, envie os arquivos via
-`rsync`/`scp` para `/opt/projeto_saida` como o usuário `projeto_saida`.)
-
-## 6. Variáveis de ambiente (`.env`)
-
-```bash
-sudo -u projeto_saida cp /opt/projeto_saida/.env.example /opt/projeto_saida/.env
-sudo -u projeto_saida nano /opt/projeto_saida/.env
-```
-
-Preencha pelo menos:
-
-```dotenv
-FLASK_ENV=production
-
-# Gere com: python3 -c "import secrets; print(secrets.token_hex(32))"
-SECRET_KEY=<chave-gerada-aleatoria>
-
-DATABASE_URL=mysql+pymysql://projeto_saida:TROQUE-ESTA-SENHA@localhost/projeto_saida
-
-# Atrás do Nginx (padrão já é true, mas deixe explícito)
-BEHIND_PROXY=true
-
-# Ver seção 9 sobre workers antes de decidir isto:
-SCHEDULER_ENABLED=true
-```
-
-`ProductionConfig.validate()` recusa subir sem `SECRET_KEY` e
-`DATABASE_URL` explícitos — é intencional, evita subir em produção com
-configuração incompleta por engano.
-
-## 7. Inicializar o banco
-
-```bash
-sudo -u projeto_saida -H bash <<'EOF'
-cd /opt/projeto_saida
-source venv/bin/activate
-export FLASK_ENV=production
-export $(grep -v '^#' .env | xargs)   # carrega o .env nesta sessão
-flask init-db
-flask create-admin "Administrador" admin "SENHA-FORTE-AQUI"
-EOF
-```
-
-## 8. Gunicorn + systemd
-
-Os arquivos prontos estão em `deploy/`:
-
-```bash
-sudo cp deploy/projeto-saida.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now projeto-saida
-sudo systemctl status projeto-saida
-```
-
-Revise `/etc/systemd/system/projeto-saida.service` se o caminho do
-projeto ou o usuário forem diferentes de `/opt/projeto_saida` /
-`projeto_saida`.
-
-Logs em tempo real:
-```bash
-journalctl -u projeto-saida -f
-```
-
-## 9. Um worker ou vários? (importante)
-
-O app tem um agendador interno (`APScheduler`) que atualiza o status das
-saídas periodicamente. Ele roda **dentro do processo do Gunicorn** — ou
-seja, com N workers, o job roda N vezes em paralelo (redundante, mas não
-corrompe dados; é apenas ineficiente).
-
-- **VM pequena / poucos usuários simultâneos (caso comum):** deixe
-  `WEB_CONCURRENCY=1` (padrão em `deploy/gunicorn_conf.py`, que já usa
-  threads para lidar com várias requisições ao mesmo tempo) e
-  `SCHEDULER_ENABLED=true`. Não precisa de mais nada.
-
-- **Vai escalar para vários workers/processos:** defina no `.env`
-  `WEB_CONCURRENCY=4` (ajuste ao número de vCPUs) e
-  `SCHEDULER_ENABLED=false` — e ative o timer systemd que faz o mesmo
-  trabalho fora dos workers web:
-  ```bash
-  sudo cp deploy/projeto-saida-status.service /etc/systemd/system/
-  sudo cp deploy/projeto-saida-status.timer   /etc/systemd/system/
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now projeto-saida-status.timer
-  ```
-
-## 10. Nginx + HTTPS
-
-```bash
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/projeto-saida
-sudo nano /etc/nginx/sites-available/projeto-saida   # ajuste server_name e caminhos
-sudo ln -s /etc/nginx/sites-available/projeto-saida /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-HTTPS gratuito com Let's Encrypt (o Certbot edita o nginx.conf sozinho e
-configura renovação automática via timer systemd):
-```bash
-sudo certbot --nginx -d seu-dominio.com.br
-```
-
-Teste a renovação automática (não renova de verdade, só simula):
-```bash
-sudo certbot renew --dry-run
-```
-
-## 11. Checklist final
-
-```bash
-sudo -u projeto_saida -H bash -c "cd /opt/projeto_saida && source venv/bin/activate && flask diagnosticar"
-```
-Esse comando (já existente no projeto) confere `SECRET_KEY`, cookies de
-sessão segura e o banco de dados — rode-o sempre depois de qualquer
-mudança de configuração.
-
-Confirme também:
-- [ ] `https://seu-dominio.com.br` carrega e o cadeado aparece.
-- [ ] Login funciona e o cookie de sessão só é enviado via HTTPS
-      (`SESSION_COOKIE_SECURE=true`, já é o padrão em `ProductionConfig`).
-- [ ] Upload de logo/imagem/vídeo de fundo do login funciona
-      (confira permissão de escrita em `app/static/uploads/`).
-- [ ] O tema escuro/verde-oliva troca corretamente pelo ícone de paleta
-      no topo, sem texto "sumindo".
-
-## 12. Backups
-
-Mais simples: deixe o instalador configurar tudo (banco + `app/static/uploads/`,
-com rotação automática pela retenção que você escolher):
 ```bash
 sudo bash deploy/install.sh --action backup
 ```
-Isso cria `deploy/backup.sh` (dump do MariaDB ou cópia do SQLite, mais
-`uploads/` compactado) e agenda um cron do usuário `projeto_saida` no
-horário escolhido. Para testar manualmente:
+Pergunta a retenção (dias) e o horário, e a partir daí roda sozinho
+todo dia via cron do usuário de sistema: dump do MariaDB (ou cópia do
+SQLite) + `app/static/uploads/` (logos, fotos, fundo do login)
+compactados em `instance/backups/`, com os backups mais antigos que a
+retenção escolhida apagados automaticamente. Para testar manualmente:
 ```bash
 sudo -u projeto_saida bash /opt/projeto_saida/deploy/backup.sh
 ```
 
-Se preferir configurar na mão, o equivalente para MariaDB é:
-```bash
-sudo -u projeto_saida crontab -e
-```
-```cron
-0 3 * * * mysqldump -u projeto_saida -p'TROQUE-ESTA-SENHA' projeto_saida | gzip > /opt/projeto_saida/instance/backups/db-$(date +\%F).sql.gz
-```
-Lembre de também copiar `app/static/uploads/` (logos, fotos, fundo do
-login) para o backup — não é só o banco que importa.
+---
 
-## 13. Atualizando o sistema (deploy de uma nova versão)
+## 4. Atualizando o sistema — rotina segura, feita para não quebrar produção
 
-Forma recomendada — rotina de atualização segura, com backup automático
-antes de mexer em qualquer coisa e reversão automática se algo der errado:
 ```bash
 sudo bash deploy/install.sh --action update
 # atalho equivalente:
 sudo bash deploy/update.sh
 ```
 
-O que essa rotina faz, nessa ordem:
-1. Confere se há alterações locais não commitadas em `/opt/projeto_saida`
-   (não deveria haver, numa instalação de produção) e pergunta antes de
-   prosseguir se encontrar algo.
-2. Roda `git fetch` e compara com a versão local — se já estiver
+Esta é a única forma recomendada de atualizar uma instalação em
+produção. Nessa ordem, o script:
+
+1. **Trava contra atualização duplicada** — se já houver uma atualização
+   em andamento nesta instalação (ex: alguém rodou o comando duas vezes
+   sem querer), a segunda chamada para na hora em vez de disputar os
+   mesmos arquivos.
+2. **Confere a saúde atual antes de tocar em qualquer coisa.** Se o
+   serviço já não estiver respondendo antes de começar, avisa que
+   reverter não vai ajudar (o problema já existe) e pergunta se quer
+   mesmo assim continuar, ou parar para investigar primeiro
+   (`--action diagnostico`).
+3. Confere se há alterações locais não commitadas na instalação (não
+   deveria haver em produção) e pergunta antes de seguir se encontrar.
+4. Roda `git fetch` e compara com a versão local — se já estiver
    atualizado, avisa e para por aí, sem mexer em nada.
-3. Faz backup do banco (dump do MariaDB ou cópia do SQLite) e do `.env`
-   antes de tocar em qualquer arquivo, em
+5. **Faz backup do banco e do `.env` antes de qualquer mudança**, em
    `instance/backups/pre-update-<data_hora>/`.
-4. Atualiza o código só por fast-forward (`git merge --ff-only`) — se
-   houver divergência, para sem alterar nada em vez de criar um merge
-   estranho em produção.
-5. Reinstala as dependências Python e aplica migrações de banco
+6. Atualiza o código só por fast-forward (`git merge --ff-only`) — se
+   houver divergência (alguém mexeu no checkout manualmente), para sem
+   alterar nada em vez de criar um merge inesperado em produção.
+7. Reinstala as dependências Python e aplica migrações de banco
    pendentes (`flask db upgrade`).
-6. Reinicia o serviço e confere se ele realmente voltou a responder
-   (não só se o processo subiu, mas se `http://127.0.0.1:8000/` responde).
-7. **Se qualquer passo de 4 a 6 falhar, reverte sozinho**: volta o código
-   para o commit anterior, restaura o backup do banco feito no passo 3,
-   reinstala as dependências da versão antiga e reinicia o serviço —
-   depois avisa claramente o que foi revertido e onde está o backup.
+8. Reinicia o serviço e confere se ele **realmente** voltou a responder
+   (não só se o processo systemd subiu, mas se `http://127.0.0.1:8000/`
+   responde de verdade).
+9. **Se qualquer passo de 6 a 8 falhar, reverte tudo sozinho:** código
+   de volta ao commit anterior, banco restaurado do backup do passo 5,
+   dependências da versão antiga reinstaladas, serviço reiniciado — e
+   confere de novo se voltou a responder antes de avisar que a reversão
+   deu certo. Só nesse ponto (reversão que também falhou) é que pede
+   intervenção manual, com o comando exato para começar a investigar.
 
-Forma manual, se preferir fazer cada passo você mesmo:
-```bash
-sudo -u projeto_saida -H bash <<'EOF'
-cd /opt/projeto_saida
-git pull
-source venv/bin/activate
-pip install -r requirements.txt
-flask db upgrade   # se houver migrações pendentes
-EOF
-sudo systemctl restart projeto-saida
-```
-Sem o instalador, lembre-se de fazer o backup manualmente antes (seção
-12) — é justamente esse passo que a rotina automática cobre por você.
-
-## 14. Logs da aplicação
-
-Além do `journalctl -u projeto-saida`, a aplicação grava seu próprio log
-rotativo em `instance/logs/app.log` (configurado em
-`app/__init__.py::_init_logging`, já limitado a 5×1MB automaticamente —
-não precisa de logrotate extra para esse arquivo específico).
+Em resumo: uma atualização só "vale" se, no fim, o sistema estiver
+respondendo — caso contrário o script desfaz sozinho e devolve o estado
+anterior, sem deixar produção no ar quebrada.
 
 ---
 
-### Referência rápida de comandos úteis
+## 5. Comandos do dia a dia
 
 | Ação | Comando |
 |---|---|
-| Ver status do app | `sudo systemctl status projeto-saida` |
-| Reiniciar o app | `sudo systemctl restart projeto-saida` |
+| Instalação completa / menu | `sudo bash deploy/install.sh` |
+| Atualizar com segurança | `sudo bash deploy/install.sh --action update` |
+| Emitir/trocar HTTPS | `sudo bash deploy/install.sh --action ssl` |
+| Configurar backup automático | `sudo bash deploy/install.sh --action backup` |
+| Diagnóstico de saúde | `sudo bash deploy/install.sh --action diagnostico` |
+| Ver status do serviço | `sudo systemctl status projeto-saida` |
+| Reiniciar o serviço | `sudo systemctl restart projeto-saida` |
 | Ver logs em tempo real | `journalctl -u projeto-saida -f` |
-| Testar config do Nginx | `sudo nginx -t` |
-| Forçar atualização de status manual | `flask atualizar-status` |
-| Diagnóstico de config/segurança | `flask diagnosticar` |
-| Criar novo admin | `flask create-admin "Nome" cpf senha` |
+| Log da aplicação | `instance/logs/app.log` (rotativo, 5×1MB automático) |
+| Criar outro admin | `flask create-admin "Nome" cpf senha` (dentro do venv, com `.env` carregado) |
+
+Rodar qualquer ação de novo é seguro — o script detecta o que já existe
+e não sobrescreve/duplica nada às cegas.
+
+---
+
+## Apêndice — como o script monta cada peça (referência, não é um passo a passo)
+
+Esta seção é só para quem quer entender o que acontece por baixo dos
+panos, adaptar algo mais avançado, ou comparar com uma instalação feita
+à mão em outro projeto. **Não é necessário ler ou executar nada daqui
+para colocar o sistema no ar** — é isso que a seção 1 já faz.
+
+- **Pacotes do sistema:** Python 3, venv, Nginx, Certbot, ufw, cron, e
+  (se você escolher MariaDB) `mariadb-server`/`mariadb-client`. Inclui
+  também `libssl-dev`, `libffi-dev`, `python3-dev`, `zlib1g-dev`,
+  `libjpeg-dev` — só usadas se o `pip` precisar compilar
+  `cryptography`/`Pillow` por falta de uma wheel pronta para a
+  arquitetura da VM.
+- **Firewall (ufw):** libera só OpenSSH e Nginx Full (80/443). A porta
+  do Gunicorn (8000) nunca é exposta — escuta só em `127.0.0.1`.
+- **Usuário de sistema dedicado** (`projeto_saida` por padrão): sem
+  shell de login, roda a aplicação com privilégios mínimos.
+- **Banco de dados:** SQLite em `instance/` (dev/uso pequeno) ou
+  MariaDB com banco e usuário dedicados criados na hora
+  (`CREATE DATABASE` / `CREATE USER` com senha gerada aleatoriamente).
+- **`.env` de produção:** gerado com `SECRET_KEY` própria da instalação
+  (nunca a string de exemplo do repositório), `DATABASE_URL`,
+  `BEHIND_PROXY=true` e a config de workers/agendador coerente com o
+  número de workers escolhido — `ProductionConfig.validate()`
+  (`config.py`) recusa subir sem esses valores explícitos, de propósito.
+- **systemd:** `deploy/projeto-saida.service` (Gunicorn) sempre; com
+  mais de 1 worker, também `deploy/projeto-saida-status.service` +
+  `.timer` (job de atualização de status fora dos workers web, evitando
+  rodar duplicado — ver comentários em `app/__init__.py::_init_scheduler`).
+- **Nginx:** `deploy/nginx.conf` como template, com `server_name` e
+  caminhos substituídos para o domínio/diretório escolhidos.
+- **HTTPS:** Certbot (Let's Encrypt) ou certificado autoassinado com SAN
+  correto (IP ou domínio), conforme a seção 2.
+- **Backup:** `deploy/backup.sh` gerado sob medida (MariaDB ou SQLite) +
+  cron do usuário de sistema, conforme a seção 3.
+
+Se mesmo assim você quiser montar tudo isso manualmente (por exemplo,
+para adaptar a um provedor com particularidades bem específicas), o
+próprio `deploy/install.sh` é a documentação mais precisa: é um script
+bash comum, comentado, sem mágica — dá pra ler de cima a baixo e copiar
+só os trechos relevantes.

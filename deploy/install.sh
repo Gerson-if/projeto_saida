@@ -1154,11 +1154,33 @@ cmd_update() {
 
     [ -d "$INSTALL_DIR/.git" ] || die "$INSTALL_DIR não parece um checkout git (sem .git)."
 
+    # Trava contra duas atualizações rodando ao mesmo tempo (ex: alguém
+    # rodou o comando duas vezes, ou um cron mal configurado) — sem isso,
+    # duas atualizações simultâneas poderiam se atropelar no meio do git
+    # pull/pip install/restart e deixar a instalação num estado incoerente.
+    mkdir -p "$INSTALL_DIR/instance"
+    local lockfile="$INSTALL_DIR/instance/.update.lock"
+    exec 9>"$lockfile"
+    if ! flock -n 9; then
+        die "Já existe uma atualização em andamento nesta instalação (lock: $lockfile). Aguarde terminar antes de rodar de novo."
+    fi
+
     local db_engine="sqlite"
     grep -q '^DATABASE_URL=mysql' "$INSTALL_DIR/.env" 2>/dev/null && db_engine="mariadb"
 
+    log "Conferindo se o serviço já está saudável antes de mexer em qualquer coisa"
+    if ! wait_for_service_ativo projeto-saida 5 || ! wait_for_http "http://127.0.0.1:8000/" 5; then
+        warn "O serviço 'projeto-saida' já não está respondendo ANTES desta atualização."
+        warn "Reverter para o estado atual, se algo falhar, NÃO vai resolver — o problema já existe agora."
+        if ! yesno "Investigar depois ou continuar mesmo assim?" "n"; then
+            die "Atualização cancelada. Rode 'sudo bash deploy/install.sh --action diagnostico' para investigar o estado atual primeiro."
+        fi
+    else
+        ok "Serviço saudável antes da atualização (baseline OK para permitir rollback seguro)"
+    fi
+
     log "Verificando se há alterações locais não commitadas em $INSTALL_DIR"
-    if [ -n "$(sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git status --porcelain -- . ':!.env*'" 2>/dev/null)" ]; then
+    if [ -n "$(sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git status --porcelain -- . ':!.env*' ':!instance'" 2>/dev/null)" ]; then
         warn "Há arquivos modificados localmente em $INSTALL_DIR (fora de .env)."
         warn "Isso normalmente não deveria acontecer numa instalação de produção."
         if ! yesno "Continuar mesmo assim (git pull pode falhar ou descartar essas mudanças)?" "n"; then
@@ -1226,7 +1248,13 @@ cmd_update() {
             fi
         fi
         systemctl restart projeto-saida 2>/dev/null || true
-        err "Reversão concluída. A instalação deve estar de volta ao estado anterior à atualização."
+        if wait_for_service_ativo projeto-saida 15 && wait_for_http "http://127.0.0.1:8000/" 15; then
+            ok "Reversão concluída — o serviço voltou a responder no estado anterior à atualização."
+        else
+            err "ATENÇÃO: mesmo após a reversão, o serviço não voltou a responder."
+            err "Isso não deveria acontecer (o estado anterior estava saudável antes de começar)."
+            err "Intervenção manual necessária — comece por: journalctl -u projeto-saida --no-pager -n 80"
+        fi
         err "Backup preservado em $backup_pre_dir para investigação."
     }
 
