@@ -181,6 +181,17 @@ para colocar o sistema no ar** — é isso que a seção 1 já faz.
   `libjpeg-dev` — só usadas se o `pip` precisar compilar
   `cryptography`/`Pillow` por falta de uma wheel pronta para a
   arquitetura da VM.
+- **Assets estáticos (`scripts/build_static_assets.sh`):** baixa versões
+  fixas do Bootstrap, Bootstrap Icons, Chart.js e da fonte Inter
+  (direto do registro do npm, sem precisar de Node) e organiza tudo em
+  `app/static/vendor/`. A partir daí a aplicação serve esses arquivos
+  localmente — nenhum `<link>`/`<script>` aponta para CDN externo em
+  produção nem em desenvolvimento. Isso deixa o carregamento das
+  páginas mais rápido (sem handshake TLS extra para outros domínios) e
+  a aplicação continua funcionando mesmo se a VM perder acesso à
+  internet depois de instalada. Roda na instalação completa e em toda
+  atualização (`--action update`), com cache por versão (só recompila
+  se as versões pinadas no script mudarem, ou com `--force`).
 - **Firewall (ufw):** libera só OpenSSH e Nginx Full (80/443). A porta
   do Gunicorn (8000) nunca é exposta — escuta só em `127.0.0.1`.
 - **Usuário de sistema dedicado** (`projeto_saida` por padrão): sem

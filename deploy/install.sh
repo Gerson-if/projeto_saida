@@ -700,6 +700,14 @@ EOF
     fi
     ok "Dependências instaladas"
 
+    log "Compilando assets estáticos (Bootstrap, ícones, Chart.js, fonte Inter)"
+    if ! sudo -u "$SYS_USER" -H bash "$INSTALL_DIR/scripts/build_static_assets.sh" > /tmp/build_static_assets.log 2>&1; then
+        err "Falha ao compilar os assets estáticos (provavelmente sem acesso a registry.npmjs.org):"
+        tail -n 30 /tmp/build_static_assets.log >&2
+        die "A aplicação depende desses arquivos para funcionar — corrija o acesso à internet da VM e rode de novo. Log completo em /tmp/build_static_assets.log."
+    fi
+    ok "Assets estáticos compilados — a aplicação não depende de CDN externo em produção"
+
     # ── 5. Banco de dados ─────────────────────────────────────────────────
     DATABASE_URL=""
     if [ "$DB_BACKEND" = "mariadb" ]; then
@@ -1231,6 +1239,8 @@ cmd_update() {
         sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git reset --hard '$before_commit'" || true
         sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && source venv/bin/activate && pip install -r requirements.txt -q" \
             || warn "Não consegui reinstalar as dependências da versão anterior — revise o venv manualmente."
+        sudo -u "$SYS_USER" -H bash "$INSTALL_DIR/scripts/build_static_assets.sh" --force \
+            || warn "Não consegui recompilar os assets estáticos da versão anterior — revise app/static/vendor/ manualmente."
         if [ "$db_engine" = "mariadb" ] && [ -f "$backup_pre_dir/db.sql.gz" ]; then
             local db_url db_user_b db_pass_b db_name_b
             db_url="$(grep '^DATABASE_URL=' "$INSTALL_DIR/.env" | cut -d= -f2-)"
@@ -1269,6 +1279,14 @@ cmd_update() {
         tail -n 30 /tmp/pip_update.log >&2
         rollback_update
         die "Atualização revertida. Log completo em /tmp/pip_update.log."
+    fi
+
+    log "Recompilando assets estáticos (caso as versões pinadas tenham mudado)"
+    if ! sudo -u "$SYS_USER" -H bash "$INSTALL_DIR/scripts/build_static_assets.sh" > /tmp/build_static_assets_update.log 2>&1; then
+        err "Falha ao recompilar os assets estáticos:"
+        tail -n 30 /tmp/build_static_assets_update.log >&2
+        rollback_update
+        die "Atualização revertida. Log completo em /tmp/build_static_assets_update.log."
     fi
 
     log "Aplicando migrações de banco pendentes (se houver)"

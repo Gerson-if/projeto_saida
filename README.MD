@@ -38,6 +38,13 @@ Sistema web para registro e controle de saídas de militares, com atualização 
 - **Identidade visual configurável**: nome do sistema, cores, logo, brasão e favicon configuráveis pelo painel admin.
 - **Favicon dinâmico**: favicon exibido na aba do navegador, definido pelo admin.
 - **Relatórios PDF**: por período ou data exata.
+- **Assets estáticos locais**: Bootstrap, ícones, Chart.js e a fonte Inter
+  são compilados localmente em `app/static/vendor/` (por
+  `scripts/build_static_assets.sh`, chamado automaticamente por
+  `setup_dev.sh` e por `deploy/install.sh`) — a aplicação não depende de
+  nenhum CDN externo para carregar, o que deixa o carregamento das
+  páginas mais rápido e continua funcionando mesmo sem internet depois de
+  instalada.
 
 ---
 ## Atualização — Versão 3
@@ -201,10 +208,13 @@ sistema_saida/
 │   ├── models/         # Modelos SQLAlchemy (Usuario, Registro, ConfigSistema)
 │   ├── routes/         # Blueprints: auth, admin, user, reports
 │   ├── templates/      # Templates Jinja2 (base.html, admin/, user/, reports/)
-│   ├── static/         # CSS, JS, uploads, relatórios
+│   ├── static/         # CSS, JS, uploads, relatórios, vendor/ (gerado, não versionado)
 │   ├── context_processors.py
 │   ├── commands.py
 │   └── __init__.py     # Application factory + scheduler
+├── scripts/
+│   └── build_static_assets.sh  # Compila Bootstrap/ícones/Chart.js/Inter localmente
+├── deploy/              # Instalador guiado, systemd, Nginx (veja deploy/DEPLOY.md)
 ├── config.py           # Configurações por ambiente
 ├── run.py              # Ponto de entrada
 ├── requirements.txt
