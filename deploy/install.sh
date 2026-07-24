@@ -63,7 +63,8 @@ BACKUP_RETENCAO_DIAS="14"
 BACKUP_HORA="03:00"
 ASSUME_YES="0"
 NON_INTERACTIVE="0"
-SKIP_SSL="0"
+SKIP_SSL="0"             # legado: --skip-ssl equivale a --https-mode selfsigned
+HTTPS_MODE=""            # letsencrypt | selfsigned | none
 FLAGS_INFORMADAS="0"     # vira 1 se qualquer flag de configuração foi passada
 
 usage() {
@@ -85,7 +86,8 @@ while [ $# -gt 0 ]; do
         --admin-senha) ADMIN_SENHA="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --backup-dias) BACKUP_RETENCAO_DIAS="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --backup-hora) BACKUP_HORA="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
-        --skip-ssl) SKIP_SSL="1"; FLAGS_INFORMADAS="1"; shift ;;
+        --https-mode) HTTPS_MODE="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
+        --skip-ssl) SKIP_SSL="1"; FLAGS_INFORMADAS="1"; shift ;;   # legado, use --https-mode selfsigned
         --yes|-y) ASSUME_YES="1"; NON_INTERACTIVE="1"; shift ;;
         -h|--help) usage; exit 0 ;;
         *) die "Opção desconhecida: $1 (use --help)" ;;
@@ -138,6 +140,93 @@ yesno() {
 rand_hex()  { python3 -c "import secrets; print(secrets.token_hex(${1:-16}))"; }
 rand_pass() { python3 -c "import secrets,string; a=string.ascii_letters+string.digits; print(''.join(secrets.choice(a) for _ in range(${1:-20})))"; }
 
+# retry_cmd <tentativas> <comando...> — repete um comando com espera crescente
+# entre tentativas. Usado em operações de rede (apt, pip, git) que falham por
+# instabilidade transitória e não por erro real de configuração.
+retry_cmd() {
+    local tentativas="$1" tentativa=1 espera=5
+    shift
+    until "$@"; do
+        if [ "$tentativa" -ge "$tentativas" ]; then
+            return 1
+        fi
+        warn "Tentativa $tentativa/$tentativas falhou (\"$*\") — tentando de novo em ${espera}s..."
+        sleep "$espera"
+        tentativa=$((tentativa + 1))
+        espera=$((espera * 2))
+    done
+    return 0
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# Pré-checagens — tentam pegar problemas óbvios ANTES de mexer no sistema
+# ─────────────────────────────────────────────────────────────────────────
+preflight_checks() {
+    log "Checagens antes de começar"
+    local problemas=0
+
+    if ! retry_cmd 3 curl -fsS --max-time 5 -o /dev/null https://deb.debian.org 2>/dev/null \
+       && ! retry_cmd 1 curl -fsS --max-time 5 -o /dev/null http://archive.ubuntu.com 2>/dev/null; then
+        warn "Não consegui confirmar acesso à internet (necessário para apt/pip/certbot)."
+        problemas=$((problemas + 1))
+    else
+        ok "Conectividade de rede OK"
+    fi
+
+    local disp_kb
+    disp_kb="$(df -Pk / 2>/dev/null | awk 'NR==2{print $4}')"
+    if [ -n "$disp_kb" ] && [ "$disp_kb" -lt 1048576 ]; then
+        warn "Menos de 1 GB livre em / (disponível: $((disp_kb / 1024)) MB) — a instalação pode falhar por falta de espaço."
+        problemas=$((problemas + 1))
+    else
+        ok "Espaço em disco OK"
+    fi
+
+    if command -v ss >/dev/null 2>&1; then
+        if ss -ltn 2>/dev/null | grep -qE ':80\s|:443\s'; then
+            warn "Já existe algo escutando na porta 80 e/ou 443 (outro Nginx/Apache?)."
+            warn "O instalador vai sobrescrever a config do site 'projeto-saida', mas"
+            warn "se for outro serviço além do Nginx, pode haver conflito de porta."
+            problemas=$((problemas + 1))
+        fi
+    fi
+
+    if [ "$problemas" -gt 0 ] && [ "$NON_INTERACTIVE" != "1" ]; then
+        if ! yesno "Foram encontrados $problemas aviso(s) acima. Continuar mesmo assim?" "n"; then
+            die "Instalação cancelada — resolva os avisos acima e rode de novo."
+        fi
+    elif [ "$problemas" -gt 0 ]; then
+        warn "$problemas aviso(s) de pré-checagem ignorado(s) por rodar em modo não interativo."
+    fi
+}
+
+# wait_for_service_ativo <unidade> <timeout_seg> — espera um serviço systemd
+# ficar "active (running)", em vez de confiar cegamente no "enable --now".
+wait_for_service_ativo() {
+    local unidade="$1" timeout="${2:-15}" decorrido=0
+    while [ "$decorrido" -lt "$timeout" ]; do
+        systemctl is-active --quiet "$unidade" && return 0
+        sleep 1
+        decorrido=$((decorrido + 1))
+    done
+    systemctl is-active --quiet "$unidade"
+}
+
+# wait_for_http <url> <timeout_seg> — espera um endpoint HTTP responder
+# qualquer coisa (mesmo 302/401/500) — só não pode ser "conexão recusada".
+wait_for_http() {
+    # Sem -f: qualquer status HTTP (mesmo 404/500) conta como "respondeu".
+    # Só falha em erro de conexão (recusada, timeout) — é só isso que
+    # realmente indica que o serviço não está de pé.
+    local url="$1" timeout="${2:-15}" decorrido=0
+    while [ "$decorrido" -lt "$timeout" ]; do
+        curl -sS -o /dev/null --max-time 3 "$url" 2>/dev/null && return 0
+        sleep 1
+        decorrido=$((decorrido + 1))
+    done
+    return 1
+}
+
 # ─────────────────────────────────────────────────────────────────────────
 # Validadores — cada um recebe o valor em $1 e retorna 0 (válido) / 1 (inválido)
 # ─────────────────────────────────────────────────────────────────────────
@@ -146,6 +235,15 @@ validate_path()        { [[ "$1" =~ ^/[A-Za-z0-9_./-]+$ ]] && [ "$1" != "/" ]; }
 validate_username()    { [[ "$1" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; }
 validate_repo_url()    { [[ "$1" =~ ^(https?://|git@) ]]; }
 validate_domain()      { [[ "$1" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$ ]]; }
+validate_ipv4() {
+    local ip="$1" o
+    [[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+    for o in "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}"; do
+        [ "$o" -le 255 ] || return 1
+    done
+    return 0
+}
+validate_domain_ou_ip() { validate_domain "$1" || validate_ipv4 "$1"; }
 validate_email()       { [[ "$1" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; }
 validate_inteiro_pos() { [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ]; }
 validate_workers()     { validate_inteiro_pos "$1" && [ "$1" -le 32 ]; }
@@ -335,6 +433,7 @@ cmd_install() {
     echo
 
     detect_os
+    preflight_checks
 
     if [ "$NON_INTERACTIVE" != "1" ]; then
         ask_valid "Diretório de instalação" "$INSTALL_DIR" validate_path \
@@ -350,45 +449,74 @@ cmd_install() {
         REPO_URL="$REPLY_VAL"
     fi
 
-    # ── Domínio / IP + HTTPS ──────────────────────────────────────────────
+    # ── Domínio ou IP + modo de HTTPS ─────────────────────────────────────
     PUBLIC_IP="$(detect_public_ip)"
-    if [ -n "$DOMAIN" ] && ! validate_domain "$DOMAIN"; then
-        die "--domain '$DOMAIN' não parece um domínio válido (ex: saida.exemplo.com.br)."
+    if [ -n "$DOMAIN" ] && ! validate_domain "$DOMAIN" && ! validate_ipv4 "$DOMAIN"; then
+        die "--domain '$DOMAIN' não é um domínio nem um IPv4 válido (ex: saida.exemplo.com.br ou 203.0.113.10)."
     fi
-    if [ -z "$DOMAIN" ] && [ "$NON_INTERACTIVE" != "1" ]; then
-        echo
-        echo "Para HTTPS gratuito (Let's Encrypt) é preciso um nome de domínio"
-        echo "que resolva para o IP desta VM — Let's Encrypt NÃO emite certificado"
-        echo "para IP puro (ex: https://${PUBLIC_IP:-1.2.3.4})."
-        if [ -n "$PUBLIC_IP" ]; then
-            echo -e "IP público detectado desta VM: ${C_BOLD}${PUBLIC_IP}${C_RESET}"
-        fi
-        if yesno "Você já tem um domínio/subdomínio apontando para este IP?" "n"; then
-            ask_valid "Domínio (ex: saida.suaorganizacao.com.br)" "" validate_domain \
-                "Domínio inválido — use um nome como saida.exemplo.com.br."
-            DOMAIN="$REPLY_VAL"
-        else
-            if [ -n "$PUBLIC_IP" ]; then
-                SUGESTAO="${PUBLIC_IP}.sslip.io"
-                echo
-                echo "Sem domínio próprio, dá pra usar um serviço de DNS público que"
-                echo "resolve automaticamente para o IP embutido no nome — sem precisar"
-                echo "configurar nada em lugar nenhum:"
-                echo -e "   ${C_BOLD}${SUGESTAO}${C_RESET}  →  aponta para ${PUBLIC_IP}"
-                if yesno "Usar '${SUGESTAO}' como domínio (permite HTTPS de verdade grátis)?" "s"; then
-                    DOMAIN="$SUGESTAO"
-                fi
-            fi
-            if [ -z "$DOMAIN" ]; then
-                warn "Sem domínio, vou gerar um certificado autoassinado — o navegador"
-                warn "vai mostrar aviso de 'conexão não segura' até você configurar um"
-                warn "domínio de verdade (rode depois a ação 'ssl' deste mesmo script)."
-                SKIP_SSL="1"
-            fi
-        fi
+    if [ -n "$HTTPS_MODE" ] && [ "$HTTPS_MODE" != "letsencrypt" ] && [ "$HTTPS_MODE" != "selfsigned" ] && [ "$HTTPS_MODE" != "none" ]; then
+        die "--https-mode deve ser 'letsencrypt', 'selfsigned' ou 'none' (recebido: '$HTTPS_MODE')."
     fi
 
-    if [ -n "$DOMAIN" ] && [ -z "$EMAIL" ] && [ "$NON_INTERACTIVE" != "1" ] && [ "$SKIP_SSL" != "1" ]; then
+    if [ -z "$HTTPS_MODE" ] && [ "$NON_INTERACTIVE" != "1" ]; then
+        echo
+        echo "Como você quer expor o sistema para os usuários?"
+        if [ -n "$PUBLIC_IP" ]; then
+            echo -e "IP público detectado desta VM/VPS: ${C_BOLD}${PUBLIC_IP}${C_RESET}"
+        fi
+        cat <<EOF
+  1) Tenho um domínio próprio apontando para este servidor (HTTPS real, Let's Encrypt)
+  2) Não tenho domínio, mas quero HTTPS real do mesmo jeito (usa o IP via sslip.io)
+  3) Usar o IP da VM/VPS direto, com certificado autoassinado (navegador avisa "não seguro")
+  4) Só HTTP por enquanto, sem certificado (não recomendado, ex: ambiente de teste)
+EOF
+        while true; do
+            ask "Escolha (1-4)" "1"
+            case "$REPLY_VAL" in
+                1)
+                    ask_valid "Domínio (ex: saida.suaorganizacao.com.br)" "" validate_domain \
+                        "Domínio inválido — use um nome como saida.exemplo.com.br."
+                    DOMAIN="$REPLY_VAL"
+                    HTTPS_MODE="letsencrypt"
+                    break
+                    ;;
+                2)
+                    [ -z "$PUBLIC_IP" ] && { warn "Não consegui detectar o IP público desta VM — escolha outra opção."; continue; }
+                    DOMAIN="${PUBLIC_IP}.sslip.io"
+                    ok "Vou usar '${DOMAIN}' (resolve automaticamente para ${PUBLIC_IP}, sem configurar nada em DNS)."
+                    HTTPS_MODE="letsencrypt"
+                    break
+                    ;;
+                3)
+                    DOMAIN="${PUBLIC_IP:-}"
+                    if [ -z "$DOMAIN" ]; then
+                        ask_valid "Não detectei o IP automaticamente — informe o IP da VM/VPS" "" validate_ipv4 \
+                            "Informe um IPv4 válido (ex: 203.0.113.10)."
+                        DOMAIN="$REPLY_VAL"
+                    fi
+                    warn "Certificado autoassinado para IP '$DOMAIN': o navegador vai avisar"
+                    warn "'conexão não é segura' na primeira visita — isso é esperado, não é erro."
+                    HTTPS_MODE="selfsigned"
+                    break
+                    ;;
+                4)
+                    DOMAIN="${PUBLIC_IP:-_}"
+                    warn "Seguindo sem HTTPS — dados (inclusive senhas) trafegam sem criptografia."
+                    HTTPS_MODE="none"
+                    break
+                    ;;
+                *) warn "Digite um número de 1 a 4." ;;
+            esac
+        done
+    elif [ -z "$HTTPS_MODE" ]; then
+        # Modo não interativo sem --https-mode explícito: mantém compatibilidade
+        # com versões anteriores (Let's Encrypt se houver domínio, senão autoassinado).
+        HTTPS_MODE="letsencrypt"
+        [ -z "$DOMAIN" ] && { DOMAIN="${PUBLIC_IP:-_}"; HTTPS_MODE="selfsigned"; }
+    fi
+    [ -z "$DOMAIN" ] && DOMAIN="${PUBLIC_IP:-_}"
+
+    if [ "$HTTPS_MODE" = "letsencrypt" ] && [ -z "$EMAIL" ] && [ "$NON_INTERACTIVE" != "1" ]; then
         ask_valid "E-mail para avisos de expiração do certificado (Let's Encrypt)" "" validate_email \
             "E-mail inválido — use o formato nome@dominio.com."
         EMAIL="$REPLY_VAL"
@@ -396,7 +524,8 @@ cmd_install() {
     if [ -n "$EMAIL" ] && ! validate_email "$EMAIL"; then
         die "--email '$EMAIL' não é um e-mail válido."
     fi
-    [ -z "$DOMAIN" ] && DOMAIN="${PUBLIC_IP:-_}"
+    # SKIP_SSL é mantido só por compatibilidade com versões anteriores do script.
+    [ "$SKIP_SSL" = "1" ] && HTTPS_MODE="selfsigned"
 
     # ── Banco de dados ────────────────────────────────────────────────────
     if [ -z "$DB_BACKEND" ]; then
@@ -478,7 +607,11 @@ cmd_install() {
   Usuário de sistema .. $SYS_USER
   Repositório ......... $REPO_URL
   Domínio/host ........ $DOMAIN
-  HTTPS (Let's Encrypt) $([ "$SKIP_SSL" = "1" ] && echo "não (certificado autoassinado)" || echo "sim")
+  HTTPS ............... $(case "$HTTPS_MODE" in
+                            letsencrypt) echo "Let's Encrypt (certificado real, grátis)" ;;
+                            selfsigned)  echo "autoassinado (navegador vai avisar 'não seguro')" ;;
+                            none)        echo "nenhum — apenas HTTP (não recomendado)" ;;
+                          esac)
   Banco de dados ...... $DB_BACKEND
   Workers Gunicorn .... $WORKERS
   Admin inicial ....... $ADMIN_NOME (cpf/id: $ADMIN_CPF)
@@ -492,11 +625,16 @@ EOF
     # ── 1. Pacotes do sistema ─────────────────────────────────────────────
     log "Atualizando pacotes e instalando dependências do sistema"
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
-    PKGS=(python3 python3-venv python3-pip git nginx build-essential pkg-config curl ufw openssl cron)
-    [ "$SKIP_SSL" != "1" ] && PKGS+=(certbot python3-certbot-nginx)
+    retry_cmd 3 apt-get update -y \
+        || die "apt-get update falhou depois de 3 tentativas — confira a conexão da VM com a internet."
+    # Inclui bibliotecas de compilação para o caso raro de o pip precisar
+    # compilar 'cryptography'/'Pillow' na hora (sem wheel pronta pra essa arch).
+    PKGS=(python3 python3-venv python3-pip git nginx build-essential pkg-config curl ufw \
+          openssl cron libssl-dev libffi-dev python3-dev zlib1g-dev libjpeg-dev)
+    [ "$HTTPS_MODE" = "letsencrypt" ] && PKGS+=(certbot python3-certbot-nginx)
     [ "$DB_BACKEND" = "mariadb" ] && PKGS+=(mariadb-server mariadb-client libmariadb-dev)
-    apt-get install -y "${PKGS[@]}"
+    retry_cmd 3 apt-get install -y "${PKGS[@]}" \
+        || die "Falha ao instalar pacotes do sistema depois de 3 tentativas. Rode 'apt-get install ${PKGS[*]}' manualmente para ver o erro completo."
     ok "Pacotes instalados"
 
     # ── 2. Firewall ────────────────────────────────────────────────────────
@@ -514,19 +652,26 @@ EOF
     ok "Usuário e diretório prontos"
 
     # ── 4. Código da aplicação ────────────────────────────────────────────
+    log "Conferindo se o repositório é acessível"
+    retry_cmd 3 git ls-remote "$REPO_URL" HEAD >/dev/null 2>&1 \
+        || die "Não consegui acessar '$REPO_URL' (URL errada? repositório privado sem credenciais? sem internet?)."
+
     log "Obtendo código da aplicação"
     if [ -d "$INSTALL_DIR/.git" ]; then
         warn "Repositório já existe em $INSTALL_DIR — atualizando com 'git pull'."
-        sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git pull"
+        retry_cmd 3 sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git pull" \
+            || die "git pull falhou em $INSTALL_DIR. Verifique se há alterações locais conflitantes (git status)."
     elif [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
         die "$INSTALL_DIR já existe e não é um repositório git. Esvazie a pasta ou escolha outro diretório."
     else
-        sudo -u "$SYS_USER" -H git clone "$REPO_URL" "$INSTALL_DIR"
+        retry_cmd 3 sudo -u "$SYS_USER" -H git clone "$REPO_URL" "$INSTALL_DIR" \
+            || die "git clone de '$REPO_URL' falhou depois de 3 tentativas."
     fi
     ok "Código em $INSTALL_DIR"
 
     log "Criando ambiente virtual e instalando dependências Python"
-    sudo -u "$SYS_USER" -H bash -c "
+    if ! sudo -u "$SYS_USER" -H bash -c "
+        set -e
         cd '$INSTALL_DIR'
         python3 -m venv venv
         source venv/bin/activate
@@ -536,7 +681,23 @@ EOF
         if [ '$DB_BACKEND' = 'mariadb' ]; then
             pip install pymysql cryptography -q
         fi
-    "
+    " > /tmp/pip_install.log 2>&1; then
+        warn "Primeira tentativa de instalar dependências Python falhou — tentando de novo"
+        warn "(bibliotecas de compilação já foram instaladas no passo 1, pode ter sido rede)."
+        if ! sudo -u "$SYS_USER" -H bash -c "
+            cd '$INSTALL_DIR'
+            source venv/bin/activate
+            pip install -r requirements.txt -q
+            pip install gunicorn -q
+            if [ '$DB_BACKEND' = 'mariadb' ]; then
+                pip install pymysql cryptography -q
+            fi
+        " > /tmp/pip_install.log 2>&1; then
+            err "Falha ao instalar dependências Python. Últimas linhas do log:"
+            tail -n 30 /tmp/pip_install.log >&2
+            die "Log completo em /tmp/pip_install.log."
+        fi
+    fi
     ok "Dependências instaladas"
 
     # ── 5. Banco de dados ─────────────────────────────────────────────────
@@ -544,13 +705,38 @@ EOF
     if [ "$DB_BACKEND" = "mariadb" ]; then
         log "Configurando MariaDB"
         systemctl enable --now mariadb >/dev/null 2>&1 || systemctl enable --now mysql
-        if ! mysql -u root -e "USE $DB_NAME" >/dev/null 2>&1; then
-            mysql -u root <<SQL
+        sleep 2
+        if ! systemctl is-active --quiet mariadb 2>/dev/null && ! systemctl is-active --quiet mysql 2>/dev/null; then
+            die "O serviço MariaDB não iniciou. Veja: journalctl -u mariadb --no-pager -n 50"
+        fi
+
+        # Padrão do Ubuntu: root do MariaDB autentica via socket Unix (sem
+        # senha) quando 'mysql' é chamado como root do sistema — funciona na
+        # maioria das instalações. Se não funcionar (root com senha definida
+        # manualmente antes), pedimos a senha em vez de falhar sem explicação.
+        MYSQL_ROOT_CMD=(mysql -u root)
+        if ! "${MYSQL_ROOT_CMD[@]}" -e "SELECT 1" >/dev/null 2>&1; then
+            warn "Não consegui autenticar no MariaDB como root via socket (padrão do Ubuntu)."
+            if [ "$NON_INTERACTIVE" != "1" ]; then
+                ask_secret "Senha do root do MariaDB (deixe em branco para tentar sem senha de novo)"
+                if [ -n "$REPLY_VAL" ]; then
+                    MYSQL_ROOT_CMD=(mysql -u root -p"$REPLY_VAL")
+                fi
+            fi
+            "${MYSQL_ROOT_CMD[@]}" -e "SELECT 1" >/dev/null 2>&1 \
+                || die "Não foi possível autenticar no MariaDB como root. Configure o acesso manualmente e rode de novo."
+        fi
+
+        if ! "${MYSQL_ROOT_CMD[@]}" -e "USE $DB_NAME" >/dev/null 2>&1; then
+            if ! "${MYSQL_ROOT_CMD[@]}" <<SQL
 CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
 GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';
 FLUSH PRIVILEGES;
 SQL
+            then
+                die "Falha ao criar banco/usuário no MariaDB. Rode manualmente para ver o erro: sudo mysql -u root"
+            fi
             ok "Banco '$DB_NAME' e usuário '$DB_USER' criados"
         else
             warn "Banco '$DB_NAME' já existe — mantendo como está."
@@ -604,7 +790,21 @@ SQL
         "$INSTALL_DIR/deploy/projeto-saida.service" > /etc/systemd/system/projeto-saida.service
     systemctl daemon-reload
     systemctl enable --now projeto-saida
-    ok "Serviço 'projeto-saida' ativo (journalctl -u projeto-saida -f para logs)"
+
+    if ! wait_for_service_ativo projeto-saida 15; then
+        err "O serviço 'projeto-saida' não subiu corretamente. Últimas linhas do log:"
+        journalctl -u projeto-saida --no-pager -n 40 >&2 || true
+        die "Corrija o erro acima (causas comuns: porta 8000 ocupada, erro no .env, dependência faltando) e rode a instalação de novo."
+    fi
+
+    log "Conferindo se a aplicação responde em 127.0.0.1:8000"
+    if wait_for_http "http://127.0.0.1:8000/" 15; then
+        ok "Serviço 'projeto-saida' ativo e respondendo (journalctl -u projeto-saida -f para logs)"
+    else
+        err "O processo do Gunicorn está de pé, mas não respondeu em http://127.0.0.1:8000/ a tempo."
+        journalctl -u projeto-saida --no-pager -n 40 >&2 || true
+        die "Revise o log acima antes de continuar — sem isso, Nginx/HTTPS não vão ter o que servir."
+    fi
 
     if [ "$WORKERS" -gt 1 ]; then
         log "Mais de 1 worker: ativando timer systemd para status (evita job duplicado)"
@@ -627,16 +827,24 @@ SQL
         "$INSTALL_DIR/deploy/nginx.conf" > /etc/nginx/sites-available/projeto-saida
     ln -sf /etc/nginx/sites-available/projeto-saida /etc/nginx/sites-enabled/projeto-saida
     rm -f /etc/nginx/sites-enabled/default
-    nginx -t
+    if ! nginx -t 2>/tmp/nginx_test.log; then
+        err "Nginx recusou a configuração gerada:"
+        tail -n 20 /tmp/nginx_test.log >&2
+        die "Corrija /etc/nginx/sites-available/projeto-saida e rode 'nginx -t' manualmente para validar."
+    fi
     systemctl reload nginx
-    ok "Nginx servindo http://$DOMAIN (proxy para Gunicorn em 127.0.0.1:8000)"
+    if wait_for_http "http://127.0.0.1/" 10; then
+        ok "Nginx servindo http://$DOMAIN (proxy para Gunicorn em 127.0.0.1:8000)"
+    else
+        warn "Nginx recarregou, mas http://127.0.0.1/ não respondeu a tempo — confira 'nginx -t' e os logs em /var/log/nginx/."
+    fi
 
     # ── 10. HTTPS ──────────────────────────────────────────────────────────
-    if [ "$SKIP_SSL" = "1" ]; then
-        emit_selfsigned_cert
-    else
-        emit_letsencrypt_cert
-    fi
+    case "$HTTPS_MODE" in
+        selfsigned) emit_selfsigned_cert ;;
+        letsencrypt) emit_letsencrypt_cert ;;
+        none) ok "Seguindo sem HTTPS, conforme escolhido (só http://$DOMAIN)." ;;
+    esac
 
     # ── 11. Backup automático (se escolhido) ───────────────────────────────
     if [ "$QUER_BACKUP" = "s" ]; then
@@ -651,7 +859,11 @@ SQL
     echo -e "${C_GREEN}${C_BOLD}Instalação concluída.${C_RESET}"
     cat <<EOF
 
-  URL ................ $([ "$SKIP_SSL" = "1" ] && echo "https://$DOMAIN (autoassinado) / http://$DOMAIN" || echo "https://$DOMAIN")
+  URL ................ $(case "$HTTPS_MODE" in
+                            letsencrypt) echo "https://$DOMAIN" ;;
+                            selfsigned)  echo "https://$DOMAIN (autoassinado) — aceite o aviso do navegador" ;;
+                            none)        echo "http://$DOMAIN (sem HTTPS)" ;;
+                          esac)
   Admin CPF/ID ....... $ADMIN_CPF
   Admin senha ........ ${ADMIN_SENHA} (ANOTE E GUARDE — não fica salva em nenhum arquivo)
   Diretório .......... $INSTALL_DIR
@@ -672,15 +884,37 @@ EOF
 # Emissão de certificado — autoassinado (fallback sem domínio)
 # ─────────────────────────────────────────────────────────────────────────
 emit_selfsigned_cert() {
-    warn "Sem Let's Encrypt: gerando certificado autoassinado só para não"
-    warn "deixar a porta 443 sem nada — o navegador vai avisar que não confia nele."
+    log "Gerando certificado autoassinado para '$DOMAIN'"
+    warn "O navegador vai avisar 'conexão não é segura' na primeira visita —"
+    warn "isso é esperado para um certificado autoassinado, não é um erro."
+
     mkdir -p /etc/ssl/projeto-saida
-    if [ ! -f /etc/ssl/projeto-saida/selfsigned.crt ]; then
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+
+    # SAN correto (IP ou DNS) é obrigatório — navegadores modernos (Chrome,
+    # Firefox) ignoram o campo CN sozinho desde 2017 e rejeitam o certificado
+    # como malformado se faltar o SAN, mesmo sendo autoassinado.
+    local san
+    if validate_ipv4 "$DOMAIN"; then
+        san="subjectAltName=IP:$DOMAIN"
+    else
+        san="subjectAltName=DNS:$DOMAIN"
+    fi
+
+    # Sempre regera: garante que o SAN acompanha o domínio/IP atual, mesmo
+    # que a VM tenha trocado de IP público desde a última execução.
+    if ! openssl req -x509 -nodes -days 825 -newkey rsa:2048 \
             -keyout /etc/ssl/projeto-saida/selfsigned.key \
             -out /etc/ssl/projeto-saida/selfsigned.crt \
-            -subj "/CN=$DOMAIN" >/dev/null 2>&1
+            -subj "/CN=$DOMAIN" \
+            -addext "$san" >/tmp/openssl_selfsigned.log 2>&1
+    then
+        err "Falha ao gerar o certificado autoassinado:"
+        tail -n 20 /tmp/openssl_selfsigned.log >&2
+        die "Não foi possível gerar o certificado. Veja /tmp/openssl_selfsigned.log."
     fi
+    chmod 640 /etc/ssl/projeto-saida/selfsigned.key
+    ok "Certificado autoassinado gerado (válido por ~2 anos, SAN=$DOMAIN)"
+
     if ! grep -q "listen 443 ssl" /etc/nginx/sites-available/projeto-saida 2>/dev/null; then
         cat >> /etc/nginx/sites-available/projeto-saida <<EOF
 
@@ -694,9 +928,16 @@ server {
 }
 EOF
     fi
-    nginx -t && systemctl reload nginx
+
+    if ! nginx -t 2>/tmp/nginx_test.log; then
+        err "Nginx recusou a configuração com o certificado autoassinado:"
+        tail -n 20 /tmp/nginx_test.log >&2
+        die "Corrija /etc/nginx/sites-available/projeto-saida e rode 'nginx -t' de novo."
+    fi
+    systemctl reload nginx
+    ok "HTTPS autoassinado ativo em https://$DOMAIN"
     echo
-    warn "Assim que tiver um domínio de verdade apontando para este IP, rode:"
+    warn "Assim que tiver um domínio de verdade apontando para este servidor, rode:"
     warn "  sudo bash deploy/install.sh --action ssl --domain SEU-DOMINIO --email SEU-EMAIL"
 }
 
@@ -767,34 +1008,51 @@ emit_letsencrypt_cert() {
 cmd_ssl() {
     banner
     echo "Emitir ou renovar o certificado HTTPS de uma instalação já feita."
+    echo "Por padrão emite Let's Encrypt; use --https-mode selfsigned para"
+    echo "gerar (ou trocar para) um certificado autoassinado com IP/domínio."
     echo
     require_existing_install
-
-    command -v certbot >/dev/null 2>&1 || {
-        log "Instalando Certbot"
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y && apt-get install -y certbot python3-certbot-nginx
-    }
 
     [ -f /etc/nginx/sites-available/projeto-saida ] \
         || die "Não encontrei /etc/nginx/sites-available/projeto-saida. Rode a ação 'install' primeiro."
 
+    [ -z "$HTTPS_MODE" ] && HTTPS_MODE="letsencrypt"
+    if [ "$HTTPS_MODE" != "letsencrypt" ] && [ "$HTTPS_MODE" != "selfsigned" ]; then
+        die "--https-mode aqui só aceita 'letsencrypt' ou 'selfsigned' (recebido: '$HTTPS_MODE')."
+    fi
+
     PUBLIC_IP="$(detect_public_ip)"
     if [ -z "$DOMAIN" ]; then
-        ask_valid "Domínio (ex: saida.suaorganizacao.com.br)" "" validate_domain \
-            "Domínio inválido — use um nome como saida.exemplo.com.br."
+        if [ "$HTTPS_MODE" = "selfsigned" ]; then
+            ask_valid "Domínio ou IP para o certificado" "${PUBLIC_IP:-}" validate_domain_ou_ip \
+                "Informe um domínio válido (ex: saida.exemplo.com.br) ou um IPv4."
+        else
+            ask_valid "Domínio (ex: saida.suaorganizacao.com.br)" "" validate_domain \
+                "Domínio inválido — use um nome como saida.exemplo.com.br."
+        fi
         DOMAIN="$REPLY_VAL"
-    elif ! validate_domain "$DOMAIN"; then
-        die "--domain '$DOMAIN' não parece um domínio válido."
+    elif [ "$HTTPS_MODE" = "selfsigned" ] && ! validate_domain_ou_ip "$DOMAIN"; then
+        die "--domain '$DOMAIN' não é um domínio nem um IPv4 válido."
+    elif [ "$HTTPS_MODE" = "letsencrypt" ] && ! validate_domain "$DOMAIN"; then
+        die "--domain '$DOMAIN' não parece um domínio válido (Let's Encrypt não emite para IP puro)."
     fi
-    if [ -z "$EMAIL" ] && [ "$NON_INTERACTIVE" != "1" ]; then
+
+    if [ "$HTTPS_MODE" = "letsencrypt" ] && [ -z "$EMAIL" ] && [ "$NON_INTERACTIVE" != "1" ]; then
         ask_valid "E-mail para avisos de expiração" "" validate_email \
             "E-mail inválido — use o formato nome@dominio.com."
         EMAIL="$REPLY_VAL"
     fi
 
-    SKIP_SSL="0"
-    emit_letsencrypt_cert
+    if [ "$HTTPS_MODE" = "selfsigned" ]; then
+        emit_selfsigned_cert
+    else
+        command -v certbot >/dev/null 2>&1 || {
+            log "Instalando Certbot"
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -y && apt-get install -y certbot python3-certbot-nginx
+        }
+        emit_letsencrypt_cert
+    fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -889,26 +1147,125 @@ cmd_backup() {
 # ─────────────────────────────────────────────────────────────────────────
 cmd_update() {
     banner
-    echo "Atualiza o código, dependências e o banco de uma instalação existente."
+    echo "Atualiza código, dependências e banco de uma instalação existente,"
+    echo "com backup automático antes e rollback automático se algo falhar."
     echo
     require_existing_install
 
     [ -d "$INSTALL_DIR/.git" ] || die "$INSTALL_DIR não parece um checkout git (sem .git)."
 
-    log "Baixando última versão"
-    sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git pull"
+    local db_engine="sqlite"
+    grep -q '^DATABASE_URL=mysql' "$INSTALL_DIR/.env" 2>/dev/null && db_engine="mariadb"
+
+    log "Verificando se há alterações locais não commitadas em $INSTALL_DIR"
+    if [ -n "$(sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git status --porcelain -- . ':!.env*'" 2>/dev/null)" ]; then
+        warn "Há arquivos modificados localmente em $INSTALL_DIR (fora de .env)."
+        warn "Isso normalmente não deveria acontecer numa instalação de produção."
+        if ! yesno "Continuar mesmo assim (git pull pode falhar ou descartar essas mudanças)?" "n"; then
+            die "Atualização cancelada. Revise 'git status' em $INSTALL_DIR antes de tentar de novo."
+        fi
+    fi
+
+    local before_commit
+    before_commit="$(sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git rev-parse HEAD")"
+
+    log "Verificando se há uma versão nova"
+    retry_cmd 3 sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git fetch --quiet" \
+        || die "git fetch falhou depois de 3 tentativas — confira a conectividade da VM."
+    local remote_commit branch
+    branch="$(sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git rev-parse --abbrev-ref HEAD")"
+    remote_commit="$(sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git rev-parse '@{u}'" 2>/dev/null || echo "$before_commit")"
+    if [ "$before_commit" = "$remote_commit" ]; then
+        ok "Já está na última versão (branch '$branch', commit ${before_commit:0:8}). Nada a fazer."
+        return 0
+    fi
+
+    log "Fazendo backup de segurança antes de atualizar"
+    local backup_stamp backup_pre_dir
+    backup_stamp="$(date +%Y%m%d_%H%M%S)"
+    backup_pre_dir="$INSTALL_DIR/instance/backups/pre-update-$backup_stamp"
+    mkdir -p "$backup_pre_dir"
+    cp "$INSTALL_DIR/.env" "$backup_pre_dir/.env.bak" 2>/dev/null || true
+    if [ "$db_engine" = "mariadb" ]; then
+        local db_url db_user_b db_pass_b db_name_b
+        db_url="$(grep '^DATABASE_URL=' "$INSTALL_DIR/.env" | cut -d= -f2-)"
+        db_user_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://([^:]+):.*#\1#')"
+        db_pass_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://[^:]+:([^@]+)@.*#\1#')"
+        db_name_b="$(echo "$db_url" | sed -E 's#.*/([^/?]+)$#\1#')"
+        if ! mysqldump -u "$db_user_b" -p"$db_pass_b" "$db_name_b" 2>/tmp/mysqldump_update.log | gzip > "$backup_pre_dir/db.sql.gz"; then
+            err "Falha ao fazer o backup do MariaDB antes de atualizar:"
+            tail -n 20 /tmp/mysqldump_update.log >&2
+            die "Atualização cancelada por segurança — sem backup, não sigo. Log em /tmp/mysqldump_update.log."
+        fi
+    else
+        find "$INSTALL_DIR/instance" -maxdepth 1 -name "*.db" -exec cp {} "$backup_pre_dir/" \; 2>/dev/null || true
+    fi
+    chown -R "$SYS_USER:$SYS_USER" "$backup_pre_dir"
+    ok "Backup pré-atualização salvo em $backup_pre_dir"
+
+    # rollback_update — restaura código e banco ao estado anterior a esta atualização.
+    rollback_update() {
+        err "Revertendo para o commit anterior (${before_commit:0:8}) e restaurando o backup..."
+        sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git reset --hard '$before_commit'" || true
+        sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && source venv/bin/activate && pip install -r requirements.txt -q" \
+            || warn "Não consegui reinstalar as dependências da versão anterior — revise o venv manualmente."
+        if [ "$db_engine" = "mariadb" ] && [ -f "$backup_pre_dir/db.sql.gz" ]; then
+            local db_url db_user_b db_pass_b db_name_b
+            db_url="$(grep '^DATABASE_URL=' "$INSTALL_DIR/.env" | cut -d= -f2-)"
+            db_user_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://([^:]+):.*#\1#')"
+            db_pass_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://[^:]+:([^@]+)@.*#\1#')"
+            db_name_b="$(echo "$db_url" | sed -E 's#.*/([^/?]+)$#\1#')"
+            gunzip -c "$backup_pre_dir/db.sql.gz" | mysql -u "$db_user_b" -p"$db_pass_b" "$db_name_b" \
+                || warn "Não consegui restaurar o dump do MariaDB automaticamente — restaure na mão a partir de $backup_pre_dir/db.sql.gz"
+        elif [ "$db_engine" = "sqlite" ]; then
+            local bkp
+            bkp="$(find "$backup_pre_dir" -maxdepth 1 -name "*.db" | head -n1)"
+            if [ -n "$bkp" ]; then
+                cp "$bkp" "$INSTALL_DIR/instance/$(basename "$bkp")"
+                chown "$SYS_USER:$SYS_USER" "$INSTALL_DIR/instance/$(basename "$bkp")"
+            fi
+        fi
+        systemctl restart projeto-saida 2>/dev/null || true
+        err "Reversão concluída. A instalação deve estar de volta ao estado anterior à atualização."
+        err "Backup preservado em $backup_pre_dir para investigação."
+    }
+
+    log "Baixando última versão (fast-forward only)"
+    if ! sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git merge --ff-only '@{u}'"; then
+        die "git pull (fast-forward) falhou — provavelmente há divergência local. Nada foi alterado; investigue com 'git status' em $INSTALL_DIR."
+    fi
 
     log "Atualizando dependências Python"
-    sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && source venv/bin/activate && pip install -r requirements.txt -q"
+    if ! sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && source venv/bin/activate && pip install -r requirements.txt -q" > /tmp/pip_update.log 2>&1; then
+        err "Falha ao instalar dependências da nova versão:"
+        tail -n 30 /tmp/pip_update.log >&2
+        rollback_update
+        die "Atualização revertida. Log completo em /tmp/pip_update.log."
+    fi
 
     log "Aplicando migrações de banco pendentes (se houver)"
-    run_as_app_user "flask db upgrade"
+    if ! run_as_app_user "flask db upgrade" > /tmp/flask_db_upgrade.log 2>&1; then
+        err "Falha ao aplicar migrações de banco:"
+        tail -n 30 /tmp/flask_db_upgrade.log >&2
+        rollback_update
+        die "Atualização revertida. Log completo em /tmp/flask_db_upgrade.log."
+    fi
 
     log "Reiniciando serviço"
     systemctl restart projeto-saida
-    systemctl --no-pager --lines=5 status projeto-saida || true
 
-    ok "Atualização concluída. Logs: journalctl -u projeto-saida -f"
+    if ! wait_for_service_ativo projeto-saida 15 || ! wait_for_http "http://127.0.0.1:8000/" 15; then
+        err "O serviço não voltou saudável depois da atualização."
+        journalctl -u projeto-saida --no-pager -n 40 >&2 || true
+        rollback_update
+        die "Atualização revertida por falha no health-check pós-restart."
+    fi
+
+    local after_commit
+    after_commit="$(sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git rev-parse HEAD")"
+    ok "Atualização concluída com sucesso: ${before_commit:0:8} → ${after_commit:0:8}"
+    echo "  Backup pré-atualização: $backup_pre_dir"
+    echo "  Logs: journalctl -u projeto-saida -f"
 }
 
 # ─────────────────────────────────────────────────────────────────────────

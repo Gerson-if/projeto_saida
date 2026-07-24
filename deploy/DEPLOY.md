@@ -10,8 +10,9 @@ pacotes e caminhos mudam e o resultado pode ficar inconsistente.
 
 > **Atalho:** se você não quer configurar nada na mão, use o instalador
 > guiado (`deploy/install.sh`) — ele faz todos os passos abaixo por você,
-> incluindo HTTPS grátis e backup automático, com um menu interativo e
-> validação dos dados digitados:
+> incluindo HTTPS grátis e backup automático, com um menu interativo,
+> validação dos dados digitados e checagens automáticas antes/depois de
+> cada etapa (rede, disco, portas, serviço realmente respondendo):
 > ```bash
 > git clone https://github.com/Gerson-if/projeto_saida.git
 > cd projeto_saida
@@ -19,19 +20,43 @@ pacotes e caminhos mudam e o resultado pode ficar inconsistente.
 > ```
 > Ele mostra um menu com as opções: instalação completa, emitir/renovar
 > HTTPS, configurar backup automático, atualizar uma instalação existente
-> e diagnóstico. Cada opção também pode ser chamada direto por flag, ex.:
+> (com backup e reversão automáticos se algo falhar) e diagnóstico. Cada
+> opção também pode ser chamada direto por flag, ex.:
 > `sudo bash deploy/install.sh --action update` (atalho: `deploy/update.sh`).
 > O guia manual abaixo continua útil para entender o que o script faz por
 > baixo dos panos, ou se preferir configurar cada etapa você mesmo.
+
+### Domínio, IP ou VPS sem domínio — como o instalador decide o HTTPS
+
+Ao rodar a instalação completa, o script pergunta como você quer expor o
+sistema (ou aceita via `--https-mode` + `--domain` para pular a pergunta):
+
+| Situação | Opção no menu | O que acontece |
+|---|---|---|
+| Tenho um domínio apontando para a VM/VPS | 1 | Certificado real via Let's Encrypt, grátis |
+| Não tenho domínio, mas quero HTTPS de verdade | 2 | Usa `SEU-IP.sslip.io` — resolve sozinho para o IP da VM, sem mexer em DNS, e ainda ganha certificado real do Let's Encrypt |
+| Quero acessar só pelo IP da VM/VPS mesmo | 3 | Certificado autoassinado, com o SAN (Subject Alternative Name) já correto para IP — o navegador avisa "conexão não é segura" na primeira visita, mas é só aceitar o aviso uma vez |
+| Ambiente de teste, sem HTTPS por enquanto | 4 | Só HTTP — não recomendado para produção |
+
+Muda de ideia depois? Rode só a parte de HTTPS de novo, sem reinstalar tudo:
+```bash
+# Trocar para HTTPS autoassinado usando o IP da VM
+sudo bash deploy/install.sh --action ssl --https-mode selfsigned --domain 203.0.113.10
+
+# Trocar para Let's Encrypt de verdade quando conseguir um domínio
+sudo bash deploy/install.sh --action ssl --https-mode letsencrypt --domain saida.exemplo.com.br --email voce@exemplo.com
+```
 
 ---
 
 ## 0. Antes de começar
 
-- Uma VM com pelo menos 1 vCPU / 1GB RAM (o app é leve).
-- Um domínio (ou subdomínio) apontando o DNS para o IP da VM — necessário
-  para o HTTPS com Let's Encrypt.
+- Uma VM/VPS com pelo menos 1 vCPU / 1GB RAM (o app é leve).
 - Acesso root/sudo via SSH.
+- Domínio: **opcional**. Ele só é obrigatório se você quiser HTTPS via
+  Let's Encrypt com um domínio próprio (seção "Domínio, IP ou VPS sem
+  domínio" logo abaixo explica as alternativas — incluindo acesso direto
+  pelo IP da VM/VPS, com ou sem HTTPS autoassinado).
 
 ---
 
@@ -41,8 +66,14 @@ pacotes e caminhos mudam e o resultado pode ficar inconsistente.
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y python3 python3-venv python3-pip git \
     nginx mariadb-server mariadb-client libmariadb-dev \
-    build-essential pkg-config certbot python3-certbot-nginx ufw
+    build-essential pkg-config certbot python3-certbot-nginx ufw cron \
+    libssl-dev libffi-dev python3-dev zlib1g-dev libjpeg-dev
 ```
+As últimas quatro bibliotecas (`libssl-dev`, `libffi-dev`, `python3-dev`,
+`zlib1g-dev`, `libjpeg-dev`) só são necessárias se o `pip` precisar
+compilar `cryptography`/`Pillow` na hora por não haver uma wheel pronta
+para a arquitetura da VM — instalar de qualquer forma evita descobrir
+isso no meio da instalação.
 
 ## 2. Firewall
 
@@ -243,6 +274,36 @@ login) para o backup — não é só o banco que importa.
 
 ## 13. Atualizando o sistema (deploy de uma nova versão)
 
+Forma recomendada — rotina de atualização segura, com backup automático
+antes de mexer em qualquer coisa e reversão automática se algo der errado:
+```bash
+sudo bash deploy/install.sh --action update
+# atalho equivalente:
+sudo bash deploy/update.sh
+```
+
+O que essa rotina faz, nessa ordem:
+1. Confere se há alterações locais não commitadas em `/opt/projeto_saida`
+   (não deveria haver, numa instalação de produção) e pergunta antes de
+   prosseguir se encontrar algo.
+2. Roda `git fetch` e compara com a versão local — se já estiver
+   atualizado, avisa e para por aí, sem mexer em nada.
+3. Faz backup do banco (dump do MariaDB ou cópia do SQLite) e do `.env`
+   antes de tocar em qualquer arquivo, em
+   `instance/backups/pre-update-<data_hora>/`.
+4. Atualiza o código só por fast-forward (`git merge --ff-only`) — se
+   houver divergência, para sem alterar nada em vez de criar um merge
+   estranho em produção.
+5. Reinstala as dependências Python e aplica migrações de banco
+   pendentes (`flask db upgrade`).
+6. Reinicia o serviço e confere se ele realmente voltou a responder
+   (não só se o processo subiu, mas se `http://127.0.0.1:8000/` responde).
+7. **Se qualquer passo de 4 a 6 falhar, reverte sozinho**: volta o código
+   para o commit anterior, restaura o backup do banco feito no passo 3,
+   reinstala as dependências da versão antiga e reinicia o serviço —
+   depois avisa claramente o que foi revertido e onde está o backup.
+
+Forma manual, se preferir fazer cada passo você mesmo:
 ```bash
 sudo -u projeto_saida -H bash <<'EOF'
 cd /opt/projeto_saida
@@ -253,6 +314,8 @@ flask db upgrade   # se houver migrações pendentes
 EOF
 sudo systemctl restart projeto-saida
 ```
+Sem o instalador, lembre-se de fazer o backup manualmente antes (seção
+12) — é justamente esse passo que a rotina automática cobre por você.
 
 ## 14. Logs da aplicação
 
