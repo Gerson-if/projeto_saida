@@ -6,6 +6,18 @@ Gunicorn + Nginx + MariaDB + HTTPS (Let's Encrypt) + systemd.
 Testado mentalmente para Ubuntu 22.04/24.04 e Debian 12. Em CentOS/RHEL/
 Rocky troque `apt` por `dnf` e os nomes de alguns pacotes.
 
+> **Atalho:** se você não quer configurar nada na mão, use o instalador
+> guiado (`deploy/install.sh`) — ele faz todos os passos abaixo por você,
+> incluindo o HTTPS grátis, de forma interativa:
+> ```bash
+> git clone https://github.com/Gerson-if/projeto_saida.git
+> cd projeto_saida
+> sudo bash deploy/install.sh
+> ```
+> Para atualizar depois: `sudo bash deploy/update.sh`. O guia manual
+> abaixo continua útil para entender o que o script faz por baixo dos
+> panos, ou se preferir configurar cada etapa você mesmo.
+
 ---
 
 ## 0. Antes de começar
