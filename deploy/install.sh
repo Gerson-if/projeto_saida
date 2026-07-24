@@ -16,7 +16,11 @@
 #       --dir /opt/projeto_saida --user projeto_saida \
 #       --repo https://github.com/Gerson-if/projeto_saida.git \
 #       --domain saida.exemplo.com.br --email voce@exemplo.com \
-#       --db mariadb --workers 2 --yes
+#       --workers 2 --yes
+#
+# O banco de dados de produção é sempre MariaDB — SQLite é só para
+# desenvolvimento local (veja setup_dev.sh). Não faz sentido rodar SQLite
+# atrás de múltiplos workers Gunicorn/usuários simultâneos em produção.
 #
 # Ações disponíveis (--action):
 #   install       Instalação completa (pacotes, venv, banco, systemd, Nginx, HTTPS)
@@ -51,7 +55,7 @@ SYS_USER="projeto_saida"
 REPO_URL="https://github.com/Gerson-if/projeto_saida.git"
 DOMAIN=""
 EMAIL=""
-DB_BACKEND=""            # sqlite | mariadb
+DB_BACKEND="mariadb"     # produção só suporta MariaDB — SQLite é dev-only
 DB_NAME="projeto_saida"
 DB_USER="projeto_saida"
 DB_PASS=""
@@ -79,7 +83,7 @@ while [ $# -gt 0 ]; do
         --repo) REPO_URL="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --domain) DOMAIN="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --email) EMAIL="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
-        --db) DB_BACKEND="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
+        --db) DB_BACKEND="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;   # só 'mariadb' é aceito (produção não usa SQLite)
         --workers) WORKERS="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --admin-nome) ADMIN_NOME="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --admin-cpf) ADMIN_CPF="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
@@ -528,27 +532,13 @@ EOF
     [ "$SKIP_SSL" = "1" ] && HTTPS_MODE="selfsigned"
 
     # ── Banco de dados ────────────────────────────────────────────────────
-    if [ -z "$DB_BACKEND" ]; then
-        if [ "$NON_INTERACTIVE" = "1" ]; then
-            DB_BACKEND="sqlite"
-        else
-            echo
-            echo "Banco de dados:"
-            echo "  1) SQLite   — mais simples, ótimo para times pequenos/uso único (padrão)"
-            echo "  2) MariaDB  — recomendado se esperar mais carga/usuários simultâneos"
-            while true; do
-                ask "Escolha (1/2)" "1"
-                case "$REPLY_VAL" in
-                    1) DB_BACKEND="sqlite"; break ;;
-                    2) DB_BACKEND="mariadb"; break ;;
-                    *) warn "Digite 1 ou 2." ;;
-                esac
-            done
-        fi
-    elif [ "$DB_BACKEND" != "sqlite" ] && [ "$DB_BACKEND" != "mariadb" ]; then
-        die "--db deve ser 'sqlite' ou 'mariadb' (recebido: '$DB_BACKEND')."
+    # Produção usa sempre MariaDB — SQLite não aguenta bem múltiplos workers
+    # Gunicorn/usuários simultâneos gravando ao mesmo tempo (é por isso que
+    # existe para dev, veja setup_dev.sh). Não há pergunta nem escolha aqui.
+    if [ "$DB_BACKEND" != "mariadb" ]; then
+        die "--db '$DB_BACKEND' não é suportado — produção usa sempre MariaDB (não precisa passar essa flag)."
     fi
-    [ "$DB_BACKEND" = "mariadb" ] && [ -z "$DB_PASS" ] && DB_PASS="$(rand_pass 24)"
+    [ -z "$DB_PASS" ] && DB_PASS="$(rand_pass 24)"
 
     if [ "$NON_INTERACTIVE" != "1" ]; then
         echo
@@ -612,7 +602,7 @@ EOF
                             selfsigned)  echo "autoassinado (navegador vai avisar 'não seguro')" ;;
                             none)        echo "nenhum — apenas HTTP (não recomendado)" ;;
                           esac)
-  Banco de dados ...... $DB_BACKEND
+  Banco de dados ...... MariaDB
   Workers Gunicorn .... $WORKERS
   Admin inicial ....... $ADMIN_NOME (cpf/id: $ADMIN_CPF)
   Backup automático ... $([ "$QUER_BACKUP" = "s" ] && echo "sim, diário às $BACKUP_HORA, retendo $BACKUP_RETENCAO_DIAS dias" || echo "não (pode configurar depois pela ação 'backup')")
@@ -632,7 +622,7 @@ EOF
     PKGS=(python3 python3-venv python3-pip git nginx build-essential pkg-config curl ufw \
           openssl cron libssl-dev libffi-dev python3-dev zlib1g-dev libjpeg-dev)
     [ "$HTTPS_MODE" = "letsencrypt" ] && PKGS+=(certbot python3-certbot-nginx)
-    [ "$DB_BACKEND" = "mariadb" ] && PKGS+=(mariadb-server mariadb-client libmariadb-dev)
+    PKGS+=(mariadb-server mariadb-client libmariadb-dev)
     retry_cmd 3 apt-get install -y "${PKGS[@]}" \
         || die "Falha ao instalar pacotes do sistema depois de 3 tentativas. Rode 'apt-get install ${PKGS[*]}' manualmente para ver o erro completo."
     ok "Pacotes instalados"
@@ -678,9 +668,7 @@ EOF
         pip install --upgrade pip -q
         pip install -r requirements.txt -q
         pip install gunicorn -q
-        if [ '$DB_BACKEND' = 'mariadb' ]; then
-            pip install pymysql cryptography -q
-        fi
+        pip install pymysql cryptography -q
     " > /tmp/pip_install.log 2>&1; then
         warn "Primeira tentativa de instalar dependências Python falhou — tentando de novo"
         warn "(bibliotecas de compilação já foram instaladas no passo 1, pode ter sido rede)."
@@ -689,9 +677,7 @@ EOF
             source venv/bin/activate
             pip install -r requirements.txt -q
             pip install gunicorn -q
-            if [ '$DB_BACKEND' = 'mariadb' ]; then
-                pip install pymysql cryptography -q
-            fi
+            pip install pymysql cryptography -q
         " > /tmp/pip_install.log 2>&1; then
             err "Falha ao instalar dependências Python. Últimas linhas do log:"
             tail -n 30 /tmp/pip_install.log >&2
@@ -708,51 +694,47 @@ EOF
     fi
     ok "Assets estáticos compilados — a aplicação não depende de CDN externo em produção"
 
-    # ── 5. Banco de dados ─────────────────────────────────────────────────
+    # ── 5. Banco de dados (sempre MariaDB em produção) ──────────────────────
     DATABASE_URL=""
-    if [ "$DB_BACKEND" = "mariadb" ]; then
-        log "Configurando MariaDB"
-        systemctl enable --now mariadb >/dev/null 2>&1 || systemctl enable --now mysql
-        sleep 2
-        if ! systemctl is-active --quiet mariadb 2>/dev/null && ! systemctl is-active --quiet mysql 2>/dev/null; then
-            die "O serviço MariaDB não iniciou. Veja: journalctl -u mariadb --no-pager -n 50"
-        fi
+    log "Configurando MariaDB"
+    systemctl enable --now mariadb >/dev/null 2>&1 || systemctl enable --now mysql
+    sleep 2
+    if ! systemctl is-active --quiet mariadb 2>/dev/null && ! systemctl is-active --quiet mysql 2>/dev/null; then
+        die "O serviço MariaDB não iniciou. Veja: journalctl -u mariadb --no-pager -n 50"
+    fi
 
-        # Padrão do Ubuntu: root do MariaDB autentica via socket Unix (sem
-        # senha) quando 'mysql' é chamado como root do sistema — funciona na
-        # maioria das instalações. Se não funcionar (root com senha definida
-        # manualmente antes), pedimos a senha em vez de falhar sem explicação.
-        MYSQL_ROOT_CMD=(mysql -u root)
-        if ! "${MYSQL_ROOT_CMD[@]}" -e "SELECT 1" >/dev/null 2>&1; then
-            warn "Não consegui autenticar no MariaDB como root via socket (padrão do Ubuntu)."
-            if [ "$NON_INTERACTIVE" != "1" ]; then
-                ask_secret "Senha do root do MariaDB (deixe em branco para tentar sem senha de novo)"
-                if [ -n "$REPLY_VAL" ]; then
-                    MYSQL_ROOT_CMD=(mysql -u root -p"$REPLY_VAL")
-                fi
+    # Padrão do Ubuntu: root do MariaDB autentica via socket Unix (sem
+    # senha) quando 'mysql' é chamado como root do sistema — funciona na
+    # maioria das instalações. Se não funcionar (root com senha definida
+    # manualmente antes), pedimos a senha em vez de falhar sem explicação.
+    MYSQL_ROOT_CMD=(mysql -u root)
+    if ! "${MYSQL_ROOT_CMD[@]}" -e "SELECT 1" >/dev/null 2>&1; then
+        warn "Não consegui autenticar no MariaDB como root via socket (padrão do Ubuntu)."
+        if [ "$NON_INTERACTIVE" != "1" ]; then
+            ask_secret "Senha do root do MariaDB (deixe em branco para tentar sem senha de novo)"
+            if [ -n "$REPLY_VAL" ]; then
+                MYSQL_ROOT_CMD=(mysql -u root -p"$REPLY_VAL")
             fi
-            "${MYSQL_ROOT_CMD[@]}" -e "SELECT 1" >/dev/null 2>&1 \
-                || die "Não foi possível autenticar no MariaDB como root. Configure o acesso manualmente e rode de novo."
         fi
+        "${MYSQL_ROOT_CMD[@]}" -e "SELECT 1" >/dev/null 2>&1 \
+            || die "Não foi possível autenticar no MariaDB como root. Configure o acesso manualmente e rode de novo."
+    fi
 
-        if ! "${MYSQL_ROOT_CMD[@]}" -e "USE $DB_NAME" >/dev/null 2>&1; then
-            if ! "${MYSQL_ROOT_CMD[@]}" <<SQL
+    if ! "${MYSQL_ROOT_CMD[@]}" -e "USE $DB_NAME" >/dev/null 2>&1; then
+        if ! "${MYSQL_ROOT_CMD[@]}" <<SQL
 CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
 GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';
 FLUSH PRIVILEGES;
 SQL
-            then
-                die "Falha ao criar banco/usuário no MariaDB. Rode manualmente para ver o erro: sudo mysql -u root"
-            fi
-            ok "Banco '$DB_NAME' e usuário '$DB_USER' criados"
-        else
-            warn "Banco '$DB_NAME' já existe — mantendo como está."
+        then
+            die "Falha ao criar banco/usuário no MariaDB. Rode manualmente para ver o erro: sudo mysql -u root"
         fi
-        DATABASE_URL="mysql+pymysql://${DB_USER}:${DB_PASS}@localhost/${DB_NAME}"
+        ok "Banco '$DB_NAME' e usuário '$DB_USER' criados"
     else
-        ok "Usando SQLite (criado automaticamente em instance/ na primeira execução)"
+        warn "Banco '$DB_NAME' já existe — mantendo como está."
     fi
+    DATABASE_URL="mysql+pymysql://${DB_USER}:${DB_PASS}@localhost/${DB_NAME}"
 
     # ── 6. Arquivo .env ────────────────────────────────────────────────────
     log "Gerando .env de produção"
@@ -1090,18 +1072,13 @@ setup_backup() {
         echo "mkdir -p \"\$DEST\""
         echo "set -a; source '$INSTALL_DIR/.env'; set +a"
         echo
-        if [ "$DB_BACKEND" = "mariadb" ] || grep -q '^DATABASE_URL=mysql' "$INSTALL_DIR/.env" 2>/dev/null; then
-            cat <<'BKSCRIPT'
+        cat <<'BKSCRIPT'
 DB_URL="${DATABASE_URL:-}"
 DB_USER_B=$(echo "$DB_URL" | sed -E 's#mysql\+pymysql://([^:]+):.*#\1#')
 DB_PASS_B=$(echo "$DB_URL" | sed -E 's#mysql\+pymysql://[^:]+:([^@]+)@.*#\1#')
 DB_NAME_B=$(echo "$DB_URL" | sed -E 's#.*/([^/?]+)$#\1#')
 mysqldump -u "$DB_USER_B" -p"$DB_PASS_B" "$DB_NAME_B" | gzip > "$DEST/db-$DATA.sql.gz"
 BKSCRIPT
-        else
-            echo 'find "'"$INSTALL_DIR"'/instance" -maxdepth 1 -name "*.db" -exec cp {} "$DEST/db-$DATA.db" \; 2>/dev/null || true'
-            echo '[ -f "$DEST/db-$DATA.db" ] && gzip -f "$DEST/db-$DATA.db"'
-        fi
         echo
         echo "tar -czf \"\$DEST/uploads-\$DATA.tar.gz\" -C '$INSTALL_DIR/app/static' uploads 2>/dev/null || true"
         echo
@@ -1125,12 +1102,6 @@ cmd_backup() {
     echo "(logos, fotos, vídeo de fundo do login) via cron."
     echo
     require_existing_install
-
-    if grep -q '^DATABASE_URL=mysql' "$INSTALL_DIR/.env" 2>/dev/null; then
-        DB_BACKEND="mariadb"
-    else
-        DB_BACKEND="sqlite"
-    fi
 
     if [ "$NON_INTERACTIVE" != "1" ]; then
         ask_valid "Quantos dias de backup manter" "$BACKUP_RETENCAO_DIAS" validate_inteiro_pos \
@@ -1173,8 +1144,8 @@ cmd_update() {
         die "Já existe uma atualização em andamento nesta instalação (lock: $lockfile). Aguarde terminar antes de rodar de novo."
     fi
 
-    local db_engine="sqlite"
-    grep -q '^DATABASE_URL=mysql' "$INSTALL_DIR/.env" 2>/dev/null && db_engine="mariadb"
+    grep -q '^DATABASE_URL=mysql' "$INSTALL_DIR/.env" 2>/dev/null \
+        || die "$INSTALL_DIR/.env não tem um DATABASE_URL de MariaDB — essa instalação não parece ter sido feita por este script (produção não usa SQLite)."
 
     log "Conferindo se o serviço já está saudável antes de mexer em qualquer coisa"
     if ! wait_for_service_ativo projeto-saida 5 || ! wait_for_http "http://127.0.0.1:8000/" 5; then
@@ -1216,19 +1187,15 @@ cmd_update() {
     backup_pre_dir="$INSTALL_DIR/instance/backups/pre-update-$backup_stamp"
     mkdir -p "$backup_pre_dir"
     cp "$INSTALL_DIR/.env" "$backup_pre_dir/.env.bak" 2>/dev/null || true
-    if [ "$db_engine" = "mariadb" ]; then
-        local db_url db_user_b db_pass_b db_name_b
-        db_url="$(grep '^DATABASE_URL=' "$INSTALL_DIR/.env" | cut -d= -f2-)"
-        db_user_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://([^:]+):.*#\1#')"
-        db_pass_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://[^:]+:([^@]+)@.*#\1#')"
-        db_name_b="$(echo "$db_url" | sed -E 's#.*/([^/?]+)$#\1#')"
-        if ! mysqldump -u "$db_user_b" -p"$db_pass_b" "$db_name_b" 2>/tmp/mysqldump_update.log | gzip > "$backup_pre_dir/db.sql.gz"; then
-            err "Falha ao fazer o backup do MariaDB antes de atualizar:"
-            tail -n 20 /tmp/mysqldump_update.log >&2
-            die "Atualização cancelada por segurança — sem backup, não sigo. Log em /tmp/mysqldump_update.log."
-        fi
-    else
-        find "$INSTALL_DIR/instance" -maxdepth 1 -name "*.db" -exec cp {} "$backup_pre_dir/" \; 2>/dev/null || true
+    local db_url db_user_b db_pass_b db_name_b
+    db_url="$(grep '^DATABASE_URL=' "$INSTALL_DIR/.env" | cut -d= -f2-)"
+    db_user_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://([^:]+):.*#\1#')"
+    db_pass_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://[^:]+:([^@]+)@.*#\1#')"
+    db_name_b="$(echo "$db_url" | sed -E 's#.*/([^/?]+)$#\1#')"
+    if ! mysqldump -u "$db_user_b" -p"$db_pass_b" "$db_name_b" 2>/tmp/mysqldump_update.log | gzip > "$backup_pre_dir/db.sql.gz"; then
+        err "Falha ao fazer o backup do MariaDB antes de atualizar:"
+        tail -n 20 /tmp/mysqldump_update.log >&2
+        die "Atualização cancelada por segurança — sem backup, não sigo. Log em /tmp/mysqldump_update.log."
     fi
     chown -R "$SYS_USER:$SYS_USER" "$backup_pre_dir"
     ok "Backup pré-atualização salvo em $backup_pre_dir"
@@ -1241,7 +1208,7 @@ cmd_update() {
             || warn "Não consegui reinstalar as dependências da versão anterior — revise o venv manualmente."
         sudo -u "$SYS_USER" -H bash "$INSTALL_DIR/scripts/build_static_assets.sh" --force \
             || warn "Não consegui recompilar os assets estáticos da versão anterior — revise app/static/vendor/ manualmente."
-        if [ "$db_engine" = "mariadb" ] && [ -f "$backup_pre_dir/db.sql.gz" ]; then
+        if [ -f "$backup_pre_dir/db.sql.gz" ]; then
             local db_url db_user_b db_pass_b db_name_b
             db_url="$(grep '^DATABASE_URL=' "$INSTALL_DIR/.env" | cut -d= -f2-)"
             db_user_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://([^:]+):.*#\1#')"
@@ -1249,13 +1216,6 @@ cmd_update() {
             db_name_b="$(echo "$db_url" | sed -E 's#.*/([^/?]+)$#\1#')"
             gunzip -c "$backup_pre_dir/db.sql.gz" | mysql -u "$db_user_b" -p"$db_pass_b" "$db_name_b" \
                 || warn "Não consegui restaurar o dump do MariaDB automaticamente — restaure na mão a partir de $backup_pre_dir/db.sql.gz"
-        elif [ "$db_engine" = "sqlite" ]; then
-            local bkp
-            bkp="$(find "$backup_pre_dir" -maxdepth 1 -name "*.db" | head -n1)"
-            if [ -n "$bkp" ]; then
-                cp "$bkp" "$INSTALL_DIR/instance/$(basename "$bkp")"
-                chown "$SYS_USER:$SYS_USER" "$INSTALL_DIR/instance/$(basename "$bkp")"
-            fi
         fi
         systemctl restart projeto-saida 2>/dev/null || true
         if wait_for_service_ativo projeto-saida 15 && wait_for_http "http://127.0.0.1:8000/" 15; then

@@ -3,8 +3,15 @@ config.py — Configurações da aplicação.
 
 Hierarquia:
   DevelopmentConfig  →  usa SQLite local em instance/, DEBUG=True
-  ProductionConfig   →  lê DATABASE_URL do ambiente, DEBUG=False
+  ProductionConfig   →  lê DATABASE_URL do ambiente (sempre MariaDB/MySQL —
+                         SQLite é rejeitado por validate(), veja abaixo),
+                         DEBUG=False
   TestingConfig      →  banco em memória, TESTING=True
+
+SQLite é só para desenvolvimento local (setup_dev.sh). Em produção,
+deploy/install.sh sempre configura MariaDB — não há suporte a SQLite em
+produção porque um arquivo único não aguenta bem escrita concorrente de
+vários usuários/workers Gunicorn ao mesmo tempo.
 
 Para selecionar: export FLASK_ENV=production  (ou passe a classe diretamente).
 """
@@ -224,11 +231,23 @@ class ProductionConfig(Config):
         # (uma sessão criada numa réplica seria rejeitada por outra).
         if not _secret_key_veio_do_ambiente:
             missing.append("SECRET_KEY")
-        if not os.environ.get("DATABASE_URL"):
+        database_url = os.environ.get("DATABASE_URL")
+        if not database_url:
             missing.append("DATABASE_URL")
         if missing:
             raise RuntimeError(
                 f"Variáveis de ambiente obrigatórias não configuradas: {missing}"
+            )
+        # SQLite é só para desenvolvimento (arquivo único, sem suporte real a
+        # escrita concorrente) — não é adequado para produção com múltiplos
+        # usuários/workers Gunicorn gravando ao mesmo tempo. deploy/install.sh
+        # já configura MariaDB automaticamente; se DATABASE_URL aponta para
+        # SQLite mesmo assim, é sinal de configuração manual equivocada.
+        if database_url.startswith("sqlite:"):
+            raise RuntimeError(
+                "DATABASE_URL aponta para SQLite, mas produção não suporta SQLite "
+                "— use MariaDB/MySQL (ex: mysql+pymysql://usuario:senha@host/banco). "
+                "Rode 'sudo bash deploy/install.sh' para configurar isso automaticamente."
             )
 
 

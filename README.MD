@@ -4,11 +4,11 @@ Sistema web desenvolvido em **Flask**, utilizando **SQLAlchemy**, **MariaDB** e 
 
 O projeto foi estruturado seguindo boas práticas de desenvolvimento, utilizando arquitetura modular com **Blueprints**, separação entre modelos, rotas e serviços, facilitando a manutenção e futuras expansões.
 
-Sistema web para registro e controle de saídas de militares, com atualização automática de status, dashboard analítica e suporte a MariaDB/MySQL ou SQLite.
+Sistema web para registro e controle de saídas de militares, com atualização automática de status e dashboard analítica. Usa SQLite em desenvolvimento (zero configuração) e MariaDB/MySQL em produção.
 
 **Como colocar para rodar:**
 - **Só para testar/desenvolver na sua máquina?** Veja [Desenvolvimento local](#desenvolvimento-local) — `bash setup_dev.sh` cuida de tudo (venv, dependências, assets estáticos, banco SQLite, dados de exemplo).
-- **Vai colocar em produção numa VM/VPS?** Veja [Deploy em produção](#deploy-em-produção) — `sudo bash deploy/install.sh` cuida de tudo (pacotes do sistema, banco, HTTPS grátis, backup automático, systemd/Nginx).
+- **Vai colocar em produção numa VM/VPS?** Veja [Deploy em produção](#deploy-em-produção) — `sudo bash deploy/install.sh` cuida de tudo (pacotes do sistema, MariaDB, HTTPS grátis, backup automático, systemd/Nginx).
 
 Nenhum dos dois caminhos exige editar arquivo de configuração na mão. O
 restante deste README documenta o funcionamento do sistema; os detalhes de
@@ -41,8 +41,9 @@ cada script estão comentados nos próprios arquivos e em `deploy/DEPLOY.md`.
 ## Requisitos
 
 - Python 3.11+
-- SQLite (padrão, já incluso no Python — ótimo para dev e para instalações pequenas) **ou** MariaDB 10.6+ / MySQL 8+ (recomendado se esperar mais carga/usuários simultâneos, em dev ou produção)
 - pip
+- **Desenvolvimento:** SQLite (já incluso no Python, zero configuração — usado por `setup_dev.sh`).
+- **Produção:** MariaDB 10.6+ / MySQL 8+ (configurado automaticamente por `deploy/install.sh`). SQLite não é suportado em produção — um arquivo único não aguenta bem escrita concorrente de vários usuários/workers Gunicorn ao mesmo tempo.
 
 ---
 
@@ -111,8 +112,8 @@ manual em nenhuma etapa:
 
 - **Pacotes do sistema, usuário dedicado, firewall**: instalados/configurados
   automaticamente, com validação de cada resposta digitada no menu.
-- **Banco de dados**: SQLite ou MariaDB, com banco e usuário criados na hora
-  quando aplicável.
+- **Banco de dados**: sempre MariaDB, com banco e usuário próprios da
+  aplicação criados na hora (senha gerada automaticamente).
 - **Gunicorn + systemd + Nginx**: serviço registrado e checado (rede, disco,
   portas, serviço realmente respondendo) antes e depois de cada etapa.
 - **HTTPS grátis**: com domínio próprio via Let's Encrypt, sem domínio via
@@ -181,9 +182,12 @@ manutenção são chamados pelo próprio instalador:
 - **Bloqueio por tentativas de login** (`LOGIN_MAX_TENTATIVAS`,
   `LOGIN_BLOQUEIO_MINUTOS` no `.env`), com contador atômico no banco — não
   perde incrementos mesmo com tentativas simultâneas.
-- **SQLite em modo WAL + busy_timeout**: reduz drasticamente os erros de
+- **SQLite em modo WAL + busy_timeout** (desenvolvimento): reduz os erros de
   "database is locked" quando vários usuários (ou o job automático de
-  status) gravam no banco ao mesmo tempo.
+  status) gravam no banco local ao mesmo tempo. Em produção esse tipo de
+  contenção nem chega a acontecer porque o banco é MariaDB, que já lida com
+  escrita concorrente nativamente — outro motivo para SQLite não ser
+  suportado em produção (veja [Requisitos](#requisitos)).
 - **`commit_seguro()`** (`app/db_utils.py`): centraliza o commit em todas as
   rotas. Qualquer falha real ao salvar é **logada** em
   `instance/logs/app.log`, erros de lock transitório são reexecutados
@@ -243,9 +247,10 @@ sistema_saida/
 - O scheduler APScheduler deve estar instalado (`pip install APScheduler`).
 - Para ambientes sem APScheduler, use `flask atualizar-status` via cron.
 
-**Banco SQLite não encontrado**
+**Banco SQLite não encontrado (desenvolvimento)**
 - Execute `flask init-db` para criar as tabelas.
 - O arquivo é criado em `instance/sistema_saida.db`.
+- Isso só se aplica a dev — em produção o banco é MariaDB (veja [Requisitos](#requisitos)).
 
 **Página sem estilo / ícones não aparecem / erro 404 em `/static/vendor/...`**
 - Os assets estáticos (Bootstrap, ícones, Chart.js, fonte Inter) precisam
