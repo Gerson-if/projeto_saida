@@ -10,6 +10,10 @@ python3 --version
 echo "📦  Instalando dependências..."
 pip install -r requirements.txt
 
+echo "🎨  Compilando assets estáticos (Bootstrap, ícones, Chart.js, fonte Inter)..."
+echo "    Baixa uma vez e serve local — a aplicação não depende de CDN externo."
+bash "$(dirname "${BASH_SOURCE[0]}")/scripts/build_static_assets.sh"
+
 echo "📄  Criando .env (se não existir)..."
 if [ ! -f .env ]; then
     cp .env.example .env

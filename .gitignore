@@ -20,3 +20,9 @@ app/static/uploads/*
 !app/static/uploads/.gitkeep
 app/static/relatorios/*
 !app/static/relatorios/.gitkeep
+
+# Assets estáticos de terceiros (Bootstrap, ícones, Chart.js, fonte Inter) —
+# gerados por scripts/build_static_assets.sh, rodado por setup_dev.sh e por
+# deploy/install.sh. Não versionar binários baixados; cada ambiente compila
+# os seus na hora.
+app/static/vendor/
