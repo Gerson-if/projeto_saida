@@ -1,22 +1,28 @@
-# Deploy em produção — VM Linux (Ubuntu/Debian)
+# Deploy em produção — VM Ubuntu
 
-Guia passo a passo para subir o sistema numa VM Linux "do zero", com
+Guia passo a passo para subir o sistema numa VM Ubuntu "do zero", com
 Gunicorn + Nginx + MariaDB + HTTPS (Let's Encrypt) + systemd.
 
-Testado mentalmente para Ubuntu 22.04/24.04 e Debian 12. Em CentOS/RHEL/
-Rocky troque `apt` por `dnf` e os nomes de alguns pacotes.
+**Recomendado apenas para Ubuntu 22.04 LTS ou 24.04 LTS.** O instalador
+guiado (próxima seção) detecta outras distros (Debian, CentOS, etc.) e
+avisa antes de continuar — não são testadas nem recomendadas, os nomes de
+pacotes e caminhos mudam e o resultado pode ficar inconsistente.
 
 > **Atalho:** se você não quer configurar nada na mão, use o instalador
 > guiado (`deploy/install.sh`) — ele faz todos os passos abaixo por você,
-> incluindo o HTTPS grátis, de forma interativa:
+> incluindo HTTPS grátis e backup automático, com um menu interativo e
+> validação dos dados digitados:
 > ```bash
 > git clone https://github.com/Gerson-if/projeto_saida.git
 > cd projeto_saida
 > sudo bash deploy/install.sh
 > ```
-> Para atualizar depois: `sudo bash deploy/update.sh`. O guia manual
-> abaixo continua útil para entender o que o script faz por baixo dos
-> panos, ou se preferir configurar cada etapa você mesmo.
+> Ele mostra um menu com as opções: instalação completa, emitir/renovar
+> HTTPS, configurar backup automático, atualizar uma instalação existente
+> e diagnóstico. Cada opção também pode ser chamada direto por flag, ex.:
+> `sudo bash deploy/install.sh --action update` (atalho: `deploy/update.sh`).
+> O guia manual abaixo continua útil para entender o que o script faz por
+> baixo dos panos, ou se preferir configurar cada etapa você mesmo.
 
 ---
 
@@ -213,14 +219,25 @@ Confirme também:
 
 ## 12. Backups
 
-MariaDB — dump diário simples via cron do usuário `projeto_saida`:
+Mais simples: deixe o instalador configurar tudo (banco + `app/static/uploads/`,
+com rotação automática pela retenção que você escolher):
+```bash
+sudo bash deploy/install.sh --action backup
+```
+Isso cria `deploy/backup.sh` (dump do MariaDB ou cópia do SQLite, mais
+`uploads/` compactado) e agenda um cron do usuário `projeto_saida` no
+horário escolhido. Para testar manualmente:
+```bash
+sudo -u projeto_saida bash /opt/projeto_saida/deploy/backup.sh
+```
+
+Se preferir configurar na mão, o equivalente para MariaDB é:
 ```bash
 sudo -u projeto_saida crontab -e
 ```
 ```cron
 0 3 * * * mysqldump -u projeto_saida -p'TROQUE-ESTA-SENHA' projeto_saida | gzip > /opt/projeto_saida/instance/backups/db-$(date +\%F).sql.gz
 ```
-Crie a pasta antes: `sudo -u projeto_saida mkdir -p /opt/projeto_saida/instance/backups`.
 Lembre de também copiar `app/static/uploads/` (logos, fotos, fundo do
 login) para o backup — não é só o banco que importa.
 
