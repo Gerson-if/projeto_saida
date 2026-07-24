@@ -4,29 +4,15 @@ Sistema web desenvolvido em **Flask**, utilizando **SQLAlchemy**, **MariaDB** e 
 
 O projeto foi estruturado seguindo boas práticas de desenvolvimento, utilizando arquitetura modular com **Blueprints**, separação entre modelos, rotas e serviços, facilitando a manutenção e futuras expansões.
 
-## Antes de iniciar
-
-Antes de executar a aplicação, é importante realizar corretamente a configuração do ambiente.
-
-A sequência recomendada de instalação é:
-
-1. Clonar o projeto.
-2. Criar e ativar o ambiente virtual (`venv`).
-3. Instalar as dependências do projeto.
-4. Instalar e iniciar o serviço do **MariaDB**.
-5. Criar o banco de dados da aplicação conforme informado neste documento.
-6. Configurar corretamente o arquivo `.env` com as credenciais de acesso ao banco.
-7. Verificar se a conexão com o MariaDB está funcionando e confirmar a porta utilizada pelo servidor (normalmente **3306**).
-8. Executar os comandos de inicialização do banco de dados.
-9. Iniciar a aplicação.
-
-> **Importante: A configuração padrão do projeto utiliza SQLite, que é criado automaticamente durante a inicialização. Caso deseje utilizar MariaDB/MySQL, será necessário criar previamente o banco de dados antes de executar flask init-db ou flask db upgrade. Caso contrário, a aplicação não conseguirá estabelecer conexão com o banco informado.
-
-
-Após concluir essas etapas, siga as instruções de instalação e execução descritas nas próximas seções deste README.
-
-
 Sistema web para registro e controle de saídas de militares, com atualização automática de status, dashboard analítica e suporte a MariaDB/MySQL ou SQLite.
+
+**Como colocar para rodar:**
+- **Só para testar/desenvolver na sua máquina?** Veja [Desenvolvimento local](#desenvolvimento-local) — `bash setup_dev.sh` cuida de tudo (venv, dependências, assets estáticos, banco SQLite, dados de exemplo).
+- **Vai colocar em produção numa VM/VPS?** Veja [Deploy em produção](#deploy-em-produção) — `sudo bash deploy/install.sh` cuida de tudo (pacotes do sistema, banco, HTTPS grátis, backup automático, systemd/Nginx).
+
+Nenhum dos dois caminhos exige editar arquivo de configuração na mão. O
+restante deste README documenta o funcionamento do sistema; os detalhes de
+cada script estão comentados nos próprios arquivos e em `deploy/DEPLOY.md`.
 
 ---
 
@@ -59,68 +45,86 @@ Além disso, o processo de instalação foi atualizado com orientações para co
 ## Requisitos
 
 - Python 3.11+
-- MariaDB 10.6+ / MySQL 8+ (produção) **ou** SQLite (desenvolvimento)
+- SQLite (padrão, já incluso no Python — ótimo para dev e para instalações pequenas) **ou** MariaDB 10.6+ / MySQL 8+ (recomendado se esperar mais carga/usuários simultâneos, em dev ou produção)
 - pip
 
 ---
 
-## Instalação
-
-### 1. Clone e configure o ambiente
+## Desenvolvimento local
 
 ```bash
 git clone https://github.com/Gerson-if/projeto_saida.git
 cd projeto_saida
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate        # Linux/Mac
 venv\Scripts\activate           # Windows
+
+bash setup_dev.sh
+```
+
+O `setup_dev.sh` faz tudo: instala as dependências, compila os assets
+estáticos localmente (Bootstrap, ícones, Chart.js, fonte Inter — veja
+[Funcionalidades](#funcionalidades)), cria o `.env` a partir do
+`.env.example`, inicializa o banco SQLite e popula com dados de exemplo.
+Ao final, execute:
+
+```bash
+python run.py
+```
+
+Acesse em `http://localhost:5000` — admin padrão: `cpf=admin` / `senha=admin123`.
+
+<details>
+<summary>Passo a passo manual, se preferir não usar o setup_dev.sh</summary>
+
+```bash
 pip install -r requirements.txt
-python -m pip install -r requirements.txt # executar caso nao encontre Flask
+bash scripts/build_static_assets.sh   # baixa Bootstrap/ícones/Chart.js/Inter localmente
+cp .env.example .env                  # edite se quiser mudar algo além do padrão (SQLite)
+flask init-db
+flask create-admin "Nome Completo" cpf_sem_pontos senha123
+python run.py
 ```
 
-### 2. Configure as variáveis de ambiente
-
-```bash
-cp .env.example .env
-# Edite .env com suas configurações (SECRET_KEY e DATABASE_URL)linux
-```
-
-```bash
-copy .env.example .env
-# Edite .env com suas configurações (SECRET_KEY e DATABASE_URL)windowns
-```
-
-**Para MariaDB**, crie o banco antes:
+**Para usar MariaDB em vez de SQLite em dev:** crie o banco antes e
+aponte `DATABASE_URL` no `.env`:
 ```sql
 CREATE DATABASE sistema_saida CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'seu_usuario'@'localhost' IDENTIFIED BY 'sua_senha';
 GRANT ALL ON sistema_saida.* TO 'seu_usuario'@'localhost';
 ```
+```dotenv
+DATABASE_URL=mysql+pymysql://seu_usuario:sua_senha@localhost/sistema_saida
+```
+</details>
 
-### 3. Inicialize o banco
+---
+
+## Deploy em produção
+
+Um único comando, numa VM/VPS Ubuntu — não precisa nem clonar o repositório
+antes, o próprio script cuida disso:
 
 ```bash
-flask init-db
+curl -fsSL https://raw.githubusercontent.com/Gerson-if/projeto_saida/main/deploy/install.sh -o install.sh
+sudo bash install.sh
 ```
 
-### 4. Crie o primeiro administrador
+Abre um menu guiado que cuida da instalação inteira: pacotes do sistema,
+usuário dedicado, firewall, banco de dados (SQLite ou MariaDB), Gunicorn +
+systemd, Nginx, **HTTPS grátis** (com domínio próprio via Let's Encrypt, sem
+domínio via `SEU-IP.sslip.io`, ou autoassinado usando o IP da VM
+diretamente) e **backup automático diário**. Também compila os assets
+estáticos localmente, então a aplicação não depende de nenhum CDN externo
+depois de instalada. Para atualizar depois, com backup e reversão
+automáticos se algo falhar:
 
 ```bash
-flask create-admin "Nome Completo" cpf_sem_pontos senha123
+sudo bash deploy/install.sh --action update
 ```
 
-### 5. Execute
-
-**Desenvolvimento:**
-```bash
-python run.py
-```
-
-**Produção (Gunicorn):** 
-```bash
-pip install gunicorn
-gunicorn "run:app" -w 4 -b 0.0.0.0:8000
-```
+Detalhes completos, todas as opções e o que cada etapa faz por baixo dos
+panos: **[deploy/DEPLOY.md](deploy/DEPLOY.md)**.
 
 ---
 
@@ -135,6 +139,17 @@ gunicorn "run:app" -w 4 -b 0.0.0.0:8000
 | `flask diagnosticar` | Verifica config. de sessão/segurança e do banco (debug) |
 | `flask db migrate -m "msg"` | Gera migração após alterar modelos |
 | `flask db upgrade` | Aplica migrações pendentes |
+| `bash scripts/build_static_assets.sh` | (Re)compila os assets estáticos locais (Bootstrap, ícones, Chart.js, Inter) |
+
+Em produção (instalação feita por `deploy/install.sh`), some comandos de
+manutenção são chamados pelo próprio instalador:
+
+| Comando | Descrição |
+|---|---|
+| `sudo bash deploy/install.sh --action update` | Atualização segura, com backup e reversão automáticos |
+| `sudo bash deploy/install.sh --action ssl` | Emite/troca o certificado HTTPS |
+| `sudo bash deploy/install.sh --action backup` | Configura backup automático diário |
+| `sudo bash deploy/install.sh --action diagnostico` | Diagnóstico de saúde da instalação |
 
 ---
 
@@ -180,7 +195,40 @@ Principais mudanças:
 
 ---
 
+## Atualização — Deploy automatizado, HTTPS flexível e assets locais
 
+O processo de instalação/deploy e a interface deixaram de depender de
+configuração manual ou de serviços externos:
+
+- **Instalador guiado (`deploy/install.sh`)**: um único comando cuida da
+  instalação de produção inteira numa VM/VPS Ubuntu — pacotes do sistema,
+  usuário dedicado, firewall, banco de dados, systemd, Nginx, HTTPS e
+  backup, com um menu interativo, validação de cada resposta digitada e
+  checagens automáticas (rede, disco, portas, serviço realmente
+  respondendo) antes e depois de cada etapa. Veja
+  [Deploy em produção](#deploy-em-produção) e `deploy/DEPLOY.md`.
+- **HTTPS sem exigir domínio**: além de domínio próprio (Let's Encrypt),
+  agora dá pra expor o sistema só pelo IP da VM/VPS — com certificado
+  autoassinado (SAN correto, não só CN) ou, sem abrir mão de um
+  certificado real, usando `SEU-IP.sslip.io`.
+- **Atualização segura**: `deploy/install.sh --action update` faz backup
+  do banco antes de qualquer mudança, atualiza só por fast-forward, e
+  **reverte tudo sozinho** (código, banco, dependências) se a migração,
+  a instalação de dependências ou o health-check pós-restart falharem —
+  pensado para nunca deixar a produção parada num estado quebrado.
+- **Backup automático diário**: `deploy/install.sh --action backup`
+  configura dump do banco + `app/static/uploads/` via cron, com retenção
+  configurável.
+- **Assets estáticos locais**: Bootstrap, Bootstrap Icons, Chart.js e a
+  fonte Inter deixaram de ser carregados de CDN externo
+  (`cdn.jsdelivr.net`, `fonts.googleapis.com`) e passaram a ser
+  compilados localmente em `app/static/vendor/` por
+  `scripts/build_static_assets.sh` — chamado automaticamente por
+  `setup_dev.sh` e por `deploy/install.sh`. Páginas carregam mais rápido
+  (sem handshake TLS extra para outros domínios) e a aplicação continua
+  funcionando mesmo se a VM perder acesso à internet depois de instalada.
+
+---
 
 ## Status das Saídas
 
@@ -236,3 +284,17 @@ sistema_saida/
 **Banco SQLite não encontrado**
 - Execute `flask init-db` para criar as tabelas.
 - O arquivo é criado em `instance/sistema_saida.db`.
+
+**Página sem estilo / ícones não aparecem / erro 404 em `/static/vendor/...`**
+- Os assets estáticos (Bootstrap, ícones, Chart.js, fonte Inter) precisam
+  ser compilados uma vez antes de rodar a aplicação: `bash
+  scripts/build_static_assets.sh` (já é feito automaticamente por
+  `setup_dev.sh` e por `deploy/install.sh` — só costuma faltar se você
+  rodou a aplicação pulando esses scripts). Precisa de acesso a
+  `registry.npmjs.org` na hora de compilar; depois disso, a aplicação
+  não depende mais de internet para servir sua própria interface.
+
+**Instalação em produção com problema**
+- Rode `sudo bash deploy/install.sh --action diagnostico` — confere
+  configuração da aplicação, serviço systemd, Nginx, certificados e
+  espaço em disco de uma vez. Veja também `deploy/DEPLOY.md`.
