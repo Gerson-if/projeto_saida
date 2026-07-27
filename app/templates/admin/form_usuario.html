@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Novo' if acao == 'novo' else 'Editar' }} Usuário{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center gap-3">
+    <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-sm btn-light">
+        <i class="bi bi-arrow-left"></i>
+    </a>
+    <div>
+        <h4 class="mb-0 fw-bold">
+            <i class="bi bi-person-{{ 'plus' if acao == 'novo' else 'gear' }} me-2" style="color:var(--cor-secundaria);"></i>
+            {{ 'Cadastrar Novo Usuário' if acao == 'novo' else 'Editar Usuário: ' + usuario.nome }}
+        </h4>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0 fw-semibold">
+                    <i class="bi bi-person-circle me-2 text-primary"></i>Dados do Usuário
+                </h6>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" enctype="multipart/form-data" novalidate>
+
+                    {% if acao == 'editar' and usuario.foto %}
+                    <div class="text-center mb-4">
+                        <img src="{{ url_for('static', filename='uploads/' + usuario.foto) }}"
+                             class="rounded-circle" style="width:90px;height:90px;object-fit:cover;border:3px solid var(--cor-secundaria);" alt="">
+                        <div class="text-muted mt-1" style="font-size:0.78rem;">Foto atual</div>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-person me-1"></i>Nome Completo <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" name="nome" class="form-control"
+                               value="{{ usuario.nome if usuario else '' }}"
+                               placeholder="Nome completo do usuário" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-person-badge me-1"></i>CPF / Identificação <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" name="cpf" class="form-control"
+                               value="{{ usuario.cpf if usuario else '' }}"
+                               placeholder="CPF ou identificação" required>
+                        <div class="form-text">Este será o login de acesso ao sistema.</div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">
+                                <i class="bi bi-key me-1"></i>{{ 'Senha' if acao == 'novo' else 'Nova Senha' }}
+                                {% if acao == 'novo' %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            <div class="input-group">
+                                <input type="password" name="{{ 'senha' if acao == 'novo' else 'nova_senha' }}"
+                                       id="senhaInput" class="form-control"
+                                       placeholder="{{ 'Mínimo 4 caracteres' if acao == 'novo' else 'Deixe em branco para não alterar' }}"
+                                       {{ 'required' if acao == 'novo' else '' }}>
+                                <button type="button" class="btn btn-outline-secondary" onclick="toggleSenha()">
+                                    <i class="bi bi-eye" id="senhaIcon"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">
+                                <i class="bi bi-shield me-1"></i>Perfil de Acesso <span class="text-danger">*</span>
+                            </label>
+                            <select name="tipo" class="form-select">
+                                <option value="usuario" {{ 'selected' if usuario and usuario.tipo == 'usuario' else '' }}>
+                                    👤 Usuário Convencional
+                                </option>
+                                <option value="admin" {{ 'selected' if usuario and usuario.tipo == 'admin' else '' }}>
+                                    🛡️ Super Administrador
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {% if acao == 'editar' %}
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-image me-1"></i>Foto do Usuário
+                        </label>
+                        <input type="file" name="foto" class="form-control" accept="image/*">
+                        <div class="form-text">PNG, JPG ou GIF. Máximo 5MB.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="ativo" id="ativoCheck"
+                                   {{ 'checked' if usuario.ativo else '' }}>
+                            <label class="form-check-label" for="ativoCheck">
+                                Usuário ativo (pode acessar o sistema)
+                            </label>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="alert alert-info d-flex align-items-start gap-2 py-2">
+                        <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+                        <small>
+                            {% if acao == 'novo' %}
+                            O usuário poderá fazer login com o CPF e a senha informados acima.
+                            {% else %}
+                            Deixe a senha em branco para mantê-la sem alterações.
+                            {% endif %}
+                        </small>
+                    </div>
+
+                    <div class="d-flex gap-2 justify-content-end mt-3">
+                        <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-light">
+                            <i class="bi bi-x me-1"></i>Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i>
+                            {{ 'Cadastrar Usuário' if acao == 'novo' else 'Salvar Alterações' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleSenha() {
+    const input = document.getElementById('senhaInput');
+    const icon = document.getElementById('senhaIcon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+    } else {
+        input.type = 'password';
+        icon.className = 'bi bi-eye';
+    }
+}
+</script>
+{% endblock %}

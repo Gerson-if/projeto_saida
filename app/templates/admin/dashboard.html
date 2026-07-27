@@ -1,0 +1,309 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard Admin — Controle de Saídas{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+        <h4 class="mb-0 fw-bold">
+            <i class="bi bi-speedometer2 me-2" style="color:var(--cor-secundaria);"></i>
+            Dashboard Administrativo
+        </h4>
+        <small class="text-muted">Visão geral e indicadores operacionais — {{ now.strftime('%d/%m/%Y %H:%M') }}</small>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('admin.novo_usuario') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-person-plus me-1"></i> Novo Usuário
+        </a>
+        <a href="{{ url_for('user.registrar_saida') }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-plus-circle me-1"></i> Registrar Saída
+        </a>
+    </div>
+</div>
+
+<!-- ── Indicadores Principais ───────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:#dbeafe;">
+                    <i class="bi bi-people" style="color:#1d4ed8;"></i>
+                </div>
+                <div>
+                    <div class="text-muted" style="font-size:0.78rem;">Total Militares</div>
+                    <div class="fw-bold fs-4">{{ total_militares }}</div>
+                    <div class="text-success" style="font-size:0.72rem;">
+                        <i class="bi bi-check-circle-fill me-1"></i>{{ militares_presentes }} presentes
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:#fce7f3;">
+                    <i class="bi bi-person-walking" style="color:#be185d;"></i>
+                </div>
+                <div>
+                    <div class="text-muted" style="font-size:0.78rem;">Em Trânsito</div>
+                    <div class="fw-bold fs-4">{{ em_transito }}</div>
+                    <div class="text-warning" style="font-size:0.72rem;">
+                        <i class="bi bi-clock me-1"></i>{{ agendadas }} agendadas
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:#dcfce7;">
+                    <i class="bi bi-house-check" style="color:#15803d;"></i>
+                </div>
+                <div>
+                    <div class="text-muted" style="font-size:0.78rem;">Retornados Hoje</div>
+                    <div class="fw-bold fs-4">{{ retornados_hoje }}</div>
+                    <div class="text-muted" style="font-size:0.72rem;">
+                        <i class="bi bi-calendar-day me-1"></i>{{ saidas_hoje }} saídas hoje
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-xl-3">
+        <div class="card stat-card h-100">
+            <div class="card-body d-flex align-items-center gap-3">
+                <div class="stat-icon" style="background:#fef3c7;">
+                    <i class="bi bi-journal-text" style="color:#d97706;"></i>
+                </div>
+                <div>
+                    <div class="text-muted" style="font-size:0.78rem;">Total de Saídas</div>
+                    <div class="fw-bold fs-4">{{ total_saidas }}</div>
+                    <div class="text-muted" style="font-size:0.72rem;">
+                        <i class="bi bi-shield-check me-1"></i>{{ total_admins }} admins
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Linha 2: Gráfico + Próximas saídas ───────────────────────────── -->
+<div class="row g-3 mb-4">
+    <!-- Gráfico de distribuição de status -->
+    <div class="col-md-5 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="mb-0 fw-semibold">
+                    <i class="bi bi-pie-chart me-2 text-primary"></i>Status das Saídas
+                </h6>
+            </div>
+            <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                <canvas id="graficoPizza" style="max-height:220px;"></canvas>
+                <div class="mt-3 w-100">
+                    {% for status, qtd in grafico_status.items() %}
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="badge bg-{{ StatusSaida.BADGES[status] }}">{{ StatusSaida.LABELS[status] }}</span>
+                        <span class="fw-bold text-muted small">{{ qtd }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Próximas saídas agendadas -->
+    <div class="col-md-7 col-lg-8">
+        <div class="card h-100">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-semibold">
+                    <i class="bi bi-calendar-event me-2 text-warning"></i>Próximas Saídas (7 dias)
+                </h6>
+                <a href="{{ url_for('admin.listar_saidas') }}?status=agendada" class="btn btn-sm btn-outline-warning">
+                    Ver agendadas
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-3">Militar</th>
+                                <th>Destino</th>
+                                <th>Data Saída</th>
+                                <th>Retorno</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in proximas_saidas %}
+                            <tr>
+                                <td class="ps-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="user-avatar-placeholder" style="width:28px;height:28px;font-size:0.7rem;">
+                                            {{ s.usuario.nome[0].upper() if s.usuario else '?' }}
+                                        </div>
+                                        <span style="font-size:0.85rem;">{{ s.usuario.nome if s.usuario else '—' }}</span>
+                                    </div>
+                                </td>
+                                <td style="font-size:0.85rem;">{{ s.local }}</td>
+                                <td style="font-size:0.85rem;">{{ s.data_saida.strftime('%d/%m/%Y') }}</td>
+                                <td style="font-size:0.85rem;">{{ s.data_retorno.strftime('%d/%m/%Y') if s.data_retorno else '—' }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center py-3 text-muted">Nenhuma saída agendada para os próximos 7 dias.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Linha 3: Últimas saídas + Ações rápidas + Usuários ───────────── -->
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-semibold">
+                    <i class="bi bi-clock-history me-2 text-primary"></i>Últimas Saídas
+                </h6>
+                <a href="{{ url_for('admin.listar_saidas') }}" class="btn btn-sm btn-outline-primary">
+                    Ver todas <i class="bi bi-arrow-right ms-1"></i>
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-3">Usuário</th>
+                                <th>Local</th>
+                                <th>Saída</th>
+                                <th>Retorno</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for saida in ultimas_saidas %}
+                            <tr>
+                                <td class="ps-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="user-avatar-placeholder" style="width:28px;height:28px;font-size:0.72rem;">
+                                            {{ saida.usuario.nome[0].upper() if saida.usuario else '?' }}
+                                        </div>
+                                        <span class="fw-medium" style="font-size:0.875rem;">
+                                            {{ saida.usuario.nome if saida.usuario else '—' }}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td style="font-size:0.875rem;">{{ saida.local }}</td>
+                                <td style="font-size:0.875rem;">{{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '—' }}</td>
+                                <td style="font-size:0.875rem;">{{ saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else '—' }}</td>
+                                <td>
+                                    <span class="badge bg-{{ saida.status_badge }}">{{ saida.status_label }}</span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="5" class="text-center py-4 text-muted">Nenhuma saída registrada.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Ações rápidas -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0 fw-semibold"><i class="bi bi-lightning me-2 text-warning"></i>Ações Rápidas</h6>
+            </div>
+            <div class="card-body d-grid gap-2">
+                <a href="{{ url_for('admin.novo_usuario') }}" class="btn btn-outline-primary btn-sm text-start">
+                    <i class="bi bi-person-plus me-2"></i>Cadastrar Militar
+                </a>
+                <a href="{{ url_for('reports.por_periodo') }}" class="btn btn-outline-success btn-sm text-start">
+                    <i class="bi bi-file-earmark-pdf me-2"></i>Relatório por Período
+                </a>
+                <a href="{{ url_for('reports.data_exata') }}" class="btn btn-outline-info btn-sm text-start">
+                    <i class="bi bi-calendar-check me-2"></i>Relatório Data Exata
+                </a>
+                <a href="{{ url_for('admin.listar_saidas') }}?status=em_transito" class="btn btn-outline-danger btn-sm text-start">
+                    <i class="bi bi-person-walking me-2"></i>Ver Em Trânsito ({{ em_transito }})
+                </a>
+                <a href="{{ url_for('admin.configuracoes') }}" class="btn btn-outline-secondary btn-sm text-start">
+                    <i class="bi bi-gear me-2"></i>Configurações
+                </a>
+            </div>
+        </div>
+
+        <!-- Lista de usuários -->
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-semibold"><i class="bi bi-people me-2 text-primary"></i>Militares</h6>
+                <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-sm btn-outline-primary">Gerenciar</a>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for u in usuarios[:6] %}
+                    <li class="list-group-item d-flex align-items-center gap-2 py-2 px-3">
+                        <div class="user-avatar-placeholder" style="width:26px;height:26px;font-size:0.7rem;flex-shrink:0;">
+                            {{ u.nome[0].upper() }}
+                        </div>
+                        <div class="flex-grow-1 min-w-0">
+                            <div class="fw-medium text-truncate" style="font-size:0.82rem;">{{ u.nome }}</div>
+                        </div>
+                        {% if u.saidas_ativas > 0 %}
+                        <span class="badge bg-danger bg-opacity-80" style="font-size:0.68rem;" title="Em trânsito">
+                            <i class="bi bi-person-walking"></i> {{ u.saidas_ativas }}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-success bg-opacity-10 text-success" style="font-size:0.68rem;">Presente</span>
+                        {% endif %}
+                    </li>
+                    {% else %}
+                    <li class="list-group-item text-center text-muted py-3" style="font-size:0.85rem;">Nenhum usuário.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const ctx = document.getElementById('graficoPizza');
+    if (!ctx) return;
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: [
+                {% for status, qtd in grafico_status.items() %}'{{ StatusSaida.LABELS[status] }}',{% endfor %}
+            ],
+            datasets: [{
+                data: [
+                    {% for status, qtd in grafico_status.items() %}{{ qtd }},{% endfor %}
+                ],
+                backgroundColor: ['#fbbf24','#3b82f6','#22c55e','#94a3b8'],
+                borderWidth: 2,
+                borderColor: '#fff',
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: {
+                    label: (ctx) => ` ${ctx.label}: ${ctx.parsed}`
+                }}
+            },
+            cutout: '65%',
+        }
+    });
+})();
+</script>
+{% endblock %}

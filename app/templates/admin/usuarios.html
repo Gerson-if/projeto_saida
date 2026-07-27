@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% block title %}Usuários — Admin{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+        <h4 class="mb-0 fw-bold"><i class="bi bi-people me-2" style="color:var(--cor-secundaria);"></i>Gestão de Usuários</h4>
+        <small class="text-muted">Cadastre, edite e gerencie os usuários do sistema</small>
+    </div>
+    <a href="{{ url_for('admin.novo_usuario') }}" class="btn btn-primary">
+        <i class="bi bi-person-plus me-1"></i> Novo Usuário
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex flex-wrap align-items-center gap-2">
+        <form class="d-flex gap-2 flex-grow-1" method="GET">
+            <div class="input-group" style="max-width:380px;">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" name="busca" class="form-control" placeholder="Buscar por nome ou CPF..."
+                       value="{{ busca }}">
+                <button class="btn btn-outline-secondary" type="submit">Buscar</button>
+            </div>
+            {% if busca %}
+            <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-x-lg"></i>
+            </a>
+            {% endif %}
+        </form>
+        <span class="badge bg-secondary ms-auto">{{ usuarios|length }} usuários</span>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-4" style="width:40px;">#</th>
+                        <th>Usuário</th>
+                        <th>CPF</th>
+                        <th>Perfil</th>
+                        <th>Status</th>
+                        <th>Cadastro</th>
+                        <th class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr>
+                        <td class="ps-4 text-muted">{{ loop.index }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                {% if u.foto %}
+                                    <img src="{{ url_for('static', filename='uploads/' + u.foto) }}"
+                                         class="user-avatar" alt="" style="width:32px;height:32px;">
+                                {% else %}
+                                    <div class="user-avatar-placeholder" style="width:32px;height:32px;font-size:0.8rem;background:{{ '#1a3a5c' if u.is_admin else '#2980b9' }};">
+                                        {{ u.nome[0].upper() }}
+                                    </div>
+                                {% endif %}
+                                <div>
+                                    <div class="fw-medium" style="font-size:0.875rem;">{{ u.nome }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="text-muted" style="font-size:0.875rem;">{{ u.cpf }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'danger' if u.is_admin else 'primary' }} bg-opacity-15 text-{{ 'danger' if u.is_admin else 'primary' }}">
+                                <i class="bi bi-{{ 'shield-fill' if u.is_admin else 'person' }} me-1"></i>
+                                {{ 'Super Admin' if u.is_admin else 'Usuário' }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ 'success' if u.ativo else 'secondary' }} bg-opacity-15 text-{{ 'success' if u.ativo else 'secondary' }}">
+                                <i class="bi bi-{{ 'check-circle' if u.ativo else 'x-circle' }} me-1"></i>
+                                {{ 'Ativo' if u.ativo else 'Inativo' }}
+                            </span>
+                        </td>
+                        <td class="text-muted" style="font-size:0.8rem;">
+                            {{ u.data_criacao.strftime('%d/%m/%Y') if u.data_criacao else '-' }}
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex justify-content-center gap-1">
+                                <a href="{{ url_for('admin.editar_usuario', id=u.id) }}"
+                                   class="btn btn-sm btn-outline-primary" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if u.id != current_user.id %}
+                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                        title="Excluir"
+                                        data-bs-toggle="modal" data-bs-target="#modalExcluir{{ u.id }}">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Modal de confirmação -->
+                    <div class="modal fade" id="modalExcluir{{ u.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-sm">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h6 class="modal-title text-danger">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Confirmar Exclusão
+                                    </h6>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body" style="font-size:0.875rem;">
+                                    Tem certeza que deseja excluir o usuário <strong>{{ u.nome }}</strong>?
+                                    Esta ação não pode ser desfeita.
+                                </div>
+                                <div class="modal-footer gap-2">
+                                    <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                    <form method="POST" action="{{ url_for('admin.excluir_usuario', id=u.id) }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash me-1"></i>Excluir
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-people display-6 d-block mb-2"></i>
+                            Nenhum usuário encontrado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

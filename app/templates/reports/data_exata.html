@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Relatório por Data Exata{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center gap-3">
+    <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-light">
+        <i class="bi bi-arrow-left"></i>
+    </a>
+    <div>
+        <h4 class="mb-0 fw-bold">
+            <i class="bi bi-calendar-date me-2" style="color:var(--cor-secundaria);"></i>Relatório por Data Exata
+        </h4>
+        <small class="text-muted">Busque registros de uma data específica</small>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-funnel me-2"></i>Filtros</h6>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="formRelatorio">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Data Exata <span class="text-danger">*</span></label>
+                    <input type="date" name="data_exata" class="form-control"
+                           value="{{ filtros.get('data_exata', '') }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Usuário (opcional)</label>
+                    <select name="usuario_id" class="form-select">
+                        <option value="">Todos os usuários</option>
+                        {% for u in usuarios %}
+                        <option value="{{ u.id }}" {{ 'selected' if filtros.get('usuario_id') == u.id|string }}>
+                            {{ u.nome }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Status (opcional)</label>
+                    <select name="status" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="pendente" {{ 'selected' if filtros.get('status') == 'pendente' }}>Pendente</option>
+                        <option value="ativo" {{ 'selected' if filtros.get('status') == 'ativo' }}>Em Trânsito</option>
+                        <option value="retornado" {{ 'selected' if filtros.get('status') == 'retornado' }}>Retornado</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="d-flex flex-wrap gap-2 w-100">
+                        <input type="hidden" name="formato" id="formatoInput" value="visualizar">
+                        <button type="submit" class="btn btn-primary btn-sm" onclick="setFormato('visualizar')">
+                            <i class="bi bi-search me-1"></i>Visualizar
+                        </button>
+                        <button type="submit" class="btn btn-danger btn-sm" onclick="setFormato('pdf')">
+                            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+                        </button>
+                        <button type="submit" class="btn btn-success btn-sm" onclick="setFormato('csv')">
+                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if saidas is defined and request.method == 'POST' %}
+<div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="fw-semibold" style="font-size:0.875rem;">
+            <i class="bi bi-table me-2"></i>Resultados
+        </span>
+        <span class="badge bg-primary">{{ saidas|length }} registros</span>
+    </div>
+    <div class="card-body p-0">
+        {% if saidas %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">#</th>
+                        <th>Usuário</th>
+                        <th>Local</th>
+                        <th>Motivo</th>
+                        <th>Saída</th>
+                        <th>Retorno</th>
+                        <th>Telefone</th>
+                        <th>Endereço</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for saida in saidas %}
+                    <tr>
+                        <td class="ps-3 text-muted">{{ loop.index }}</td>
+                        <td>
+                            <div class="fw-medium" style="font-size:0.875rem;">
+                                {{ saida.usuario.nome if saida.usuario else '-' }}
+                            </div>
+                            <div class="text-muted" style="font-size:0.72rem;">{{ saida.cpf_usuario }}</div>
+                        </td>
+                        <td style="font-size:0.875rem;">{{ saida.local }}</td>
+                        <td style="font-size:0.8rem;max-width:180px;" class="text-truncate">{{ saida.motivo }}</td>
+                        <td style="font-size:0.875rem;">
+                            {{ saida.data_saida.strftime('%d/%m/%Y') if saida.data_saida else '-' }}
+                        </td>
+                        <td style="font-size:0.875rem;">
+                            {{ saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else '—' }}
+                        </td>
+                        <td style="font-size:0.82rem;">{{ saida.telefone_contato or '—' }}</td>
+                        <td style="font-size:0.78rem;max-width:150px;" class="text-truncate text-muted">
+                            {{ saida.endereco_destino or '—' }}
+                        </td>
+                        <td>
+                            <span class="badge bg-{{ saida.status_badge }}">{{ saida.status_label }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-calendar-x display-5 d-block mb-2"></i>
+            Nenhum registro encontrado para a data selecionada.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setFormato(fmt) {
+    document.getElementById('formatoInput').value = fmt;
+}
+</script>
+{% endblock %}
