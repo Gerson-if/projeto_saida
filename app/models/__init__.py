@@ -13,13 +13,16 @@ from app import bcrypt, db, login_manager
 
 @login_manager.user_loader
 def load_user(user_id: str) -> "Usuario | None":
-    return db.session.get(Usuario, int(user_id))
+    try:
+        return db.session.get(Usuario, int(user_id))
+    except (ValueError, TypeError):
+        return None
 
 
 class TipoUsuario:
-    ADMIN = "admin"
+    ADMIN   = "admin"
     USUARIO = "usuario"
-    TODOS = [ADMIN, USUARIO]
+    TODOS   = [ADMIN, USUARIO]
 
 
 class StatusSaida:
@@ -57,13 +60,20 @@ class Subunidade(db.Model):
 
     __tablename__ = "subunidades"
 
-    id    = db.Column(db.Integer, primary_key=True)
-    nome  = db.Column(db.String(100), unique=True, nullable=False)
-    sigla = db.Column(db.String(20), nullable=True)
-    ativa = db.Column(db.Boolean, default=True, nullable=False)
+    id           = db.Column(db.Integer, primary_key=True)
+    nome         = db.Column(db.String(100), unique=True, nullable=False)
+    sigla        = db.Column(db.String(20), nullable=True)
+    ativa        = db.Column(db.Boolean, default=True, nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    usuarios = db.relationship("Usuario", backref="subunidade", lazy="dynamic")
+    # lazy="select" (padrão) é mais seguro do que "dynamic" para contagens
+    # pequenas e evita erros ao fechar a sessão fora de contexto.
+    usuarios = db.relationship("Usuario", backref="subunidade", lazy="select")
+
+    @property
+    def total_usuarios(self) -> int:
+        """Quantidade de usuários vinculados (ativo ou não)."""
+        return len(self.usuarios)
 
     def __repr__(self) -> str:
         return f"<Subunidade {self.nome}>"
@@ -76,18 +86,18 @@ class Subunidade(db.Model):
 class Usuario(UserMixin, db.Model):
     __tablename__ = "usuarios"
 
-    id           = db.Column(db.Integer, primary_key=True)
-    cpf          = db.Column(db.String(14), unique=True, nullable=False, index=True)
-    nome         = db.Column(db.String(100), nullable=False)
-    senha_hash   = db.Column(db.String(255), nullable=False)
-    tipo         = db.Column(
+    id            = db.Column(db.Integer, primary_key=True)
+    cpf           = db.Column(db.String(14), unique=True, nullable=False, index=True)
+    nome          = db.Column(db.String(100), nullable=False)
+    senha_hash    = db.Column(db.String(255), nullable=False)
+    tipo          = db.Column(
         db.Enum(*TipoUsuario.TODOS, name="tipo_usuario"),
         nullable=False,
         default=TipoUsuario.USUARIO,
     )
-    ativo        = db.Column(db.Boolean, default=True, nullable=False)
-    data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    foto         = db.Column(db.String(255), nullable=True)
+    ativo         = db.Column(db.Boolean, default=True, nullable=False)
+    data_criacao  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    foto          = db.Column(db.String(255), nullable=True)
     subunidade_id = db.Column(
         db.Integer,
         db.ForeignKey("subunidades.id", ondelete="SET NULL"),
@@ -129,21 +139,21 @@ class Usuario(UserMixin, db.Model):
 class Registro(db.Model):
     __tablename__ = "registros"
 
-    id              = db.Column(db.Integer, primary_key=True)
-    cpf_usuario     = db.Column(
+    id                   = db.Column(db.Integer, primary_key=True)
+    cpf_usuario          = db.Column(
         db.String(14),
         db.ForeignKey("usuarios.cpf", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    local           = db.Column(db.String(255), nullable=False)
-    motivo          = db.Column(db.String(300), nullable=False)
-    data_saida      = db.Column(db.DateTime, nullable=False, index=True)
-    data_retorno    = db.Column(db.DateTime, nullable=True, index=True)
-    telefone_contato  = db.Column(db.String(20), nullable=True)
-    endereco_destino  = db.Column(db.Text, nullable=True)
-    data_registro   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    status          = db.Column(
+    local                = db.Column(db.String(255), nullable=False)
+    motivo               = db.Column(db.String(300), nullable=False)
+    data_saida           = db.Column(db.DateTime, nullable=False, index=True)
+    data_retorno         = db.Column(db.DateTime, nullable=True, index=True)
+    telefone_contato     = db.Column(db.String(20), nullable=True)
+    endereco_destino     = db.Column(db.Text, nullable=True)
+    data_registro        = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    status               = db.Column(
         db.Enum(*StatusSaida.TODOS, name="status_saida"),
         default=StatusSaida.AGENDADA,
         nullable=False,
@@ -152,8 +162,8 @@ class Registro(db.Model):
     status_atualizado_em = db.Column(db.DateTime, nullable=True)
 
     # Campos de cancelamento
-    motivo_cancelamento = db.Column(db.String(500), nullable=True)
-    data_cancelamento   = db.Column(db.DateTime, nullable=True)
+    motivo_cancelamento  = db.Column(db.String(500), nullable=True)
+    data_cancelamento    = db.Column(db.DateTime, nullable=True)
 
     @property
     def status_badge(self) -> str:
@@ -205,11 +215,11 @@ class Registro(db.Model):
 class ConfigSistema(db.Model):
     __tablename__ = "config_sistema"
 
-    id       = db.Column(db.Integer, primary_key=True)
-    chave    = db.Column(db.String(100), unique=True, nullable=False)
-    valor    = db.Column(db.Text, nullable=True)
+    id        = db.Column(db.Integer, primary_key=True)
+    chave     = db.Column(db.String(100), unique=True, nullable=False)
+    valor     = db.Column(db.Text, nullable=True)
     descricao = db.Column(db.String(255), nullable=True)
-    tipo     = db.Column(db.String(20), default="texto")
+    tipo      = db.Column(db.String(20), default="texto")
 
     @staticmethod
     def get(chave: str, default: str | None = None) -> str | None:
@@ -221,6 +231,7 @@ class ConfigSistema(db.Model):
 
     @staticmethod
     def set(chave: str, valor: str) -> None:
+        """Upsert de uma chave de configuração."""
         config = ConfigSistema.query.filter_by(chave=chave).first()
         if config:
             config.valor = valor

@@ -31,7 +31,7 @@ def create_app(config_name: str | None = None) -> Flask:
                      ('development', 'production', 'testing').
                      Se None, usa FLASK_ENV ou 'default'.
     """
-    from config import config as config_map
+    from config import config as config_map, INSTANCE_DIR
 
     app = Flask(__name__, instance_relative_config=False)
 
@@ -44,7 +44,9 @@ def create_app(config_name: str | None = None) -> Flask:
     if hasattr(cfg_class, "validate"):
         cfg_class.validate()
 
-    # ── Garante diretórios necessários ────────────────────────────────────
+    # ── Garante diretórios necessários ─────────────────────────────────────
+    # instance/ precisa existir antes de criar o banco SQLite
+    os.makedirs(INSTANCE_DIR, exist_ok=True)
     for folder in (app.config["UPLOAD_FOLDER"], app.config["RELATORIO_FOLDER"]):
         os.makedirs(folder, exist_ok=True)
 
@@ -62,7 +64,7 @@ def create_app(config_name: str | None = None) -> Flask:
     from app.context_processors import register_context_processors
     register_context_processors(app)
 
-    # ── Registra tratadores de erro (páginas amigáveis para 400/403/404/413/500...)
+    # ── Registra tratadores de erro ────────────────────────────────────────
     from app.error_handlers import register_error_handlers
     register_error_handlers(app)
 
@@ -90,8 +92,14 @@ def create_app(config_name: str | None = None) -> Flask:
 def _init_scheduler(app: Flask) -> None:
     """
     Registra job APScheduler para atualizar status de saídas automaticamente.
-    O job roda em background a cada N minutos (configurável via SCHEDULER_STATUS_INTERVAL_MINUTES).
+    Só inicia se não estivermos no processo de reloader do Werkzeug (evita
+    dois schedulers rodando em paralelo durante o desenvolvimento).
     """
+    # Em dev, o Werkzeug reloader fork dois processos. Só inicia o scheduler
+    # no processo "filho" (WERKZEUG_RUN_MAIN=true) ou em produção.
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "false":
+        return
+
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         from apscheduler.triggers.interval import IntervalTrigger
@@ -120,8 +128,7 @@ def _init_scheduler(app: Flask) -> None:
 
 def _job_atualizar_status(app: Flask) -> None:
     """
-    Função executada pelo scheduler.
-    Roda dentro do application context para ter acesso ao banco.
+    Função executada pelo scheduler dentro do application context.
     """
     with app.app_context():
         from app.models import Registro, StatusSaida
@@ -137,7 +144,11 @@ def _job_atualizar_status(app: Flask) -> None:
 
             if atualizados:
                 db.session.commit()
-                app.logger.info(f"[scheduler] {atualizados} saída(s) atualizada(s) automaticamente.")
+                app.logger.info(
+                    f"[scheduler] {atualizados} saída(s) atualizada(s) automaticamente."
+                )
         except Exception:
             db.session.rollback()
-            app.logger.exception("[scheduler] Falha ao atualizar status automático de saídas.")
+            app.logger.exception(
+                "[scheduler] Falha ao atualizar status automático de saídas."
+            )

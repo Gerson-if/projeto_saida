@@ -1,6 +1,6 @@
 # =============================================
 # Sistema de Controle de Saídas — requirements
-# Testado com Python 3.11+ e MariaDB/MySQL
+# Testado com Python 3.11+
 # =============================================
 
 # Web framework
@@ -12,7 +12,7 @@ SQLAlchemy>=2.0.25,<3.0
 Flask-Migrate>=4.0.0,<5.0
 alembic>=1.13.0,<2.0
 
-# Auth
+# Autenticação
 Flask-Login>=0.6.3,<1.0
 Flask-Bcrypt>=1.0.1,<2.0
 
@@ -22,12 +22,12 @@ python-dotenv>=1.0.1,<2.0
 # Geração de PDF
 reportlab>=4.2.0,<5.0
 
-# Imagens
+# Processamento de imagens
 Pillow>=10.0.0,<13.0
 
-# Banco MariaDB/MySQL (opcional para SQLite local)
+# Banco MariaDB/MySQL (necessário apenas em produção; SQLite não requer extras)
 PyMySQL>=1.1.0,<2.0
 cryptography>=42.0.0,<44.0
 
-# Tarefa agendada para atualização automática de status
+# Agendador de tarefas (atualização automática de status de saídas)
 APScheduler>=3.10.0,<4.0
