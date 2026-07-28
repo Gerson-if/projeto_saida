@@ -41,7 +41,7 @@
         <div class="col-sm-6">
             <label class="form-label fw-semibold">Data de Saída</label>
             <input type="date" name="data_saida" class="form-control"
-                   value="{{ saida.data_saida.strftime('%Y-%m-%d') if saida.data_saida else '' }}">
+                   value="{{ saida.data_saida.strftime('%Y-%m-%d') if saida.data_saida else '' }}" required>
         </div>
         <div class="col-sm-6">
             <label class="form-label fw-semibold">Previsão de Retorno</label>

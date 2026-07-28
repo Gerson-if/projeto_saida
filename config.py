@@ -36,9 +36,12 @@ class Config:
     }
 
     # ── Upload de arquivos ─────────────────────────────────────────────────
+    # IMPORTANTE: esta lista é apenas informativa/legado. A validação real do
+    # arquivo é feita pelo conteúdo (Pillow), não pela extensão — ver
+    # app/uploads.py::FORMATOS_ACEITOS, que é a fonte de verdade.
     UPLOAD_FOLDER: str = os.path.join(basedir, "app", "static", "uploads")
-    MAX_CONTENT_LENGTH: int = 5 * 1024 * 1024          # 5 MB
-    ALLOWED_EXTENSIONS: set = {"png", "jpg", "jpeg", "gif", "svg", "ico"}
+    MAX_CONTENT_LENGTH: int = 5 * 1024 * 1024          # 5 MB (limite global do Flask)
+    ALLOWED_EXTENSIONS: set = {"png", "jpg", "jpeg", "gif", "webp", "ico"}
 
     # ── Relatórios (PDF) ───────────────────────────────────────────────────
     RELATORIO_FOLDER: str = os.path.join(basedir, "app", "static", "relatorios")

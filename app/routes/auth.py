@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from app.models import Usuario
+from app.validators import sanitizar_texto
 from app import db
 
 auth_bp = Blueprint('auth', __name__)
@@ -15,8 +16,11 @@ def login():
         return redirect(url_for('user.dashboard'))
 
     if request.method == 'POST':
-        cpf = request.form.get('cpf', '').strip()
-        senha = request.form.get('senha', '').strip()
+        # Sanitiza e limita o tamanho de qualquer entrada antes de consultar o
+        # banco — evita strings gigantes/com caracteres de controle chegarem
+        # à consulta, e garante que nunca comparamos algo maior que a coluna.
+        cpf = sanitizar_texto(request.form.get('cpf', ''), max_len=14)
+        senha = (request.form.get('senha', '') or '').strip()[:255]
         lembrar = request.form.get('lembrar') == 'on'
 
         if not cpf or not senha:
@@ -35,7 +39,9 @@ def login():
 
             flash(f'Bem-vindo(a), {usuario.nome}!', 'success')
 
-            if next_page:
+            # Nunca redireciona para uma URL absoluta/externa vinda de "next"
+            # (evita open redirect): só aceitamos caminhos internos relativos.
+            if next_page and next_page.startswith('/') and not next_page.startswith('//'):
                 return redirect(next_page)
             if usuario.is_admin:
                 return redirect(url_for('admin.dashboard'))

@@ -137,8 +137,8 @@
                         </div>
 
                         <input type="file" name="{{ campo }}" id="file-{{ campo }}" class="form-control form-control-sm"
-                               accept="image/*,.ico" onchange="previewImagem('{{ campo }}', this)">
-                        <small class="text-muted">{{ dica }}</small>
+                               accept="image/png,image/jpeg,image/gif,image/webp,.ico" onchange="previewImagem('{{ campo }}', this)">
+                        <small class="text-muted">{{ dica }} Formatos: PNG, JPG, GIF, WEBP ou ICO — máx. 5MB, até 4000×4000px.</small>
                     </div>
                     {% endfor %}
                 </div>
@@ -169,6 +169,14 @@ document.querySelectorAll('input[type="color"]').forEach(el => {
 function previewImagem(campo, input) {
     const file = input.files[0];
     if (!file) return;
+
+    const TAMANHO_MAXIMO = 5 * 1024 * 1024; // 5 MB — mesmo limite validado no servidor
+    if (file.size > TAMANHO_MAXIMO) {
+        alert('A imagem excede o tamanho máximo permitido (5 MB). Escolha um arquivo menor.');
+        input.value = '';
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = function(e) {
         document.getElementById('img-novo-' + campo).src = e.target.result;

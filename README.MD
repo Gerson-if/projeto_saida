@@ -68,13 +68,19 @@ python -m venv venv
 source venv/bin/activate        # Linux/Mac
 venv\Scripts\activate           # Windows
 pip install -r requirements.txt
+python -m pip install -r requirements.txt # executar caso nao encontre Flask
 ```
 
 ### 2. Configure as variáveis de ambiente
 
 ```bash
 cp .env.example .env
-# Edite .env com suas configurações (SECRET_KEY e DATABASE_URL)
+# Edite .env com suas configurações (SECRET_KEY e DATABASE_URL)linux
+```
+
+```bash
+copy .env.example .env
+# Edite .env com suas configurações (SECRET_KEY e DATABASE_URL)windowns
 ```
 
 **Para MariaDB**, crie o banco antes:
@@ -103,7 +109,7 @@ flask create-admin "Nome Completo" cpf_sem_pontos senha123
 python run.py
 ```
 
-**Produção (Gunicorn):**
+**Produção (Gunicorn):** 
 ```bash
 pip install gunicorn
 gunicorn "run:app" -w 4 -b 0.0.0.0:8000
