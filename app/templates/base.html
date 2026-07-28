@@ -5,37 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Sistema de Saídas{% endblock %}</title>
 
-    <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <!-- Favicon dinâmico -->
-    {% if config_sistema.get('favicon') %}
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='uploads/' + config_sistema.get('favicon')) }}">
-    {% else %}
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
-    {% endif %}
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    {% if config_sistema.get('favicon') %}
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='uploads/' + config_sistema.get('favicon')) }}">
+    {% else %}
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%231a3a5c'/><text y='.88em' font-size='72' x='50%25' text-anchor='middle'>🛡️</text></svg>">
+    {% endif %}
 
     <style>
         :root {
             --cor-primaria: {{ config_sistema.get('cor_primaria', '#1a3a5c') }};
             --cor-secundaria: {{ config_sistema.get('cor_secundaria', '#2980b9') }};
             --sidebar-width: 260px;
+            --sidebar-collapsed-width: 68px;
             --topbar-height: 60px;
+            --transition: 0.28s cubic-bezier(.4,0,.2,1);
         }
 
-        * { font-family: 'Inter', sans-serif; }
+        *, *::before, *::after { font-family: 'Inter', sans-serif; box-sizing: border-box; }
 
-        body {
-            background-color: #f0f2f5;
-            min-height: 100vh;
-        }
+        body { background-color: #f0f2f5; min-height: 100vh; }
 
-        /* === SIDEBAR === */
+        /* ── SIDEBAR ── */
         #sidebar {
             width: var(--sidebar-width);
             height: 100vh;
@@ -43,343 +38,265 @@
             top: 0; left: 0;
             background: linear-gradient(180deg, var(--cor-primaria) 0%, #0d2137 100%);
             z-index: 1000;
-            transition: all 0.3s ease;
-            overflow-y: auto;
-            overflow-x: hidden;
+            transition: width var(--transition);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
-        #sidebar .sidebar-brand {
-            padding: 1.5rem 1.2rem 1rem;
+        #sidebar.collapsed { width: var(--sidebar-collapsed-width); }
+
+        .sidebar-brand {
+            padding: 1.2rem 1rem;
             border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-height: 74px;
+            flex-shrink: 0;
+            white-space: nowrap;
+            position: relative;
         }
-
-        #sidebar .sidebar-brand img {
-            width: 45px; height: 45px;
+        
+        /* Modificado: Transição suave de opacidade na Logo/Ícone */
+        .sidebar-brand img, .sidebar-brand .brand-icon {
+            width: 40px; height: 40px;
+            flex-shrink: 0;
             object-fit: contain;
             border-radius: 8px;
-            background: rgba(255,255,255,0.1);
-            padding: 4px;
+            background: rgba(255,255,255,0.12);
+            padding: 5px;
+            transition: opacity var(--transition);
+        }
+        
+        /* Oculta o ícone/logo de forma limpa quando colapsado para abrir espaço ao botão */
+        #sidebar.collapsed .sidebar-brand img, 
+        #sidebar.collapsed .sidebar-brand .brand-icon { 
+            opacity: 0; 
+            pointer-events: none; 
         }
 
-        #sidebar .sidebar-brand .brand-name {
-            color: #fff;
-            font-weight: 700;
-            font-size: 0.9rem;
-            line-height: 1.2;
-            margin-top: 0.5rem;
-        }
+        .brand-text { overflow: hidden; transition: opacity var(--transition), width var(--transition); flex: 1; min-width: 0; }
+        .brand-name { color: #fff; font-weight: 700; font-size: 0.88rem; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .brand-sub  { color: rgba(255,255,255,0.45); font-size: 0.7rem; }
+        #sidebar.collapsed .brand-text { opacity: 0; width: 0; pointer-events: none; }
 
-        #sidebar .sidebar-brand .brand-sub {
-            color: rgba(255,255,255,0.5);
-            font-size: 0.72rem;
-        }
-
-        #sidebar .nav-section {
-            padding: 1rem 0.8rem 0.3rem;
-            font-size: 0.65rem;
+        .nav-section {
+            padding: 0.8rem 1rem 0.2rem;
+            font-size: 0.6rem;
             text-transform: uppercase;
             letter-spacing: 1.5px;
             color: rgba(255,255,255,0.3);
             font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            transition: opacity var(--transition), height var(--transition), padding var(--transition);
         }
+        #sidebar.collapsed .nav-section { opacity: 0; height: 0; padding: 0; }
 
-        #sidebar .nav-link {
+        .nav-link {
             display: flex;
             align-items: center;
             gap: 0.7rem;
-            padding: 0.65rem 1.2rem;
+            padding: 0.6rem 1.1rem;
             color: rgba(255,255,255,0.7);
             border-radius: 8px;
-            margin: 0.15rem 0.6rem;
-            font-size: 0.875rem;
+            margin: 0.1rem 0.5rem;
+            font-size: 0.865rem;
             font-weight: 500;
             transition: all 0.2s;
             text-decoration: none;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .nav-link i { font-size: 1.1rem; flex-shrink: 0; min-width: 20px; text-align: center; }
+        .nav-link .link-text { transition: opacity var(--transition); white-space: nowrap; }
+        #sidebar.collapsed .nav-link .link-text { opacity: 0; width: 0; overflow: hidden; }
+        #sidebar.collapsed .nav-link { padding: 0.6rem; justify-content: center; margin: 0.1rem 0.4rem; }
+        .nav-link:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .nav-link.active { background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; }
+
+        .sidebar-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.4rem 0; }
+        .sidebar-nav::-webkit-scrollbar { width: 3px; }
+        .sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+        /* ── TOGGLE BTN — ESTILIZADO E CENTRALIZADO SUAVE ── */
+        .sidebar-toggle {
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.8);
+            border-radius: 6px;
+            width: 30px; height: 30px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.2s, color 0.2s, left var(--transition), transform var(--transition);
+            margin-left: auto;
+        }
+        .sidebar-toggle:hover { background: rgba(255,255,255,0.22); color: #fff; }
+        
+        /* Centralização perfeita e isolada dentro do cabeçalho de 68px */
+        #sidebar.collapsed .sidebar-toggle {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            margin: 0;
+            z-index: 1010;
         }
 
-        #sidebar .nav-link:hover,
-        #sidebar .nav-link.active {
-            background: rgba(255,255,255,0.12);
-            color: #fff;
-        }
-
-        #sidebar .nav-link i {
-            font-size: 1.1rem;
-            width: 20px;
-            text-align: center;
-        }
-
-        #sidebar .nav-link.active {
-            background: var(--cor-secundaria);
-            color: #fff;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
-
-        #sidebar .sidebar-footer {
-            padding: 1rem 1.2rem;
+        .sidebar-footer {
+            padding: 0.8rem;
             border-top: 1px solid rgba(255,255,255,0.1);
-            margin-top: auto;
+            flex-shrink: 0;
+            white-space: nowrap;
+            overflow: hidden;
         }
+        .footer-user { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+        .footer-user-info { overflow: hidden; transition: opacity var(--transition), width var(--transition); flex: 1; min-width: 0; }
+        #sidebar.collapsed .footer-user-info { opacity: 0; width: 0; }
+        #sidebar.collapsed .sidebar-footer .nav-link { justify-content: center; padding: 0.6rem; }
+        #sidebar.collapsed .sidebar-footer .nav-link .link-text { opacity: 0; width: 0; overflow: hidden; }
 
-        /* === MAIN CONTENT === */
+        /* ── MAIN CONTENT ── */
         #main-content {
             margin-left: var(--sidebar-width);
             min-height: 100vh;
-            transition: all 0.3s;
+            transition: margin-left var(--transition);
         }
+        #main-content.sidebar-collapsed { margin-left: var(--sidebar-collapsed-width); }
 
-        /* === TOPBAR === */
+        /* ── TOPBAR ── */
         .topbar {
             height: var(--topbar-height);
             background: #fff;
-            border-bottom: 1px solid #e5e7eb;
+            border-bottom: 1px solid #e8ecf0;
             position: sticky;
             top: 0;
-            z-index: 999;
+            z-index: 500;
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
             box-shadow: 0 1px 4px rgba(0,0,0,0.06);
         }
 
-        /* === CARDS === */
-        .stat-card {
-            border: none;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
+        /* ── CARDS ── */
+        .card { border: none; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); }
+        .stat-card { transition: transform 0.15s, box-shadow 0.15s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+        .stat-icon { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
 
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.1);
-        }
+        .page-header { padding: 0.25rem 0 0.5rem; }
 
-        .stat-card .stat-icon {
-            width: 52px; height: 52px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.4rem;
-        }
+        .toast-container { position: fixed; top: 70px; right: 20px; z-index: 9999; }
 
-        .card {
-            border: none;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
+        .user-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 2px solid var(--cor-secundaria); }
+        .user-avatar-placeholder { width: 34px; height: 34px; border-radius: 50%; background: var(--cor-secundaria); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
 
-        .card-header {
-            background: #fff;
-            border-bottom: 1px solid #f0f0f0;
-            border-radius: 12px 12px 0 0 !important;
-            padding: 1rem 1.25rem;
-        }
-
-        /* === TABLE === */
-        .table-hover tbody tr:hover {
-            background-color: #f8f9ff;
-        }
-
-        .table th {
-            font-size: 0.78rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #6c757d;
-            font-weight: 600;
-            border-bottom: 2px solid #e9ecef;
-        }
-
-        /* === BUTTONS === */
-        .btn {
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 0.875rem;
-        }
-
-        .btn-primary {
-            background: var(--cor-secundaria);
-            border-color: var(--cor-secundaria);
-        }
-
-        .btn-primary:hover {
-            background: var(--cor-primaria);
-            border-color: var(--cor-primaria);
-        }
-
-        /* === FORMS === */
-        .form-control, .form-select {
-            border-radius: 8px;
-            border: 1.5px solid #e5e7eb;
-            font-size: 0.9rem;
-            padding: 0.55rem 0.85rem;
-        }
-
-        .form-control:focus, .form-select:focus {
-            border-color: var(--cor-secundaria);
-            box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.15);
-        }
-
-        .form-label {
-            font-size: 0.85rem;
-            font-weight: 500;
-            color: #374151;
-            margin-bottom: 0.3rem;
-        }
-
-        /* === BADGES === */
-        .badge { border-radius: 6px; font-weight: 500; }
-
-        /* === PAGE HEADER === */
-        .page-header {
-            background: #fff;
-            border-radius: 12px;
-            padding: 1.25rem 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            border-left: 4px solid var(--cor-secundaria);
-        }
-
-        /* === ALERT TOAST === */
-        .toast-container {
-            position: fixed;
-            top: 80px;
-            right: 20px;
-            z-index: 9999;
-        }
-
-        /* === RESPONSIVE === */
+        /* ── RESPONSIVE ── */
         @media (max-width: 768px) {
-            #sidebar {
-                transform: translateX(-100%);
-                width: 260px;
-            }
-            #sidebar.show {
-                transform: translateX(0);
-            }
-            #main-content {
-                margin-left: 0;
-            }
-            .sidebar-overlay {
-                display: none;
-                position: fixed;
-                inset: 0;
-                background: rgba(0,0,0,0.5);
-                z-index: 999;
-            }
+            #sidebar { transform: translateX(-100%); width: var(--sidebar-width) !important; transition: transform var(--transition); }
+            #sidebar.mobile-show { transform: translateX(0); }
+            #main-content { margin-left: 0 !important; }
+            .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 999; }
             .sidebar-overlay.show { display: block; }
-        }
-
-        /* === USER AVATAR === */
-        .user-avatar {
-            width: 34px; height: 34px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 2px solid var(--cor-secundaria);
-        }
-
-        .user-avatar-placeholder {
-            width: 34px; height: 34px;
-            border-radius: 50%;
-            background: var(--cor-secundaria);
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 0.85rem;
         }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
 
-<!-- Sidebar Overlay (mobile) -->
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="mobileSidebarClose()"></div>
 
-<!-- Sidebar -->
-<nav id="sidebar">
-    <div class="sidebar-brand d-flex align-items-center gap-2">
+<nav id="sidebar" aria-label="Menu lateral">
+
+    <div class="sidebar-brand">
         {% if config_sistema.get('logo') %}
             <img src="{{ url_for('static', filename='uploads/' + config_sistema.get('logo')) }}" alt="Logo">
         {% else %}
-            <div style="width:45px;height:45px;border-radius:8px;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;">
-                <i class="bi bi-shield-check" style="color:#fff;font-size:1.5rem;"></i>
+            <div class="brand-icon d-flex align-items-center justify-content-center">
+                <i class="bi bi-shield-check" style="color:#fff;font-size:1.4rem;"></i>
             </div>
         {% endif %}
-        <div>
+        <div class="brand-text">
             <div class="brand-name">{{ config_sistema.get('nome_sistema', 'Controle de Saídas') }}</div>
             <div class="brand-sub">{{ config_sistema.get('subtitulo', 'Sistema de Gestão') }}</div>
         </div>
+        <button class="sidebar-toggle d-none d-md-flex" id="sidebarToggle" onclick="toggleCollapse()" title="Recolher/expandir menu">
+            <i class="bi bi-chevron-left" id="toggleIcon"></i>
+        </button>
     </div>
 
-    <div class="px-2 py-2">
+    <div class="sidebar-nav">
         {% if current_user.is_admin %}
             <div class="nav-section">Principal</div>
-            <a href="{{ url_for('admin.dashboard') }}" class="nav-link {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
-                <i class="bi bi-speedometer2"></i> Dashboard
+            <a href="{{ url_for('admin.dashboard') }}" class="nav-link {% if request.endpoint == 'admin.dashboard' %}active{% endif %}" title="Dashboard">
+                <i class="bi bi-speedometer2"></i><span class="link-text"> Dashboard</span>
             </a>
 
             <div class="nav-section">Gestão</div>
-            <a href="{{ url_for('admin.listar_usuarios') }}" class="nav-link {% if 'usuario' in request.endpoint %}active{% endif %}">
-                <i class="bi bi-people"></i> Usuários
+            <a href="{{ url_for('admin.listar_usuarios') }}" class="nav-link {% if 'usuario' in request.endpoint %}active{% endif %}" title="Usuários">
+                <i class="bi bi-people"></i><span class="link-text"> Usuários</span>
             </a>
-            <a href="{{ url_for('admin.listar_saidas') }}" class="nav-link {% if 'saidas' in request.endpoint %}active{% endif %}">
-                <i class="bi bi-journal-text"></i> Todas as Saídas
+            <a href="{{ url_for('admin.listar_subunidades') }}" class="nav-link {% if 'subunidade' in request.endpoint %}active{% endif %}" title="Subunidades">
+                <i class="bi bi-diagram-3"></i><span class="link-text"> Subunidades</span>
+            </a>
+            <a href="{{ url_for('admin.listar_saidas') }}" class="nav-link {% if 'saidas' in request.endpoint %}active{% endif %}" title="Saídas">
+                <i class="bi bi-journal-text"></i><span class="link-text"> Todas as Saídas</span>
             </a>
 
             <div class="nav-section">Relatórios</div>
-            <a href="{{ url_for('reports.por_periodo') }}" class="nav-link {% if 'periodo' in request.endpoint %}active{% endif %}">
-                <i class="bi bi-calendar-range"></i> Por Período
+            <a href="{{ url_for('reports.por_periodo') }}" class="nav-link {% if 'periodo' in request.endpoint %}active{% endif %}" title="Por Período">
+                <i class="bi bi-calendar-range"></i><span class="link-text"> Por Período</span>
             </a>
-            <a href="{{ url_for('reports.data_exata') }}" class="nav-link {% if 'exata' in request.endpoint %}active{% endif %}">
-                <i class="bi bi-calendar-date"></i> Data Exata
+            <a href="{{ url_for('reports.data_exata') }}" class="nav-link {% if 'exata' in request.endpoint %}active{% endif %}" title="Data Exata">
+                <i class="bi bi-calendar-date"></i><span class="link-text"> Data Exata</span>
             </a>
 
             <div class="nav-section">Sistema</div>
-            <a href="{{ url_for('admin.configuracoes') }}" class="nav-link {% if 'configuracoes' in request.endpoint %}active{% endif %}">
-                <i class="bi bi-gear"></i> Configurações
+            <a href="{{ url_for('admin.configuracoes') }}" class="nav-link {% if 'configuracoes' in request.endpoint %}active{% endif %}" title="Configurações">
+                <i class="bi bi-gear"></i><span class="link-text"> Configurações</span>
             </a>
         {% else %}
             <div class="nav-section">Meu Painel</div>
-            <a href="{{ url_for('user.dashboard') }}" class="nav-link {% if request.endpoint == 'user.dashboard' %}active{% endif %}">
-                <i class="bi bi-house"></i> Minhas Saídas
+            <a href="{{ url_for('user.dashboard') }}" class="nav-link {% if request.endpoint == 'user.dashboard' %}active{% endif %}" title="Minhas Saídas">
+                <i class="bi bi-house"></i><span class="link-text"> Minhas Saídas</span>
             </a>
-            <a href="{{ url_for('user.registrar_saida') }}" class="nav-link {% if 'registrar' in request.endpoint %}active{% endif %}">
-                <i class="bi bi-plus-circle"></i> Nova Saída
+            <a href="{{ url_for('user.registrar_saida') }}" class="nav-link {% if 'registrar' in request.endpoint %}active{% endif %}" title="Nova Saída">
+                <i class="bi bi-plus-circle"></i><span class="link-text"> Nova Saída</span>
             </a>
         {% endif %}
     </div>
 
-    <div class="sidebar-footer mt-auto">
-        <div class="d-flex align-items-center gap-2 mb-2">
+    <div class="sidebar-footer">
+        <div class="footer-user">
             {% if current_user.foto %}
                 <img src="{{ url_for('static', filename='uploads/' + current_user.foto) }}" class="user-avatar" alt="">
             {% else %}
                 <div class="user-avatar-placeholder">{{ current_user.nome[0].upper() }}</div>
             {% endif %}
-            <div>
-                <div style="color:#fff;font-size:0.82rem;font-weight:600;">{{ current_user.nome }}</div>
-                <div style="color:rgba(255,255,255,0.4);font-size:0.7rem;">
-                    {{ 'Super Admin' if current_user.is_admin else 'Usuário' }}
-                </div>
+            <div class="footer-user-info">
+                <div style="color:#fff;font-size:0.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ current_user.nome }}</div>
+                <div style="color:rgba(255,255,255,0.4);font-size:0.7rem;">{{ 'Super Admin' if current_user.is_admin else 'Usuário' }}</div>
             </div>
         </div>
-        <a href="{{ url_for('auth.logout') }}" class="nav-link" style="color:rgba(255,100,100,0.8);">
-            <i class="bi bi-box-arrow-right"></i> Sair do Sistema
+        <a href="{{ url_for('auth.logout') }}" class="nav-link" style="color:rgba(255,110,110,0.85);" title="Sair">
+            <i class="bi bi-box-arrow-right"></i><span class="link-text"> Sair do Sistema</span>
         </a>
     </div>
 </nav>
 
-<!-- Main Content -->
 <div id="main-content">
-    <!-- Topbar -->
-    <div class="topbar d-flex align-items-center px-3 px-md-4 gap-3">
-        <button class="btn btn-sm d-md-none border-0 p-1" onclick="toggleSidebar()">
+    <div class="topbar gap-2">
+        <button class="btn btn-sm border-0 p-1 d-md-none" onclick="mobileSidebarOpen()">
             <i class="bi bi-list fs-4"></i>
         </button>
+        <span class="text-muted small fw-medium d-none d-md-block">
+            {{ config_sistema.get('organizacao', 'Organização OM') }}
+        </span>
         <div class="ms-auto d-flex align-items-center gap-3">
             <span class="text-muted small d-none d-sm-block">
-                <i class="bi bi-calendar3 me-1"></i>
-                {{ now.strftime('%d/%m/%Y') }}
+                <i class="bi bi-calendar3 me-1"></i>{{ now.strftime('%d/%m/%Y') }}
             </span>
             <div class="dropdown">
                 <button class="btn btn-sm btn-light dropdown-toggle d-flex align-items-center gap-2" data-bs-toggle="dropdown">
@@ -401,7 +318,6 @@
         </div>
     </div>
 
-    <!-- Flash Messages -->
     <div class="toast-container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
@@ -418,25 +334,68 @@
         {% endwith %}
     </div>
 
-    <!-- Page Content -->
     <div class="container-fluid p-3 p-md-4">
         {% block content %}{% endblock %}
     </div>
 </div>
 
-<!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
-    function toggleSidebar() {
-        document.getElementById('sidebar').classList.toggle('show');
-        document.getElementById('sidebarOverlay').classList.toggle('show');
+    const STORAGE_KEY = 'sidebar_collapsed';
+    const sidebar     = document.getElementById('sidebar');
+    const main        = document.getElementById('main-content');
+    const toggleIcon  = document.getElementById('toggleIcon');
+
+    function applyCollapse(collapsed) {
+        if (collapsed) {
+            sidebar.classList.add('collapsed');
+            main.classList.add('sidebar-collapsed');
+            if (toggleIcon) {
+                toggleIcon.classList.remove('bi-chevron-left');
+                toggleIcon.classList.add('bi-chevron-right');
+            }
+        } else {
+            sidebar.classList.remove('collapsed');
+            main.classList.remove('sidebar-collapsed');
+            if (toggleIcon) {
+                toggleIcon.classList.remove('bi-chevron-right');
+                toggleIcon.classList.add('bi-chevron-left');
+            }
+        }
     }
+
+    function toggleCollapse() {
+        const collapsed = !sidebar.classList.contains('collapsed');
+        applyCollapse(collapsed);
+        try { localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch(e){}
+    }
+
+    // Inicialização do Estado Salvo
+    (function() {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            applyCollapse(stored === '1');
+        } catch(e){
+            applyCollapse(false);
+        }
+    })();
+
+    // Mobile sidebar
+    const overlay = document.getElementById('sidebarOverlay');
+    function mobileSidebarOpen()  { sidebar.classList.add('mobile-show'); overlay.classList.add('show'); }
+    function mobileSidebarClose() { sidebar.classList.remove('mobile-show'); overlay.classList.remove('show'); }
+
+    // Tooltips na sidebar recolhida
+    function initTooltips() {
+        document.querySelectorAll('#sidebar .nav-link[title]').forEach(el => {
+            new bootstrap.Tooltip(el, { placement: 'right', trigger: 'hover', container: 'body' });
+        });
+    }
+    initTooltips();
 
     // Auto-dismiss toasts
     document.querySelectorAll('.toast').forEach(el => {
-        const toast = new bootstrap.Toast(el, { delay: 4000 });
-        toast.show();
+        new bootstrap.Toast(el, { delay: 4500 }).show();
     });
 </script>
 {% block extra_js %}{% endblock %}

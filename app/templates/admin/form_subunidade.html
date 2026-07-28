@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Nova' if acao == 'nova' else 'Editar' }} Subunidade{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h4 class="mb-0 fw-bold">
+        <i class="bi bi-diagram-3 me-2" style="color:var(--cor-secundaria);"></i>
+        {{ 'Nova Subunidade' if acao == 'nova' else 'Editar Subunidade' }}
+    </h4>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body p-4">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Nome <span class="text-danger">*</span></label>
+                        <input type="text" name="nome" class="form-control"
+                               value="{{ sub.nome if sub else '' }}"
+                               placeholder="Ex: 1º Batalhão de Obras, 2ª BIA, BC..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Sigla</label>
+                        <input type="text" name="sigla" class="form-control" maxlength="20"
+                               value="{{ sub.sigla if sub and sub.sigla else '' }}"
+                               placeholder="Ex: 1ºBO, BIA, BC">
+                        <div class="form-text">Sigla curta para exibição em listas e relatórios.</div>
+                    </div>
+                    {% if acao == 'editar' %}
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" name="ativa" id="ativa"
+                               {{ 'checked' if sub.ativa else '' }}>
+                        <label class="form-check-label" for="ativa">Subunidade ativa</label>
+                    </div>
+                    {% endif %}
+                    <div class="d-flex gap-2 justify-content-end mt-4">
+                        <a href="{{ url_for('admin.listar_subunidades') }}" class="btn btn-secondary">Cancelar</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-1"></i>
+                            {{ 'Criar Subunidade' if acao == 'nova' else 'Salvar Alterações' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,4 +1,30 @@
-# Sistema de Controle de Saídas — v2
+# Sistema de Controle de Saídas de Militares
+
+Sistema web desenvolvido em **Flask**, utilizando **SQLAlchemy**, **MariaDB** e **Bootstrap 5**, com foco na gestão e controle de saídas de militares de forma simples, segura e organizada.
+
+O projeto foi estruturado seguindo boas práticas de desenvolvimento, utilizando arquitetura modular com **Blueprints**, separação entre modelos, rotas e serviços, facilitando a manutenção e futuras expansões.
+
+## Antes de iniciar
+
+Antes de executar a aplicação, é importante realizar corretamente a configuração do ambiente.
+
+A sequência recomendada de instalação é:
+
+1. Clonar o projeto.
+2. Criar e ativar o ambiente virtual (`venv`).
+3. Instalar as dependências do projeto.
+4. Instalar e iniciar o serviço do **MariaDB**.
+5. Criar o banco de dados da aplicação conforme informado neste documento.
+6. Configurar corretamente o arquivo `.env` com as credenciais de acesso ao banco.
+7. Verificar se a conexão com o MariaDB está funcionando e confirmar a porta utilizada pelo servidor (normalmente **3306**).
+8. Executar os comandos de inicialização do banco de dados.
+9. Iniciar a aplicação.
+
+> **Importante:** O banco de dados deve existir antes da execução dos comandos `flask init-db` ou `flask db upgrade`. Caso contrário, ocorrerá erro de conexão informando que o banco de dados não foi encontrado.
+
+
+Após concluir essas etapas, siga as instruções de instalação e execução descritas nas próximas seções deste README.
+
 
 Sistema web para registro e controle de saídas de militares, com atualização automática de status, dashboard analítica e suporte a MariaDB/MySQL ou SQLite.
 
@@ -14,6 +40,14 @@ Sistema web para registro e controle de saídas de militares, com atualização 
 - **Relatórios PDF**: por período ou data exata.
 
 ---
+## Atualização — Versão 3
+
+Esta versão traz melhorias significativas na organização e usabilidade do sistema, incluindo gerenciamento de **subunidades**, controle de **cancelamento com histórico preservado**, novas regras de **edição e finalização automática das saídas**, além de uma **dashboard mais completa** com gráficos e informações aprimoradas.
+
+Também foram adicionadas melhorias na interface, como **sidebar recolhível**, correções de **favicon**, otimizações para **impressão de relatórios** e ajustes gerais de estabilidade e experiência do usuário.
+
+Além disso, o processo de instalação foi atualizado com orientações para configuração do **MariaDB**, criação do banco de dados e validação da conexão antes da inicialização da aplicação, tornando o ambiente de desenvolvimento mais simples e confiável.
+
 
 ## Requisitos
 

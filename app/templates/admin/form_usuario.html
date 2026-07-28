@@ -25,13 +25,34 @@
             <div class="card-body p-4">
                 <form method="POST" enctype="multipart/form-data" novalidate>
 
-                    {% if acao == 'editar' and usuario.foto %}
+                    <!-- Foto / Avatar -->
                     <div class="text-center mb-4">
-                        <img src="{{ url_for('static', filename='uploads/' + usuario.foto) }}"
-                             class="rounded-circle" style="width:90px;height:90px;object-fit:cover;border:3px solid var(--cor-secundaria);" alt="">
-                        <div class="text-muted mt-1" style="font-size:0.78rem;">Foto atual</div>
+                        <div class="position-relative d-inline-block">
+                            <div id="avatar-preview" class="rounded-circle overflow-hidden mx-auto"
+                                 style="width:100px;height:100px;border:3px solid var(--cor-secundaria);background:#f0f2f5;display:flex;align-items:center;justify-content:center;">
+                                {% if acao == 'editar' and usuario.foto %}
+                                    <img id="avatar-img" src="{{ url_for('static', filename='uploads/' + usuario.foto) }}"
+                                         style="width:100%;height:100%;object-fit:cover;" alt="Foto atual">
+                                {% else %}
+                                    <i class="bi bi-person-fill" style="font-size:3rem;color:#adb5bd;" id="avatar-icon"></i>
+                                    <img id="avatar-img" src="" style="width:100%;height:100%;object-fit:cover;display:none;" alt="">
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="mt-2 d-flex justify-content-center gap-2 flex-wrap">
+                            <label for="fotoInput" class="btn btn-sm btn-outline-primary" style="cursor:pointer;">
+                                <i class="bi bi-camera me-1"></i>{{ 'Trocar foto' if (acao == 'editar' and usuario.foto) else 'Adicionar foto' }}
+                            </label>
+                            {% if acao == 'editar' and usuario.foto %}
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="btnRemoverFoto" onclick="removerFoto()">
+                                <i class="bi bi-trash me-1"></i>Remover foto
+                            </button>
+                            {% endif %}
+                        </div>
+                        <input type="file" name="foto" id="fotoInput" class="d-none" accept="image/*" onchange="previewFoto(this)">
+                        <input type="hidden" name="remover_foto" id="removerFoto" value="">
+                        <small class="text-muted d-block mt-1" style="font-size:0.72rem;">PNG, JPG. Máximo 5MB.</small>
                     </div>
-                    {% endif %}
 
                     <div class="mb-3">
                         <label class="form-label">
@@ -83,15 +104,21 @@
                         </div>
                     </div>
 
-                    {% if acao == 'editar' %}
                     <div class="mb-3">
                         <label class="form-label">
-                            <i class="bi bi-image me-1"></i>Foto do Usuário
+                            <i class="bi bi-diagram-3 me-1"></i>Subunidade
                         </label>
-                        <input type="file" name="foto" class="form-control" accept="image/*">
-                        <div class="form-text">PNG, JPG ou GIF. Máximo 5MB.</div>
+                        <select name="subunidade_id" class="form-select">
+                            <option value="">— Sem subunidade —</option>
+                            {% for sub in subunidades %}
+                            <option value="{{ sub.id }}" {{ 'selected' if usuario and usuario.subunidade_id == sub.id else '' }}>
+                                {{ sub.sigla or sub.nome }} — {{ sub.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
 
+                    {% if acao == 'editar' %}
                     <div class="mb-3">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" name="ativo" id="ativoCheck"
@@ -103,25 +130,12 @@
                     </div>
                     {% endif %}
 
-                    <div class="alert alert-info d-flex align-items-start gap-2 py-2">
-                        <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
-                        <small>
-                            {% if acao == 'novo' %}
-                            O usuário poderá fazer login com o CPF e a senha informados acima.
-                            {% else %}
-                            Deixe a senha em branco para mantê-la sem alterações.
-                            {% endif %}
-                        </small>
-                    </div>
-
-                    <div class="d-flex gap-2 justify-content-end mt-3">
-                        <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-light">
-                            <i class="bi bi-x me-1"></i>Cancelar
-                        </a>
+                    <div class="d-flex gap-2 mt-4">
                         <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-check-lg me-1"></i>
-                            {{ 'Cadastrar Usuário' if acao == 'novo' else 'Salvar Alterações' }}
+                            <i class="bi bi-check-circle me-1"></i>
+                            {{ 'Cadastrar' if acao == 'novo' else 'Salvar' }}
                         </button>
+                        <a href="{{ url_for('admin.listar_usuarios') }}" class="btn btn-outline-secondary">Cancelar</a>
                     </div>
                 </form>
             </div>
@@ -132,6 +146,35 @@
 
 {% block extra_js %}
 <script>
+function previewFoto(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = document.getElementById('avatar-img');
+        const icon = document.getElementById('avatar-icon');
+        img.src = e.target.result;
+        img.style.display = 'block';
+        if (icon) icon.style.display = 'none';
+        // Cancelar remoção
+        document.getElementById('removerFoto').value = '';
+    };
+    reader.readAsDataURL(file);
+}
+
+function removerFoto() {
+    if (!confirm('Remover a foto deste usuário?')) return;
+    const img = document.getElementById('avatar-img');
+    const icon = document.getElementById('avatar-icon');
+    img.src = '';
+    img.style.display = 'none';
+    if (icon) icon.style.display = '';
+    document.getElementById('removerFoto').value = '1';
+    document.getElementById('fotoInput').value = '';
+    const btn = document.getElementById('btnRemoverFoto');
+    if (btn) btn.style.display = 'none';
+}
+
 function toggleSenha() {
     const input = document.getElementById('senhaInput');
     const icon = document.getElementById('senhaIcon');

@@ -1,10 +1,5 @@
 """
 models/__init__.py — Modelos SQLAlchemy do sistema.
-
-Modelos:
-  Usuario        →  militares e administradores
-  Registro       →  controle de saídas (com status automático)
-  ConfigSistema  →  configurações dinâmicas via painel admin
 """
 
 from __future__ import annotations
@@ -16,18 +11,10 @@ from flask_login import UserMixin
 from app import bcrypt, db, login_manager
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Loader do Flask-Login
-# ─────────────────────────────────────────────────────────────────────────────
-
 @login_manager.user_loader
 def load_user(user_id: str) -> "Usuario | None":
     return db.session.get(Usuario, int(user_id))
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Enums como constantes (evita depender de Enum do Python + SQL)
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TipoUsuario:
     ADMIN = "admin"
@@ -36,28 +23,50 @@ class TipoUsuario:
 
 
 class StatusSaida:
-    AGENDADA = "agendada"       # Saída registrada, ainda não começou
-    EM_TRANSITO = "em_transito" # Saída em andamento (data_saida <= hoje)
-    RETORNADO = "retornado"     # Data de retorno expirou (automático)
-    CANCELADO = "cancelado"     # Cancelado pelo usuário
+    AGENDADA    = "agendada"
+    EM_TRANSITO = "em_transito"
+    RETORNADO   = "retornado"
+    CANCELADO   = "cancelado"
+    FINALIZADO  = "finalizado"
 
-    TODOS = [AGENDADA, EM_TRANSITO, RETORNADO, CANCELADO]
+    TODOS = [AGENDADA, EM_TRANSITO, RETORNADO, CANCELADO, FINALIZADO]
 
-    # Exibição amigável
     LABELS = {
         AGENDADA:    "Agendada",
         EM_TRANSITO: "Em Trânsito",
         RETORNADO:   "Retornado",
         CANCELADO:   "Cancelado",
+        FINALIZADO:  "Finalizado",
     }
 
-    # Classes Bootstrap para os badges
     BADGES = {
         AGENDADA:    "warning",
         EM_TRANSITO: "primary",
         RETORNADO:   "success",
         CANCELADO:   "secondary",
+        FINALIZADO:  "dark",
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Modelo: Subunidade
+# ─────────────────────────────────────────────────────────────────────────────
+
+class Subunidade(db.Model):
+    """Subunidades organizacionais (ex: 1º BO, 2ª BIA, BC)."""
+
+    __tablename__ = "subunidades"
+
+    id    = db.Column(db.Integer, primary_key=True)
+    nome  = db.Column(db.String(100), unique=True, nullable=False)
+    sigla = db.Column(db.String(20), nullable=True)
+    ativa = db.Column(db.Boolean, default=True, nullable=False)
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    usuarios = db.relationship("Usuario", backref="subunidade", lazy="dynamic")
+
+    def __repr__(self) -> str:
+        return f"<Subunidade {self.nome}>"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -65,24 +74,27 @@ class StatusSaida:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Usuario(UserMixin, db.Model):
-    """Representa um militar ou administrador do sistema."""
-
     __tablename__ = "usuarios"
 
-    id = db.Column(db.Integer, primary_key=True)
-    cpf = db.Column(db.String(14), unique=True, nullable=False, index=True)
-    nome = db.Column(db.String(100), nullable=False)
-    senha_hash = db.Column(db.String(255), nullable=False)
-    tipo = db.Column(
+    id           = db.Column(db.Integer, primary_key=True)
+    cpf          = db.Column(db.String(14), unique=True, nullable=False, index=True)
+    nome         = db.Column(db.String(100), nullable=False)
+    senha_hash   = db.Column(db.String(255), nullable=False)
+    tipo         = db.Column(
         db.Enum(*TipoUsuario.TODOS, name="tipo_usuario"),
         nullable=False,
         default=TipoUsuario.USUARIO,
     )
-    ativo = db.Column(db.Boolean, default=True, nullable=False)
+    ativo        = db.Column(db.Boolean, default=True, nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    foto = db.Column(db.String(255), nullable=True)
+    foto         = db.Column(db.String(255), nullable=True)
+    subunidade_id = db.Column(
+        db.Integer,
+        db.ForeignKey("subunidades.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
-    # Relacionamento com registros de saída
     registros = db.relationship(
         "Registro",
         backref="usuario",
@@ -92,15 +104,11 @@ class Usuario(UserMixin, db.Model):
         cascade="all, delete-orphan",
     )
 
-    # ── Senha ──────────────────────────────────────────────────────────────
-
     def set_senha(self, senha: str) -> None:
         self.senha_hash = bcrypt.generate_password_hash(senha).decode("utf-8")
 
     def check_senha(self, senha: str) -> bool:
         return bcrypt.check_password_hash(self.senha_hash, senha)
-
-    # ── Propriedades ───────────────────────────────────────────────────────
 
     @property
     def is_admin(self) -> bool:
@@ -108,7 +116,6 @@ class Usuario(UserMixin, db.Model):
 
     @property
     def saidas_ativas(self) -> int:
-        """Quantidade de saídas atualmente em trânsito."""
         return self.registros.filter_by(status=StatusSaida.EM_TRANSITO).count()
 
     def __repr__(self) -> str:
@@ -120,34 +127,33 @@ class Usuario(UserMixin, db.Model):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class Registro(db.Model):
-    """Registra uma saída de militar com controle automático de status."""
-
     __tablename__ = "registros"
 
-    id = db.Column(db.Integer, primary_key=True)
-    cpf_usuario = db.Column(
+    id              = db.Column(db.Integer, primary_key=True)
+    cpf_usuario     = db.Column(
         db.String(14),
         db.ForeignKey("usuarios.cpf", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    local = db.Column(db.String(255), nullable=False)
-    motivo = db.Column(db.String(300), nullable=False)   # limitado a 300 chars
-    data_saida = db.Column(db.DateTime, nullable=False, index=True)
-    data_retorno = db.Column(db.DateTime, nullable=True, index=True)
-    telefone_contato = db.Column(db.String(20), nullable=True)
-    endereco_destino = db.Column(db.Text, nullable=True)
-    data_registro = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    status = db.Column(
+    local           = db.Column(db.String(255), nullable=False)
+    motivo          = db.Column(db.String(300), nullable=False)
+    data_saida      = db.Column(db.DateTime, nullable=False, index=True)
+    data_retorno    = db.Column(db.DateTime, nullable=True, index=True)
+    telefone_contato  = db.Column(db.String(20), nullable=True)
+    endereco_destino  = db.Column(db.Text, nullable=True)
+    data_registro   = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    status          = db.Column(
         db.Enum(*StatusSaida.TODOS, name="status_saida"),
         default=StatusSaida.AGENDADA,
         nullable=False,
         index=True,
     )
-    # Audit: quando o status foi alterado pela última vez (manual ou automático)
     status_atualizado_em = db.Column(db.DateTime, nullable=True)
 
-    # ── Propriedades de exibição ───────────────────────────────────────────
+    # Campos de cancelamento
+    motivo_cancelamento = db.Column(db.String(500), nullable=True)
+    data_cancelamento   = db.Column(db.DateTime, nullable=True)
 
     @property
     def status_badge(self) -> str:
@@ -157,20 +163,17 @@ class Registro(db.Model):
     def status_label(self) -> str:
         return StatusSaida.LABELS.get(self.status, self.status)
 
-    # ── Lógica de status automático ────────────────────────────────────────
+    @property
+    def editavel(self) -> bool:
+        """Pode ser editado/cancelado enquanto a data_retorno não passou."""
+        if self.status in (StatusSaida.CANCELADO, StatusSaida.FINALIZADO):
+            return False
+        if self.data_retorno and self.data_retorno.date() < date.today():
+            return False
+        return True
 
     def atualizar_status_automatico(self) -> bool:
-        """
-        Avalia as datas e ajusta o status sem intervenção humana.
-
-        Regras:
-          agendada     → em_transito  quando data_saida <= hoje
-          em_transito  → retornado    quando data_retorno < hoje
-          retornado / cancelado → imutável por esta função
-
-        Retorna True se o status foi alterado.
-        """
-        if self.status in (StatusSaida.RETORNADO, StatusSaida.CANCELADO):
+        if self.status in (StatusSaida.CANCELADO, StatusSaida.FINALIZADO):
             return False
 
         hoje = date.today()
@@ -180,9 +183,9 @@ class Registro(db.Model):
             if self.data_saida.date() <= hoje:
                 novo_status = StatusSaida.EM_TRANSITO
 
-        if self.status == StatusSaida.EM_TRANSITO:
+        if self.status in (StatusSaida.AGENDADA, StatusSaida.EM_TRANSITO):
             if self.data_retorno and self.data_retorno.date() < hoje:
-                novo_status = StatusSaida.RETORNADO
+                novo_status = StatusSaida.FINALIZADO
 
         if novo_status != self.status:
             self.status = novo_status
@@ -200,25 +203,21 @@ class Registro(db.Model):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ConfigSistema(db.Model):
-    """
-    Armazena configurações dinâmicas editáveis pelo super admin.
-
-    Tipos suportados: 'texto', 'imagem', 'booleano'.
-    Acesso via ConfigSistema.get(chave) / ConfigSistema.set(chave, valor).
-    """
-
     __tablename__ = "config_sistema"
 
-    id = db.Column(db.Integer, primary_key=True)
-    chave = db.Column(db.String(100), unique=True, nullable=False)
-    valor = db.Column(db.Text, nullable=True)
+    id       = db.Column(db.Integer, primary_key=True)
+    chave    = db.Column(db.String(100), unique=True, nullable=False)
+    valor    = db.Column(db.Text, nullable=True)
     descricao = db.Column(db.String(255), nullable=True)
-    tipo = db.Column(db.String(20), default="texto")
+    tipo     = db.Column(db.String(20), default="texto")
 
     @staticmethod
     def get(chave: str, default: str | None = None) -> str | None:
-        config = ConfigSistema.query.filter_by(chave=chave).first()
-        return config.valor if config else default
+        try:
+            config = ConfigSistema.query.filter_by(chave=chave).first()
+            return config.valor if config else default
+        except Exception:
+            return default
 
     @staticmethod
     def set(chave: str, valor: str) -> None:

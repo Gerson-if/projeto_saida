@@ -11,7 +11,7 @@ Produção (recomendado via Gunicorn):
 import os
 
 from app import create_app, db
-from app.models import ConfigSistema, Registro, Usuario
+from app.models import ConfigSistema, Registro, Subunidade, Usuario
 
 app = create_app(os.environ.get("FLASK_ENV", "development"))
 
@@ -23,6 +23,7 @@ def make_shell_context() -> dict:
         "db": db,
         "Usuario": Usuario,
         "Registro": Registro,
+        "Subunidade": Subunidade,
         "ConfigSistema": ConfigSistema,
     }
 

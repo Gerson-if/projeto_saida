@@ -1,52 +1,92 @@
 """
 routes/user.py — Rotas do painel do usuário (militar).
-
-Permite registrar, editar e cancelar saídas.
-O status é gerenciado automaticamente pelo sistema.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 from flask import (
-    Blueprint,
-    current_app,
-    flash,
-    redirect,
-    render_template,
-    request,
-    url_for,
+    Blueprint, current_app, flash, redirect,
+    render_template, request, url_for,
 )
 from flask_login import current_user, login_required
 
 from app import db
-from app.models import Registro, StatusSaida
+from app.models import Registro, StatusSaida, ConfigSistema
 
 user_bp = Blueprint("user", __name__)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Dashboard do usuário
-# ─────────────────────────────────────────────────────────────────────────────
+def _get_user_stats(cpf):
+    """Estatísticas do usuário para o dashboard."""
+    todos = Registro.query.filter_by(cpf_usuario=cpf).all()
+    total = len(todos)
+
+    agendadas   = sum(1 for s in todos if s.status == StatusSaida.AGENDADA)
+    em_transito = sum(1 for s in todos if s.status == StatusSaida.EM_TRANSITO)
+    retornadas  = sum(1 for s in todos if s.status in (StatusSaida.RETORNADO, StatusSaida.FINALIZADO))
+    canceladas  = sum(1 for s in todos if s.status == StatusSaida.CANCELADO)
+
+    # Saídas por mês (últimos 6 meses)
+    hoje = datetime.today()
+    meses_labels = []
+    meses_qtd = []
+    NOMES_MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+    for i in range(5, -1, -1):
+        mes_dt = hoje - timedelta(days=i * 30)
+        mes_label = f"{NOMES_MES[mes_dt.month - 1]}/{mes_dt.year % 100:02d}"
+        qtd = sum(
+            1 for s in todos
+            if s.data_registro.year == mes_dt.year and s.data_registro.month == mes_dt.month
+        )
+        meses_labels.append(mes_label)
+        meses_qtd.append(qtd)
+
+    return {
+        'total': total,
+        'agendadas': agendadas,
+        'em_transito': em_transito,
+        'retornadas': retornadas,
+        'canceladas': canceladas,
+        'meses_labels': meses_labels,
+        'meses_qtd': meses_qtd,
+    }
+
 
 @user_bp.route("/dashboard")
 @login_required
 def dashboard():
     status_filtro = request.args.get("status", "")
+    ver_historico = request.args.get("historico", "0") == "1"
+
     query = Registro.query.filter_by(cpf_usuario=current_user.cpf)
     if status_filtro and status_filtro in StatusSaida.TODOS:
         query = query.filter_by(status=status_filtro)
-    saidas = query.order_by(Registro.data_registro.desc()).all()
+
+    query = query.order_by(Registro.data_registro.desc())
+
+    if ver_historico or status_filtro:
+        saidas = query.all()
+        mostrar_botao_historico = False
+    else:
+        total = query.count()
+        saidas = query.limit(6).all()
+        mostrar_botao_historico = total > 6
+
+    stats = _get_user_stats(current_user.cpf)
+    config_sistema = {c.chave: c.valor for c in ConfigSistema.query.all()}
+
     return render_template(
         "user/dashboard.html",
         saidas=saidas,
         status_filtro=status_filtro,
         StatusSaida=StatusSaida,
+        ver_historico=ver_historico,
+        mostrar_botao_historico=mostrar_botao_historico,
+        stats=stats,
+        config_sistema=config_sistema,
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Registrar saída
-# ─────────────────────────────────────────────────────────────────────────────
 
 @user_bp.route("/registrar", methods=["GET", "POST"])
 @login_required
@@ -55,12 +95,12 @@ def registrar_saida():
     motivo_max = current_app.config.get("MOTIVO_MAX_LENGTH", 300)
 
     if request.method == "POST":
-        local           = request.form.get("local", "").strip()
-        motivo          = request.form.get("motivo", "").strip()
-        data_saida_str  = request.form.get("data_saida", "")
+        local            = request.form.get("local", "").strip()
+        motivo           = request.form.get("motivo", "").strip()
+        data_saida_str   = request.form.get("data_saida", "")
         data_retorno_str = request.form.get("data_retorno", "")
-        telefone        = request.form.get("telefone_contato", "").strip()
-        endereco        = request.form.get("endereco_destino", "").strip()
+        telefone         = request.form.get("telefone_contato", "").strip()
+        endereco         = request.form.get("endereco_destino", "").strip()
 
         errors = []
         if not local:
@@ -90,7 +130,6 @@ def registrar_saida():
             except ValueError:
                 errors.append("Data de retorno inválida.")
 
-        # Verifica duplicidade (mesmo usuário, mesmo local, mesma data)
         if not errors and data_saida:
             duplicado = Registro.query.filter_by(
                 cpf_usuario=current_user.cpf,
@@ -111,7 +150,6 @@ def registrar_saida():
                 motivo_max=motivo_max,
             )
 
-        # Determina status inicial com base na data
         hoje = datetime.today().date()
         status_inicial = (
             StatusSaida.EM_TRANSITO
@@ -143,10 +181,6 @@ def registrar_saida():
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Editar saída (apenas enquanto agendada)
-# ─────────────────────────────────────────────────────────────────────────────
-
 @user_bp.route("/editar/<int:id>", methods=["GET", "POST"])
 @login_required
 def editar_saida(id):
@@ -154,24 +188,20 @@ def editar_saida(id):
         id=id, cpf_usuario=current_user.cpf
     ).first_or_404()
 
-    # Impede edição de saídas já em trânsito ou finalizadas
-    if saida.status not in (StatusSaida.AGENDADA,):
-        flash(
-            "Não é possível editar uma saída que já está em trânsito ou finalizada.",
-            "warning",
-        )
+    if not saida.editavel:
+        flash("Esta saída não pode mais ser editada.", "warning")
         return redirect(url_for("user.dashboard"))
 
     motivos_sugeridos = current_app.config.get("MOTIVOS_SUGERIDOS", [])
     motivo_max = current_app.config.get("MOTIVO_MAX_LENGTH", 300)
 
     if request.method == "POST":
-        local           = request.form.get("local", "").strip()
-        motivo          = request.form.get("motivo", "").strip()
-        data_saida_str  = request.form.get("data_saida", "")
+        local            = request.form.get("local", "").strip()
+        motivo           = request.form.get("motivo", "").strip()
+        data_saida_str   = request.form.get("data_saida", "")
         data_retorno_str = request.form.get("data_retorno", "")
-        telefone        = request.form.get("telefone_contato", "").strip()
-        endereco        = request.form.get("endereco_destino", "").strip()
+        telefone         = request.form.get("telefone_contato", "").strip()
+        endereco         = request.form.get("endereco_destino", "").strip()
 
         errors = []
         data_saida = data_retorno = None
@@ -221,10 +251,6 @@ def editar_saida(id):
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Cancelar saída (apenas enquanto agendada)
-# ─────────────────────────────────────────────────────────────────────────────
-
 @user_bp.route("/cancelar/<int:id>", methods=["POST"])
 @login_required
 def cancelar_saida(id):
@@ -232,12 +258,19 @@ def cancelar_saida(id):
         id=id, cpf_usuario=current_user.cpf
     ).first_or_404()
 
-    if saida.status != StatusSaida.AGENDADA:
-        flash("Apenas saídas agendadas podem ser canceladas.", "warning")
+    if not saida.editavel:
+        flash("Esta saída não pode mais ser cancelada.", "warning")
+        return redirect(url_for("user.dashboard"))
+
+    motivo_cancelamento = request.form.get("motivo_cancelamento", "").strip()
+    if not motivo_cancelamento:
+        flash("Informe o motivo do cancelamento.", "danger")
         return redirect(url_for("user.dashboard"))
 
     saida.status = StatusSaida.CANCELADO
     saida.status_atualizado_em = datetime.utcnow()
+    saida.motivo_cancelamento  = motivo_cancelamento
+    saida.data_cancelamento    = datetime.utcnow()
     db.session.commit()
     flash("Saída cancelada com sucesso.", "info")
     return redirect(url_for("user.dashboard"))

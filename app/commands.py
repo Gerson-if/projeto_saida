@@ -15,7 +15,7 @@ import click
 from flask.cli import with_appcontext
 
 from app import db
-from app.models import ConfigSistema, Registro, StatusSaida, TipoUsuario, Usuario
+from app.models import ConfigSistema, Registro, StatusSaida, Subunidade, TipoUsuario, Usuario
 
 
 def register_commands(app) -> None:
@@ -35,6 +35,7 @@ def register_commands(app) -> None:
             ("rodape",        "© Sistema de Controle de Saídas — Gerado automaticamente", "Rodapé PDF"),
             ("cor_primaria",  "#1a3a5c",                                         "Cor primária"),
             ("cor_secundaria","#2980b9",                                         "Cor de destaque"),
+            ("dicas_viagem",  "Verifique documentos e comunicação antes de sair.\nMantenha contato com a unidade durante a viagem.\nRespeite os horários de retorno estabelecidos.\nEm caso de imprevisto, comunique imediatamente a unidade.", "Dicas de viagem segura"),
         ]
         for chave, valor, desc in defaults:
             if not ConfigSistema.query.filter_by(chave=chave).first():
@@ -127,6 +128,23 @@ def register_commands(app) -> None:
                     status_atualizado_em=datetime.utcnow(),
                 )
                 db.session.add(registro)
+
+        # Subunidades padrão
+        subunidades_padrao = [
+            ("1º Batalhão de Obras", "1ºBO"),
+            ("2ª Bateria de Artilharia", "2ªBIA"),
+            ("Batalhão de Comando", "BC"),
+            ("Companhia de Saúde", "CSau"),
+        ]
+        for nome, sigla in subunidades_padrao:
+            if not Subunidade.query.filter_by(nome=nome).first():
+                db.session.add(Subunidade(nome=nome, sigla=sigla))
+        db.session.flush()
+
+        # Vincular usuários às subunidades
+        subs = Subunidade.query.all()
+        for i, u in enumerate(Usuario.query.filter_by(tipo=TipoUsuario.USUARIO).all()):
+            u.subunidade_id = subs[i % len(subs)].id if subs else None
 
         db.session.commit()
         click.echo("✅ Dados de exemplo inseridos com sucesso!")

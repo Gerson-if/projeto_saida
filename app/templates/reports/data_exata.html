@@ -1,8 +1,21 @@
 {% extends 'base.html' %}
 {% block title %}Relatório por Data Exata{% endblock %}
 
+{% block extra_css %}
+<style>
+@media print {
+    #sidebar, .topbar, .page-header a, form, .btn, .toast-container { display: none !important; }
+    #main-content { margin-left: 0 !important; }
+    .card { box-shadow: none !important; border: 1px solid #dee2e6 !important; break-inside: avoid; }
+    .table { font-size: 0.8rem; }
+    body { background: #fff; }
+    @page { margin: 1.5cm; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header d-flex align-items-center gap-3">
+<div class="page-header d-flex align-items-center gap-3 mb-4">
     <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-light">
         <i class="bi bi-arrow-left"></i>
     </a>
@@ -22,9 +35,20 @@
         <form method="POST" id="formRelatorio">
             <div class="row g-3">
                 <div class="col-md-3">
-                    <label class="form-label">Data Exata <span class="text-danger">*</span></label>
+                    <label class="form-label">Data <span class="text-danger">*</span></label>
                     <input type="date" name="data_exata" class="form-control"
                            value="{{ filtros.get('data_exata', '') }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Subunidade</label>
+                    <select name="subunidade_id" class="form-select">
+                        <option value="">Todas as subunidades</option>
+                        {% for sub in subunidades %}
+                        <option value="{{ sub.id }}" {{ 'selected' if filtros.get('subunidade_id') == sub.id|string }}>
+                            {{ sub.sigla or sub.nome }} — {{ sub.nome }}
+                        </option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Usuário (opcional)</label>
@@ -38,28 +62,28 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Status (opcional)</label>
+                    <label class="form-label">Status</label>
                     <select name="status" class="form-select">
                         <option value="">Todos</option>
-                        <option value="pendente" {{ 'selected' if filtros.get('status') == 'pendente' }}>Pendente</option>
-                        <option value="ativo" {{ 'selected' if filtros.get('status') == 'ativo' }}>Em Trânsito</option>
+                        <option value="agendada" {{ 'selected' if filtros.get('status') == 'agendada' }}>Agendada</option>
+                        <option value="em_transito" {{ 'selected' if filtros.get('status') == 'em_transito' }}>Em Trânsito</option>
                         <option value="retornado" {{ 'selected' if filtros.get('status') == 'retornado' }}>Retornado</option>
+                        <option value="cancelado" {{ 'selected' if filtros.get('status') == 'cancelado' }}>Cancelado</option>
                     </select>
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <div class="d-flex flex-wrap gap-2 w-100">
-                        <input type="hidden" name="formato" id="formatoInput" value="visualizar">
-                        <button type="submit" class="btn btn-primary btn-sm" onclick="setFormato('visualizar')">
-                            <i class="bi bi-search me-1"></i>Visualizar
-                        </button>
-                        <button type="submit" class="btn btn-danger btn-sm" onclick="setFormato('pdf')">
-                            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
-                        </button>
-                        <button type="submit" class="btn btn-success btn-sm" onclick="setFormato('csv')">
-                            <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
-                        </button>
-                    </div>
-                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <input type="hidden" name="formato" id="formatoInput" value="visualizar">
+                <button type="submit" class="btn btn-primary" onclick="setFormato('visualizar')">
+                    <i class="bi bi-search me-1"></i>Visualizar
+                </button>
+                <button type="submit" class="btn btn-danger" onclick="setFormato('pdf')">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>Baixar PDF
+                </button>
+                <button type="submit" class="btn btn-success" onclick="setFormato('csv')">
+                    <i class="bi bi-file-earmark-spreadsheet me-1"></i>Baixar CSV
+                </button>
             </div>
         </form>
     </div>
@@ -81,12 +105,12 @@
                     <tr>
                         <th class="ps-3">#</th>
                         <th>Usuário</th>
+                        <th>Subunidade</th>
                         <th>Local</th>
                         <th>Motivo</th>
                         <th>Saída</th>
                         <th>Retorno</th>
                         <th>Telefone</th>
-                        <th>Endereço</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -100,6 +124,11 @@
                             </div>
                             <div class="text-muted" style="font-size:0.72rem;">{{ saida.cpf_usuario }}</div>
                         </td>
+                        <td style="font-size:0.82rem;">
+                            {% if saida.usuario and saida.usuario.subunidade %}
+                                <span class="badge bg-secondary">{{ saida.usuario.subunidade.sigla or saida.usuario.subunidade.nome }}</span>
+                            {% else %}—{% endif %}
+                        </td>
                         <td style="font-size:0.875rem;">{{ saida.local }}</td>
                         <td style="font-size:0.8rem;max-width:180px;" class="text-truncate">{{ saida.motivo }}</td>
                         <td style="font-size:0.875rem;">
@@ -109,9 +138,6 @@
                             {{ saida.data_retorno.strftime('%d/%m/%Y') if saida.data_retorno else '—' }}
                         </td>
                         <td style="font-size:0.82rem;">{{ saida.telefone_contato or '—' }}</td>
-                        <td style="font-size:0.78rem;max-width:150px;" class="text-truncate text-muted">
-                            {{ saida.endereco_destino or '—' }}
-                        </td>
                         <td>
                             <span class="badge bg-{{ saida.status_badge }}">{{ saida.status_label }}</span>
                         </td>
@@ -123,7 +149,7 @@
         {% else %}
         <div class="text-center py-5 text-muted">
             <i class="bi bi-calendar-x display-5 d-block mb-2"></i>
-            Nenhum registro encontrado para a data selecionada.
+            Nenhum registro encontrado.
         </div>
         {% endif %}
     </div>

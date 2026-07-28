@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Subunidades{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+        <h4 class="mb-0 fw-bold">
+            <i class="bi bi-diagram-3 me-2" style="color:var(--cor-secundaria);"></i>
+            Subunidades
+        </h4>
+        <small class="text-muted">Gerencie as subunidades organizacionais</small>
+    </div>
+    <a href="{{ url_for('admin.nova_subunidade') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i> Nova Subunidade
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3">#</th>
+                        <th>Nome</th>
+                        <th>Sigla</th>
+                        <th>Militares</th>
+                        <th>Status</th>
+                        <th>Criada em</th>
+                        <th class="text-end pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sub in subunidades %}
+                    <tr>
+                        <td class="ps-3 text-muted">{{ sub.id }}</td>
+                        <td class="fw-semibold">{{ sub.nome }}</td>
+                        <td>{% if sub.sigla %}<span class="badge bg-secondary">{{ sub.sigla }}</span>{% else %}—{% endif %}</td>
+                        <td>
+                            <span class="badge bg-primary bg-opacity-10 text-primary">{{ sub.usuarios.count() }}</span>
+                        </td>
+                        <td>
+                            {% if sub.ativa %}
+                            <span class="badge bg-success">Ativa</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Inativa</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size:0.85rem;">{{ sub.data_criacao.strftime('%d/%m/%Y') }}</td>
+                        <td class="text-end pe-3">
+                            <a href="{{ url_for('admin.editar_subunidade', id=sub.id) }}" class="btn btn-sm btn-outline-primary me-1">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% if sub.usuarios.count() == 0 %}
+                            <form method="POST" action="{{ url_for('admin.excluir_subunidade', id=sub.id) }}" class="d-inline"
+                                  onsubmit="return confirm('Excluir subunidade {{ sub.nome }}?')">
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-diagram-3 fs-2 d-block mb-2"></i>
+                            Nenhuma subunidade cadastrada.
+                            <br>
+                            <a href="{{ url_for('admin.nova_subunidade') }}" class="btn btn-primary btn-sm mt-2">
+                                <i class="bi bi-plus-circle me-1"></i>Criar primeira subunidade
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
