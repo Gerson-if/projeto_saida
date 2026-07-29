@@ -184,7 +184,19 @@ para colocar o sistema no ar** — é isso que a seção 1 já faz.
   também `libssl-dev`, `libffi-dev`, `python3-dev`, `zlib1g-dev`,
   `libjpeg-dev` — só usadas se o `pip` precisar compilar
   `cryptography`/`Pillow` por falta de uma wheel pronta para a
-  arquitetura da VM.
+  arquitetura da VM. Inclui também `ffmpeg`, usado por `app/uploads.py`
+  para recomprimir automaticamente o vídeo de fundo do login (resolução
+  reduzida, bitrate controlado) — se por algum motivo não estiver
+  disponível, o upload de vídeo continua funcionando normalmente, só sem
+  essa otimização (rode `flask diagnosticar` para conferir se está
+  presente).
+- **Otimização automática de mídia:** toda imagem enviada (fotos de
+  usuário, logos, fundo do login) é automaticamente corrigida quanto à
+  rotação (EXIF), redimensionada para no máximo 1920×1920px e comprimida
+  antes de ser salva — isso é o que evita que fotos de celular em alta
+  resolução (comuns hoje em dia) pesem no disco e no carregamento das
+  páginas. O vídeo de fundo do login passa pelo mesmo tipo de tratamento
+  via `ffmpeg`, quando disponível.
 - **Assets estáticos (`scripts/build_static_assets.sh`):** baixa versões
   fixas do Bootstrap, Bootstrap Icons, Chart.js e da fonte Inter
   (direto do registro do npm, sem precisar de Node) e organiza tudo em

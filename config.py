@@ -124,10 +124,17 @@ class Config:
 
     # ── Upload de arquivos ─────────────────────────────────────────────────
     UPLOAD_FOLDER: str = os.path.join(basedir, "app", "static", "uploads")
-    # 25 MB (limite global do Flask) — cobre imagens (máx. 5MB, validado em
-    # app/uploads.py) e o vídeo curto opcional de fundo da tela de login
-    # (máx. 20MB, também validado em app/uploads.py).
-    MAX_CONTENT_LENGTH: int = 25 * 1024 * 1024
+    # Limite global do Flask — precisa cobrir o PIOR CASO de uma única
+    # requisição, não um upload isolado. A tela de Configurações envia até
+    # 5 campos de imagem (logo, logo_relatorio, brasao, favicon,
+    # login_bg_imagem — máx. 10MB cada, ver app/uploads.py) MAIS o vídeo de
+    # fundo do login (máx. 20MB) no mesmo POST: 5×10 + 20 = 70MB no limite
+    # teórico. 90MB dá uma margem confortável sem abrir mão da defesa.
+    #
+    # IMPORTANTE: se mudar este valor, mude também `client_max_body_size`
+    # em deploy/nginx.conf — o Nginx rejeita a requisição ANTES dela
+    # sequer chegar ao Flask se o valor de lá for menor.
+    MAX_CONTENT_LENGTH: int = 90 * 1024 * 1024
     ALLOWED_EXTENSIONS: set = {"png", "jpg", "jpeg", "gif", "webp", "ico"}
     ALLOWED_VIDEO_EXTENSIONS: set = {"mp4", "webm", "ogg"}
 

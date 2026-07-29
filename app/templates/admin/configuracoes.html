@@ -205,7 +205,7 @@
 
                         <input type="file" name="{{ campo }}" id="file-{{ campo }}" class="form-control form-control-sm"
                                accept="image/png,image/jpeg,image/gif,image/webp,.ico" onchange="previewImagem('{{ campo }}', this)">
-                        <small class="text-muted">{{ dica }} Formatos: PNG, JPG, GIF, WEBP ou ICO — máx. 5MB, até 4000×4000px.</small>
+                        <small class="text-muted">{{ dica }} Formatos: PNG, JPG, GIF, WEBP ou ICO — máx. 10MB. Imagens grandes são otimizadas automaticamente.</small>
                     </div>
                     {% endfor %}
                 </div>
@@ -269,7 +269,7 @@
 
                         <input type="file" name="login_bg_imagem" id="file-login_bg_imagem" class="form-control form-control-sm"
                                accept="image/png,image/jpeg,image/gif,image/webp" onchange="previewImagem('login_bg_imagem', this)">
-                        <small class="text-muted">Recomendado: paisagem, alta resolução. Máx. 5MB.</small>
+                        <small class="text-muted">Recomendado: paisagem, alta resolução. Máx. 10MB — otimizada automaticamente ao salvar.</small>
                     </div>
 
                     <!-- Bloco Vídeo -->
@@ -291,7 +291,7 @@
 
                         <input type="file" name="login_bg_video" class="form-control form-control-sm"
                                accept="video/mp4,video/webm,video/ogg">
-                        <small class="text-muted">Formatos: MP4, WEBM ou OGG — máx. 20MB. Use um clipe bem curto (poucos segundos) para não pesar o carregamento.</small>
+                        <small class="text-muted">Formatos: MP4, WEBM ou OGG — máx. 20MB. Use um clipe bem curto (poucos segundos); o vídeo é recomprimido automaticamente para não pesar o carregamento.</small>
                     </div>
 
                     <!-- Ajustes comuns -->
@@ -342,9 +342,9 @@ function previewImagem(campo, input) {
     const file = input.files[0];
     if (!file) return;
 
-    const TAMANHO_MAXIMO = 5 * 1024 * 1024; // 5 MB — mesmo limite validado no servidor
+    const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
     if (file.size > TAMANHO_MAXIMO) {
-        alert('A imagem excede o tamanho máximo permitido (5 MB). Escolha um arquivo menor.');
+        alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
         input.value = '';
         return;
     }

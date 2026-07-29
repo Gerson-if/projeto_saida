@@ -34,3 +34,12 @@ APScheduler>=3.10.0,<4.0
 
 # Servidor WSGI de produção (veja deploy/DEPLOY.md)
 gunicorn>=22.0.0,<24.0
+
+# =============================================
+# Dependência de SISTEMA opcional (não é um pacote pip):
+#   ffmpeg — usado por app/uploads.py para recomprimir automaticamente o
+#   vídeo de fundo da tela de login (reduz resolução/bitrate). Sem ele, o
+#   upload de vídeo continua funcionando normalmente, só que sem essa
+#   otimização automática. deploy/install.sh já instala via apt.
+#   Instalação manual (dev): sudo apt-get install -y ffmpeg
+# =============================================

@@ -17,7 +17,9 @@ from app.models import (
     SolicitacaoPostoGraduacao, StatusSaida,
 )
 from app.uploads import validar_e_salvar_imagem, remover_upload_seguro
-from app.validators import validar_texto_livre, validar_telefone, validar_data
+from app.validators import (
+    validar_texto_livre, validar_telefone, validar_data, parse_int_seguro,
+)
 
 user_bp = Blueprint("user", __name__)
 
@@ -95,7 +97,11 @@ def api_saidas():
     """Endpoint AJAX: retorna saídas filtradas em JSON sem recarregar a página."""
     status_filtro = request.args.get("status", "")
     historico = request.args.get("historico", "0") == "1"
-    page = max(1, int(request.args.get("page", 1)))
+    # parse_int_seguro nunca lança exceção: um "page" malformado (não
+    # numérico) na query string antes derrubava a rota inteira com um
+    # ValueError não tratado (500 genérico) em vez de simplesmente cair na
+    # primeira página.
+    page = max(1, parse_int_seguro(request.args.get("page", "1"), minimo=1) or 1)
     per_page = 9
 
     query = Registro.query.filter_by(cpf_usuario=current_user.cpf)
@@ -402,7 +408,7 @@ def meus_registros():
     data_inicio = request.args.get("data_inicio", "").strip()
     data_fim    = request.args.get("data_fim", "").strip()
     status_filtro = request.args.get("status", "").strip()
-    page = max(1, int(request.args.get("page", 1)))
+    page = max(1, parse_int_seguro(request.args.get("page", "1"), minimo=1) or 1)
     per_page = 10
 
     query = Registro.query.filter_by(cpf_usuario=current_user.cpf)

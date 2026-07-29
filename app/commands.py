@@ -274,5 +274,22 @@ def register_commands(app) -> None:
             if str(modo).lower() != "wal":
                 click.echo("  ⚠️  journal_mode não está em WAL — acessos simultâneos têm mais chance de dar 'database is locked'.")
 
+        # Otimização de mídia (imagens/vídeos de upload)
+        import shutil as _shutil
+        try:
+            import PIL  # noqa: F401
+            click.echo("Pillow (otimização de imagens): instalado.")
+        except ImportError:
+            click.echo("⚠️  Pillow não encontrado — uploads de imagem vão falhar. Reinstale as dependências (pip install -r requirements.txt).")
+
+        if _shutil.which("ffmpeg"):
+            click.echo("ffmpeg (otimização de vídeo): instalado — vídeos de fundo do login são recomprimidos automaticamente.")
+        else:
+            click.echo(
+                "⚠️  ffmpeg não encontrado — uploads de vídeo continuam funcionando, mas SEM "
+                "otimização automática (o vídeo é salvo do jeito que foi enviado). "
+                "Para instalar: sudo apt-get install -y ffmpeg"
+            )
+
         click.echo("─────────────────────────────────────────────────────────")
         click.echo("✅ Diagnóstico concluído.")

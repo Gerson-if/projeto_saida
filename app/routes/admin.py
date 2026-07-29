@@ -1151,15 +1151,23 @@ def salvar_motivos():
     excluir = request.form.getlist("motivo_excluir")
 
     for i, mid in enumerate(ids_existentes):
+        # parse_int_seguro nunca lança exceção: um "motivo_id" malformado
+        # vindo de um POST manual/malicioso antes derrubava a rota inteira
+        # com um ValueError não tratado (500 genérico). Um id inválido
+        # agora é simplesmente ignorado, sem afetar os demais motivos do
+        # mesmo formulário.
+        mid_valido = parse_int_seguro(mid, minimo=1)
+        if mid_valido is None:
+            continue
         if mid in excluir:
-            obj = db.session.get(MotivoCancelamento, int(mid))
+            obj = db.session.get(MotivoCancelamento, mid_valido)
             if obj:
                 db.session.delete(obj)
             continue
         texto = (textos[i] if i < len(textos) else "").strip()[:150]
         if not texto:
             continue
-        obj = db.session.get(MotivoCancelamento, int(mid))
+        obj = db.session.get(MotivoCancelamento, mid_valido)
         if obj:
             obj.texto = texto
             obj.ativo = str(mid) in ativos

@@ -51,7 +51,7 @@
                         </div>
                         <input type="file" name="foto" id="fotoInput" class="d-none" accept="image/png,image/jpeg,image/gif,image/webp" onchange="previewFoto(this)">
                         <input type="hidden" name="remover_foto" id="removerFoto" value="">
-                        <small class="text-muted d-block mt-1" style="font-size:0.72rem;">PNG, JPG, GIF ou WEBP. Máximo 5MB.</small>
+                        <small class="text-muted d-block mt-1" style="font-size:0.72rem;">PNG, JPG, GIF ou WEBP. Máximo 10MB (otimizada automaticamente).</small>
                     </div>
 
                     <div class="mb-3">
@@ -175,9 +175,9 @@ function previewFoto(input) {
     const file = input.files[0];
     if (!file) return;
 
-    const TAMANHO_MAXIMO = 5 * 1024 * 1024; // 5 MB — mesmo limite validado no servidor
+    const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
     if (file.size > TAMANHO_MAXIMO) {
-        alert('A imagem excede o tamanho máximo permitido (5 MB). Escolha um arquivo menor.');
+        alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
         input.value = '';
         return;
     }

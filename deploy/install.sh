@@ -619,8 +619,11 @@ EOF
         || die "apt-get update falhou depois de 3 tentativas — confira a conexão da VM com a internet."
     # Inclui bibliotecas de compilação para o caso raro de o pip precisar
     # compilar 'cryptography'/'Pillow' na hora (sem wheel pronta pra essa arch).
+    # ffmpeg é opcional em termos de funcionamento (o upload de vídeo do
+    # fundo do login funciona sem ele), mas sem ele o vídeo enviado é
+    # salvo sem otimização automática — por isso entra na lista padrão.
     PKGS=(python3 python3-venv python3-pip git nginx build-essential pkg-config curl ufw \
-          openssl cron libssl-dev libffi-dev python3-dev zlib1g-dev libjpeg-dev)
+          openssl cron libssl-dev libffi-dev python3-dev zlib1g-dev libjpeg-dev ffmpeg)
     [ "$HTTPS_MODE" = "letsencrypt" ] && PKGS+=(certbot python3-certbot-nginx)
     PKGS+=(mariadb-server mariadb-client libmariadb-dev)
     retry_cmd 3 apt-get install -y "${PKGS[@]}" \
@@ -1239,6 +1242,22 @@ cmd_update() {
         tail -n 30 /tmp/pip_update.log >&2
         rollback_update
         die "Atualização revertida. Log completo em /tmp/pip_update.log."
+    fi
+
+    # Instalações feitas antes da otimização automática de vídeo não têm
+    # ffmpeg — instala aqui (idempotente: não faz nada se já existir) para
+    # que instalações antigas ganhem a otimização automática ao atualizar,
+    # sem precisar de uma reinstalação completa. Não é motivo de rollback
+    # se falhar: o upload de vídeo continua funcionando sem otimização.
+    if ! command -v ffmpeg >/dev/null 2>&1; then
+        log "Instalando ffmpeg (necessário para otimização automática de vídeo)"
+        export DEBIAN_FRONTEND=noninteractive
+        if apt-get update -y >/tmp/apt_ffmpeg.log 2>&1 && apt-get install -y ffmpeg >>/tmp/apt_ffmpeg.log 2>&1; then
+            ok "ffmpeg instalado"
+        else
+            warn "Não foi possível instalar o ffmpeg automaticamente (veja /tmp/apt_ffmpeg.log)."
+            warn "O upload de vídeo continua funcionando normalmente, só sem otimização automática."
+        fi
     fi
 
     log "Recompilando assets estáticos (caso as versões pinadas tenham mudado)"

@@ -14,6 +14,7 @@ from datetime import datetime
 
 from flask_login import current_user
 
+from app import db
 from app.models import ConfigSistema, SolicitacaoPostoGraduacao
 
 
@@ -23,7 +24,19 @@ def register_context_processors(app) -> None:
         try:
             configs = {c.chave: c.valor for c in ConfigSistema.query.all()}
         except Exception:
-            # Banco ainda não inicializado (ex: primeiro boot)
+            # Banco ainda não inicializado (ex: primeiro boot) ou erro
+            # transitório (ex: lock momentâneo). Além de cair no valor
+            # padrão, é ESSENCIAL desfazer a transação aqui: sem o
+            # rollback, a sessão do SQLAlchemy fica marcada como
+            # "precisa de rollback" e qualquer consulta seguinte na MESMA
+            # requisição (ex: dentro da própria rota) falharia com um erro
+            # totalmente não relacionado ("PendingRollbackError"), como se
+            # o sistema tivesse quebrado do nada.
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            app.logger.warning("Falha ao carregar config_sistema no context processor.", exc_info=True)
             configs = {}
 
         pendentes = 0
@@ -31,6 +44,10 @@ def register_context_processors(app) -> None:
             if current_user.is_authenticated and current_user.is_admin:
                 pendentes = SolicitacaoPostoGraduacao.contar_pendentes()
         except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
             pendentes = 0
 
         return {

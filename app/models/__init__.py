@@ -200,6 +200,11 @@ class SolicitacaoPostoGraduacao(db.Model):
                 status=SolicitacaoPostoGraduacao.STATUS_PENDENTE
             ).count()
         except Exception:
+            # Sem o rollback, uma falha transitória aqui (ex: banco
+            # ocupado) deixaria a sessão do SQLAlchemy "suja" para o resto
+            # da requisição — a próxima consulta em qualquer rota falharia
+            # com um erro sem relação nenhuma com o problema original.
+            db.session.rollback()
             return 0
 
     def __repr__(self) -> str:
@@ -446,6 +451,11 @@ class ConfigSistema(db.Model):
             config = ConfigSistema.query.filter_by(chave=chave).first()
             return config.valor if config else default
         except Exception:
+            # Mesmo raciocínio de SolicitacaoPostoGraduacao.contar_pendentes:
+            # sem o rollback, a sessão fica inutilizável para o resto da
+            # requisição depois de uma falha transitória (ex: banco ainda
+            # não inicializado, lock momentâneo).
+            db.session.rollback()
             return default
 
     @staticmethod
