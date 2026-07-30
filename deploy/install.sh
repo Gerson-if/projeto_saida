@@ -34,6 +34,12 @@
 #
 set -euo pipefail
 
+# Caminho absoluto deste próprio arquivo — usado por 'cmd_update' para se
+# re-executar como processo novo depois de um 'git pull' (ver comentário
+# em cmd_update para o motivo: bash não relê uma função que já estava
+# carregada na memória do processo só porque o arquivo no disco mudou).
+SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
 # ── Aparência ────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
     C_RESET="\033[0m"; C_BOLD="\033[1m"; C_GREEN="\033[32m"
@@ -650,6 +656,14 @@ EOF
         || die "Não consegui acessar '$REPO_URL' (URL errada? repositório privado sem credenciais? sem internet?)."
 
     log "Obtendo código da aplicação"
+    # NOTA: se este 'git pull' trouxer mudanças no PRÓPRIO install.sh, o
+    # restante de cmd_install() continua rodando com a lógica antiga (já
+    # carregada na memória deste processo bash) até o fim — o mesmo motivo
+    # pelo qual cmd_update precisou ser dividido em duas fases com um
+    # 're-exec' no meio (veja o comentário em cmd_update). Não replicamos a
+    # mesma divisão aqui porque reinstalar em cima de um checkout existente
+    # é um caminho raro; na prática, um "install" que precisou de correções
+    # recém-lançadas deve ser seguido de um "update" logo depois.
     if [ -d "$INSTALL_DIR/.git" ]; then
         warn "Repositório já existe em $INSTALL_DIR — atualizando com 'git pull'."
         retry_cmd 3 sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git pull" \
@@ -1334,6 +1348,57 @@ cmd_update() {
     chown -R "$SYS_USER:$SYS_USER" "$backup_pre_dir"
     ok "Backup pré-atualização salvo em $backup_pre_dir"
 
+    log "Baixando última versão (fast-forward only)"
+    if ! sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git merge --ff-only '@{u}'"; then
+        die "git pull (fast-forward) falhou — provavelmente há divergência local. Nada foi alterado; investigue com 'git status' em $INSTALL_DIR."
+    fi
+
+    # A PARTIR DAQUI o restante da atualização precisa necessariamente rodar
+    # com a lógica NOVA — mas este processo bash já carregou o corpo de
+    # 'cmd_update' inteiro na memória quando começou a rodar, ANTES do 'git
+    # merge' logo acima trocar os arquivos no disco. Bash não relê uma
+    # função só porque o arquivo mudou embaixo dela: se a gente continuasse
+    # daqui pra baixo neste mesmo processo, ainda estaríamos executando a
+    # versão ANTIGA do resto da atualização (migrações, sincronização do
+    # Nginx, etc.) — mesmo com o código novo já no disco. Isso já causou um
+    # incidente real: uma correção nas migrações do banco não entrou em
+    # vigor na própria atualização que a trouxe, porque o processo em
+    # andamento continuou usando a lógica antiga, falhou, e o rollback
+    # desfez até o próprio arquivo que continha a correção — repetindo o
+    # mesmo erro para sempre a cada nova tentativa.
+    #
+    # A correção: rodar o restante da atualização num processo bash NOVO,
+    # que lê o script já atualizado do disco do zero. 'exec' troca a imagem
+    # deste processo (mesmo PID, mesmos descritores de arquivo — inclusive
+    # o lock do flock acima, que continua válido) por uma chamada nova ao
+    # script, sinalizada por _PS_UPDATE_FASE2=1 para pular direto para
+    # 'cmd_update_fase2' sem repetir fetch/backup/merge.
+    log "Continuando a atualização com a versão recém-baixada do script"
+    # --dir/--user explícitos aqui de propósito: as variáveis globais
+    # INSTALL_DIR/SYS_USER são reatribuídas incondicionalmente aos valores
+    # padrão no topo do script (antes do parser de flags rodar), o que
+    # sobrescreveria um valor apenas exportado por ambiente caso esta
+    # instalação use --dir/--user diferentes do padrão.
+    export _PS_UPDATE_FASE2=1
+    export _PS_BEFORE_COMMIT="$before_commit"
+    export _PS_BACKUP_DIR="$backup_pre_dir"
+    exec bash "$SCRIPT_PATH" --action update --dir "$INSTALL_DIR" --user "$SYS_USER"
+    # 'exec' nunca retorna se der certo — nada depois desta linha roda.
+    die "Falha inesperada ao continuar a atualização (exec não substituiu o processo)."
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# Segunda metade de 'cmd_update' — roda num processo bash NOVO (via exec,
+# depois do 'git merge --ff-only'), lendo a versão já atualizada deste
+# script do disco. Veja o comentário grande no fim de cmd_update() para o
+# motivo de existir essa separação. NÃO chamar diretamente: é disparada
+# automaticamente por cmd_update via a variável de ambiente
+# _PS_UPDATE_FASE2, nunca pelo menu/dispatch normal de ações.
+# ─────────────────────────────────────────────────────────────────────────
+cmd_update_fase2() {
+    local before_commit="$_PS_BEFORE_COMMIT"
+    local backup_pre_dir="$_PS_BACKUP_DIR"
+
     # rollback_update — restaura código e banco ao estado anterior a esta atualização.
     rollback_update() {
         err "Revertendo para o commit anterior (${before_commit:0:8}) e restaurando o backup..."
@@ -1361,11 +1426,6 @@ cmd_update() {
         fi
         err "Backup preservado em $backup_pre_dir para investigação."
     }
-
-    log "Baixando última versão (fast-forward only)"
-    if ! sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git merge --ff-only '@{u}'"; then
-        die "git pull (fast-forward) falhou — provavelmente há divergência local. Nada foi alterado; investigue com 'git status' em $INSTALL_DIR."
-    fi
 
     log "Atualizando dependências Python"
     if ! sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && source venv/bin/activate && pip install -r requirements.txt -q" > /tmp/pip_update.log 2>&1; then
@@ -1496,6 +1556,19 @@ cmd_diagnostico() {
 # Ponto de entrada
 # ─────────────────────────────────────────────────────────────────────────
 main() {
+    # Continuação de 'cmd_update' depois do 'git merge --ff-only' (veja o
+    # comentário em cmd_update) — este processo bash foi iniciado via
+    # 'exec' já lendo o script atualizado do disco. Não passa pelo menu
+    # nem pelo dispatch normal de ações: vai direto para a segunda metade
+    # da atualização, com o estado (diretório, usuário, commit anterior,
+    # backup) recebido via variáveis de ambiente do processo que a criou.
+    if [ "${_PS_UPDATE_FASE2:-0}" = "1" ]; then
+        if ! ( set -e; cmd_update_fase2 ); then
+            die "A ação 'update' terminou com erro — revise as mensagens acima."
+        fi
+        return
+    fi
+
     if [ -z "$ACTION" ]; then
         if [ "$NON_INTERACTIVE" = "1" ] || [ "$FLAGS_INFORMADAS" = "1" ]; then
             ACTION="install"

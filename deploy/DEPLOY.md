@@ -145,7 +145,12 @@ produção. Nessa ordem, o script:
    `instance/backups/pre-update-<data_hora>/`.
 6. Atualiza o código só por fast-forward (`git merge --ff-only`) — se
    houver divergência (alguém mexeu no checkout manualmente), para sem
-   alterar nada em vez de criar um merge inesperado em produção.
+   alterar nada em vez de criar um merge inesperado em produção. Logo em
+   seguida, o script se reinicia sozinho (um `exec` interno) para garantir
+   que todo o restante da atualização rode com a versão do próprio
+   `install.sh` que acabou de ser baixada — sem isso, uma correção nova na
+   lógica de pós-atualização só entraria em vigor na segunda vez que
+   alguém rodasse `--action update`, nunca na atualização que a trouxe.
 7. Reinstala as dependências Python e aplica migrações de banco
    pendentes (`flask db upgrade`). Antes disso, roda `flask db-adotar-legado`
    automaticamente — um passo idempotente que "adota" instalações antigas
