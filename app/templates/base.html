@@ -908,25 +908,72 @@
                     // escrito de forma segura para rodar mais de uma vez
                     // (se auto-encapsula, só reatribui funções a `window`).
                     novo.textContent = scriptAntigo.textContent;
-                } else {
-                    // Script inline da própria página (ex.: inicialização de
-                    // gráficos). Ao navegar de volta para a MESMA página mais
-                    // de uma vez na sessão, um `const`/`let` de nível
-                    // superior já declarado antes faria o navegador lançar
-                    // "Identifier ... has already been declared" na segunda
-                    // execução — porque bindings `let`/`const` de nível
-                    // superior de uma tag <script> clássica vivem no escopo
-                    // léxico global da PÁGINA (não são liberados só por
-                    // remover a tag do DOM). Envolver em um bloco `{ ... }`
-                    // dá um escopo léxico novo a cada execução para
-                    // `let`/`const`, e por compatibilidade legada do
-                    // JavaScript (Annex B), `function nome(){}` de nível
-                    // superior dentro desse bloco continua virando global
-                    // (necessário para os `onclick=`/`onchange=` inline
-                    // continuarem funcionando).
-                    novo.textContent = '{\n' + scriptAntigo.textContent + '\n}';
+                    scriptAntigo.replaceWith(novo);
+                    return;
                 }
-                scriptAntigo.replaceWith(novo);
+
+                // Script inline da própria página (ex.: inicialização de
+                // gráficos). Ao navegar de volta para a MESMA página mais
+                // de uma vez na sessão, um `const`/`let` de nível
+                // superior já declarado antes faria o navegador lançar
+                // "Identifier ... has already been declared" na segunda
+                // execução — porque bindings `let`/`const` de nível
+                // superior de uma tag <script> clássica vivem no escopo
+                // léxico global da PÁGINA (não são liberados só por
+                // remover a tag do DOM). Envolver em um bloco `{ ... }`
+                // dá um escopo léxico novo a cada execução para
+                // `let`/`const`, e por compatibilidade legada do
+                // JavaScript (Annex B), `function nome(){}` de nível
+                // superior dentro desse bloco continua virando global
+                // (necessário para os `onclick=`/`onchange=` inline
+                // continuarem funcionando).
+                novo.textContent = '{\n' + scriptAntigo.textContent + '\n}';
+
+                // A maioria das páginas (dashboards, relatórios,
+                // listagens) inicializa seu JS com o idioma comum
+                // "document.addEventListener('DOMContentLoaded', fn)" —
+                // que só dispara UMA vez, na carga real da página. Ao
+                // voltar para a mesma página pela navegação dinâmica
+                // (sem recarregar o navegador de verdade), esse evento
+                // nunca dispara de novo, e "fn" nunca roda — o sintoma
+                // mais visível disso era a frase de dica do dashboard
+                // sumir até a página ser recarregada de verdade, mas o
+                // mesmo problema afeta qualquer inicialização escrita
+                // desse jeito (gráficos, listeners de formulário, etc.).
+                // Como o conteúdo da página já foi trocado ANTES deste
+                // script rodar (troca de #page-content acontece antes de
+                // chamar esta função), o documento já está "pronto" no
+                // sentido que importa aqui — então, só durante a execução
+                // síncrona deste script, interceptamos os dois jeitos
+                // comuns de registrar esse evento e chamamos o callback
+                // na hora, em vez de esperar um evento que não vai vir.
+                const docAddOriginal = document.addEventListener.bind(document);
+                const winAddOriginal = window.addEventListener.bind(window);
+                function interceptarDomContentLoaded(original) {
+                    return function (tipo, callback, opcoes) {
+                        if (tipo === 'DOMContentLoaded' && typeof callback === 'function') {
+                            // setTimeout (não chamada direta): o DOMContentLoaded
+                            // de verdade só dispara depois que o script atual
+                            // termina de rodar — replicar isso evita inverter a
+                            // ordem caso o script tenha código síncrono logo
+                            // depois deste registro que o próprio callback espere
+                            // já ter rodado.
+                            setTimeout(function () {
+                                try { callback(); } catch (erro) { console.error(erro); }
+                            }, 0);
+                            return;
+                        }
+                        return original(tipo, callback, opcoes);
+                    };
+                }
+                document.addEventListener = interceptarDomContentLoaded(docAddOriginal);
+                window.addEventListener = interceptarDomContentLoaded(winAddOriginal);
+                try {
+                    scriptAntigo.replaceWith(novo);
+                } finally {
+                    document.addEventListener = docAddOriginal;
+                    window.addEventListener = winAddOriginal;
+                }
             });
         }
 

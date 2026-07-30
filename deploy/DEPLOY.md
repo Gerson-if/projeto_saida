@@ -78,13 +78,20 @@ O instalador pergunta isso no menu (ou aceita via `--https-mode` +
 | Quero acessar só pelo IP da VM/VPS mesmo | 3 | Certificado autoassinado, com o SAN (Subject Alternative Name) já correto para IP — o navegador avisa "conexão não é segura" na primeira visita, é só aceitar o aviso uma vez |
 | Ambiente de teste, sem HTTPS por enquanto | 4 | Só HTTP — não recomendado para produção |
 
-Mudou de ideia depois? Troca sem reinstalar tudo:
+Essa MESMA pergunta (com as mesmas 3 primeiras opções — a 4ª, "sem
+HTTPS", só faz sentido na instalação inicial) também aparece se você
+rodar `sudo projeto-saida --action ssl` mais tarde, sem nenhuma flag —
+seja para emitir o certificado pela primeira vez numa instalação que
+ainda não tinha, seja para trocar de um modo para o outro depois.
+
+Mudou de ideia depois? Troca sem reinstalar tudo — rode a ação de novo
+e escolha a opção nova no menu, ou pule direto pra ela com flags:
 ```bash
 # Passar a usar HTTPS autoassinado com o IP da VM
-sudo bash deploy/install.sh --action ssl --https-mode selfsigned --domain 203.0.113.10
+sudo projeto-saida --action ssl --https-mode selfsigned --domain 203.0.113.10
 
 # Passar a usar Let's Encrypt de verdade quando conseguir um domínio
-sudo bash deploy/install.sh --action ssl --https-mode letsencrypt --domain saida.exemplo.com.br --email voce@exemplo.com
+sudo projeto-saida --action ssl --https-mode letsencrypt --domain saida.exemplo.com.br --email voce@exemplo.com
 ```
 
 ---
@@ -174,30 +181,49 @@ anterior, sem deixar produção no ar quebrada.
 
 ---
 
-## 5. Migrando para outra VM (exportar / importar)
+## 5. Migrando para outra VM (menu `migrar`)
 
-Trocar de servidor — mudar de provedor, subir de plano, etc. — sem perder
-dados: o menu tem duas ações que empacotam e restauram um snapshot
-completo (banco de dados + logos/fotos/vídeo enviados + chave de sessão).
-
-**Na VM atual (origem):**
+Trocar de servidor — mudar de provedor, subir de plano, etc. — sem
+perder dados: um snapshot completo (banco de dados + logos/fotos/vídeo
+enviados + chave de sessão) é empacotado numa VM e restaurado na outra.
 
 ```bash
-sudo projeto-saida --action exportar
+sudo projeto-saida --action migrar
 ```
 
-Gera um único arquivo em `instance/migracoes/migracao-<data_hora>.tar.gz`
-(permissão 600 — contém senhas com hash e a chave de sessão, trate como
-informação sensível). O comando termina mostrando o `scp` exato para
-copiar esse arquivo para a VM nova.
+Abre um menu guiado que primeiro explica qual passo roda em qual
+máquina (o ponto que mais confunde quem nunca fez esse tipo de
+migração: os dois passos rodam em VMs **diferentes**, não na mesma) e
+depois oferece: Exportar, Importar, ou Ver snapshots já exportados
+nesta VM. `--action exportar` e `--action importar` continuam
+funcionando direto, sem passar pelo menu, para uso em automação/scripts.
+
+**Na VM atual (origem):** escolha "Exportar" (ou rode
+`sudo projeto-saida --action exportar` direto). Gera um único arquivo em
+`instance/migracoes/migracao-<data_hora>.tar.gz` (permissão 600 —
+contém senhas com hash e a chave de sessão, trate como informação
+sensível). O comando termina mostrando o `scp` exato para copiar esse
+arquivo para a VM nova — sugerindo `/tmp` como destino de propósito,
+porque é um dos lugares onde a importação procura sozinha.
 
 **Na VM nova (destino):**
 
 ```bash
 # 1) Instalação normal, se ainda não fez (cria venv, MariaDB, systemd, Nginx, HTTPS)
-sudo bash deploy/install.sh --action install
+sudo projeto-saida --action install
 
-# 2) Importa o snapshot da VM antiga
+# 2) Menu de migração — escolha "Importar"
+sudo projeto-saida --action migrar
+```
+
+Ao escolher "Importar" (seja pelo menu `migrar`, seja rodando
+`--action importar` sem `--arquivo`), o instalador procura sozinho por
+snapshots em `instance/migracoes/` (desta VM) e em `/tmp` (destino
+sugerido pelo `scp` acima) e mostra uma lista numerada para escolher —
+sem precisar decorar ou digitar o caminho completo do arquivo. Se
+preferir pular direto para um arquivo específico:
+
+```bash
 sudo projeto-saida --action importar --arquivo /tmp/migracao-<data_hora>.tar.gz
 ```
 
@@ -234,8 +260,9 @@ global, de qualquer diretório) ou `sudo bash /opt/projeto_saida/deploy/install.
 | Atualizar com segurança | `sudo projeto-saida --action update` |
 | Emitir/trocar HTTPS | `sudo projeto-saida --action ssl` |
 | Configurar backup automático | `sudo projeto-saida --action backup` |
-| Exportar para migrar de VM | `sudo projeto-saida --action exportar` |
-| Importar snapshot de outra VM | `sudo projeto-saida --action importar --arquivo /caminho/arquivo.tar.gz` |
+| Migrar para/de outra VM (menu guiado) | `sudo projeto-saida --action migrar` |
+| Exportar para migrar de VM (direto) | `sudo projeto-saida --action exportar` |
+| Importar snapshot de outra VM (direto) | `sudo projeto-saida --action importar [--arquivo /caminho/arquivo.tar.gz]` |
 | Diagnóstico de saúde | `sudo projeto-saida --action diagnostico` |
 | **Ver logs (app, Nginx, systemd) + gerar pacote de diagnóstico** | `sudo projeto-saida --action logs` |
 | Ver status do serviço | `sudo systemctl status projeto-saida` |

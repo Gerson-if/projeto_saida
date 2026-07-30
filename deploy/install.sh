@@ -27,10 +27,15 @@
 #   ssl           Emite/renova o certificado HTTPS de uma instalação já existente
 #   backup        Configura backup automático diário (banco + uploads)
 #   update        Atualiza uma instalação existente (git pull + migrações + restart)
+#   migrar        Menu guiado de migração entre VMs (exportar/importar/ver
+#                 snapshots já exportados) — explica qual passo roda em
+#                 qual máquina antes de perguntar o que fazer
 #   exportar      Empacota banco + uploads + chave de sessão num arquivo único,
 #                 para migrar esta instalação para outra VM
 #   importar      Restaura, nesta instalação, um arquivo gerado por 'exportar'
-#                 em outra VM (--arquivo /caminho/migracao-xxx.tar.gz)
+#                 em outra VM (--arquivo /caminho/migracao-xxx.tar.gz — se
+#                 omitido, procura sozinho snapshots em /tmp e na pasta
+#                 de migrações desta instalação)
 #   diagnostico   Roda verificações de saúde da instalação
 #   logs          Consulta os logs do sistema (app, Nginx, systemd) — inclui
 #                 gerar um pacote de diagnóstico para enviar a quem for
@@ -385,29 +390,27 @@ show_menu() {
 O que você quer fazer?
 
   1) Instalação completa (servidor novo)
-  2) Emitir/renovar certificado HTTPS (Let's Encrypt)
+  2) Emitir/renovar certificado HTTPS (domínio próprio ou só IP)
   3) Configurar backup automático diário
   4) Atualizar uma instalação existente (git pull + migrações)
-  5) Migrar para outra VM — exportar um snapshot desta instalação
-  6) Migrar para outra VM — importar um snapshot de outra instalação
-  7) Diagnóstico (verifica se está tudo saudável)
-  8) Ver logs do sistema (útil para investigar erros)
-  9) Sair
+  5) Migrar sistema para outra VM (exportar/importar/ver snapshots)
+  6) Diagnóstico (verifica se está tudo saudável)
+  7) Ver logs do sistema (útil para investigar erros)
+  8) Sair
 
 EOF
     while true; do
-        ask "Escolha uma opção (1-9)" "1"
+        ask "Escolha uma opção (1-8)" "1"
         case "$REPLY_VAL" in
             1) ACTION="install"; return ;;
             2) ACTION="ssl"; return ;;
             3) ACTION="backup"; return ;;
             4) ACTION="update"; return ;;
-            5) ACTION="exportar"; return ;;
-            6) ACTION="importar"; return ;;
-            7) ACTION="diagnostico"; return ;;
-            8) ACTION="logs"; return ;;
-            9) ACTION="sair"; return ;;
-            *) warn "Opção inválida — digite um número de 1 a 9." ;;
+            5) ACTION="migrar"; return ;;
+            6) ACTION="diagnostico"; return ;;
+            7) ACTION="logs"; return ;;
+            8) ACTION="sair"; return ;;
+            *) warn "Opção inválida — digite um número de 1 a 8." ;;
         esac
     done
 }
@@ -449,6 +452,109 @@ run_as_app_user() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
+# menu_escolher_https <permitir_sem_https:0|1>
+#
+# Pergunta interativamente como o sistema deve ser exposto — com domínio
+# próprio, sem domínio (mas ainda com HTTPS real, via sslip.io), só com
+# IP (autoassinado) ou, se permitido, só HTTP — e preenche DOMAIN e
+# HTTPS_MODE. Usada tanto por 'install' quanto por 'ssl', para as duas
+# ações sempre oferecerem exatamente as mesmas opções e explicações.
+#
+# Antes desta função existir, 'ssl' (emitir/renovar certificado numa
+# instalação já feita) não perguntava nada disso: se rodada sem flags,
+# ela simplesmente ASSUMIA Let's Encrypt e pedia um domínio — quem só
+# tinha o IP da VM (sem domínio nenhum) via o pedido de domínio, não
+# entendia por que, e não tinha como saber que existia
+# "--https-mode selfsigned" sem ler o código-fonte. Compartilhar esta
+# função com 'install' resolve isso e evita as duas ações divergirem
+# (uma divergência parecida — o bloco HTTPS autoassinado sendo montado
+# à mão, diferente do bloco HTTP — já causou um bug real de upload
+# recusado com a página crua do Nginx).
+menu_escolher_https() {
+    local permitir_sem_https="${1:-0}"
+
+    # NOTA: o comportamento de "sem --https-mode em modo não interativo"
+    # é decidido por CADA chamador antes de chamar esta função (install e
+    # ssl sempre tiveram regras de compatibilidade ligeiramente
+    # diferentes aqui — install baixa para autoassinado se faltar
+    # domínio, ssl sempre tenta Let's Encrypt e deixa o ask_valid abaixo
+    # morrer com uma mensagem clara se faltar domínio). Ao chegar aqui,
+    # HTTPS_MODE já deve estar definido nesse modo.
+    if [ -n "$HTTPS_MODE" ]; then
+        # O modo já foi decidido (--https-mode) — só falta o domínio/IP,
+        # se também não veio por flag.
+        if [ -z "$DOMAIN" ]; then
+            if [ "$HTTPS_MODE" = "selfsigned" ]; then
+                ask_valid "Domínio ou IP para o certificado" "${PUBLIC_IP:-}" validate_domain_ou_ip \
+                    "Informe um domínio válido (ex: saida.exemplo.com.br) ou um IPv4."
+            else
+                ask_valid "Domínio (ex: saida.suaorganizacao.com.br)" "" validate_domain \
+                    "Domínio inválido — use um nome como saida.exemplo.com.br."
+            fi
+            DOMAIN="$REPLY_VAL"
+        fi
+        return 0
+    fi
+
+    echo
+    echo "Como você quer expor o sistema para os usuários?"
+    if [ -n "$PUBLIC_IP" ]; then
+        echo -e "IP público detectado desta VM/VPS: ${C_BOLD}${PUBLIC_IP}${C_RESET}"
+    fi
+    echo "  1) Tenho um domínio próprio apontando para este servidor (HTTPS real, Let's Encrypt)"
+    echo "  2) Não tenho domínio, mas quero HTTPS real do mesmo jeito (usa o IP via sslip.io)"
+    echo "  3) Só tenho o IP da VM/VPS — certificado autoassinado (navegador avisa \"não seguro\")"
+    local max_opcao=3
+    if [ "$permitir_sem_https" = "1" ]; then
+        echo "  4) Só HTTP por enquanto, sem certificado (não recomendado, ex: ambiente de teste)"
+        max_opcao=4
+    fi
+    echo
+
+    while true; do
+        ask "Escolha (1-$max_opcao)" "1"
+        case "$REPLY_VAL" in
+            1)
+                ask_valid "Domínio (ex: saida.suaorganizacao.com.br)" "$DOMAIN" validate_domain \
+                    "Domínio inválido — use um nome como saida.exemplo.com.br."
+                DOMAIN="$REPLY_VAL"
+                HTTPS_MODE="letsencrypt"
+                return 0
+                ;;
+            2)
+                [ -z "$PUBLIC_IP" ] && { warn "Não consegui detectar o IP público desta VM — escolha outra opção."; continue; }
+                DOMAIN="${PUBLIC_IP}.sslip.io"
+                ok "Vou usar '${DOMAIN}' (resolve automaticamente para ${PUBLIC_IP}, sem configurar nada em DNS)."
+                HTTPS_MODE="letsencrypt"
+                return 0
+                ;;
+            3)
+                DOMAIN="${PUBLIC_IP:-}"
+                if [ -z "$DOMAIN" ]; then
+                    ask_valid "Não detectei o IP automaticamente — informe o IP da VM/VPS" "" validate_ipv4 \
+                        "Informe um IPv4 válido (ex: 203.0.113.10)."
+                    DOMAIN="$REPLY_VAL"
+                fi
+                warn "Certificado autoassinado para IP '$DOMAIN': o navegador vai avisar"
+                warn "'conexão não é segura' na primeira visita — isso é esperado, não é erro."
+                HTTPS_MODE="selfsigned"
+                return 0
+                ;;
+            4)
+                if [ "$permitir_sem_https" = "1" ]; then
+                    DOMAIN="${PUBLIC_IP:-_}"
+                    warn "Seguindo sem HTTPS — dados (inclusive senhas) trafegam sem criptografia."
+                    HTTPS_MODE="none"
+                    return 0
+                fi
+                warn "Digite um número de 1 a $max_opcao."
+                ;;
+            *) warn "Digite um número de 1 a $max_opcao." ;;
+        esac
+    done
+}
+
+# ─────────────────────────────────────────────────────────────────────────
 # AÇÃO: install — instalação completa
 # ─────────────────────────────────────────────────────────────────────────
 cmd_install() {
@@ -483,62 +589,13 @@ cmd_install() {
         die "--https-mode deve ser 'letsencrypt', 'selfsigned' ou 'none' (recebido: '$HTTPS_MODE')."
     fi
 
-    if [ -z "$HTTPS_MODE" ] && [ "$NON_INTERACTIVE" != "1" ]; then
-        echo
-        echo "Como você quer expor o sistema para os usuários?"
-        if [ -n "$PUBLIC_IP" ]; then
-            echo -e "IP público detectado desta VM/VPS: ${C_BOLD}${PUBLIC_IP}${C_RESET}"
-        fi
-        cat <<EOF
-  1) Tenho um domínio próprio apontando para este servidor (HTTPS real, Let's Encrypt)
-  2) Não tenho domínio, mas quero HTTPS real do mesmo jeito (usa o IP via sslip.io)
-  3) Usar o IP da VM/VPS direto, com certificado autoassinado (navegador avisa "não seguro")
-  4) Só HTTP por enquanto, sem certificado (não recomendado, ex: ambiente de teste)
-EOF
-        while true; do
-            ask "Escolha (1-4)" "1"
-            case "$REPLY_VAL" in
-                1)
-                    ask_valid "Domínio (ex: saida.suaorganizacao.com.br)" "" validate_domain \
-                        "Domínio inválido — use um nome como saida.exemplo.com.br."
-                    DOMAIN="$REPLY_VAL"
-                    HTTPS_MODE="letsencrypt"
-                    break
-                    ;;
-                2)
-                    [ -z "$PUBLIC_IP" ] && { warn "Não consegui detectar o IP público desta VM — escolha outra opção."; continue; }
-                    DOMAIN="${PUBLIC_IP}.sslip.io"
-                    ok "Vou usar '${DOMAIN}' (resolve automaticamente para ${PUBLIC_IP}, sem configurar nada em DNS)."
-                    HTTPS_MODE="letsencrypt"
-                    break
-                    ;;
-                3)
-                    DOMAIN="${PUBLIC_IP:-}"
-                    if [ -z "$DOMAIN" ]; then
-                        ask_valid "Não detectei o IP automaticamente — informe o IP da VM/VPS" "" validate_ipv4 \
-                            "Informe um IPv4 válido (ex: 203.0.113.10)."
-                        DOMAIN="$REPLY_VAL"
-                    fi
-                    warn "Certificado autoassinado para IP '$DOMAIN': o navegador vai avisar"
-                    warn "'conexão não é segura' na primeira visita — isso é esperado, não é erro."
-                    HTTPS_MODE="selfsigned"
-                    break
-                    ;;
-                4)
-                    DOMAIN="${PUBLIC_IP:-_}"
-                    warn "Seguindo sem HTTPS — dados (inclusive senhas) trafegam sem criptografia."
-                    HTTPS_MODE="none"
-                    break
-                    ;;
-                *) warn "Digite um número de 1 a 4." ;;
-            esac
-        done
-    elif [ -z "$HTTPS_MODE" ]; then
+    if [ -z "$HTTPS_MODE" ] && [ "$NON_INTERACTIVE" = "1" ]; then
         # Modo não interativo sem --https-mode explícito: mantém compatibilidade
         # com versões anteriores (Let's Encrypt se houver domínio, senão autoassinado).
         HTTPS_MODE="letsencrypt"
         [ -z "$DOMAIN" ] && { DOMAIN="${PUBLIC_IP:-_}"; HTTPS_MODE="selfsigned"; }
     fi
+    menu_escolher_https 1
     [ -z "$DOMAIN" ] && DOMAIN="${PUBLIC_IP:-_}"
 
     if [ "$HTTPS_MODE" = "letsencrypt" ] && [ -z "$EMAIL" ] && [ "$NON_INTERACTIVE" != "1" ]; then
@@ -1102,34 +1159,39 @@ emit_letsencrypt_cert() {
 # ─────────────────────────────────────────────────────────────────────────
 cmd_ssl() {
     banner
-    echo "Emitir ou renovar o certificado HTTPS de uma instalação já feita."
-    echo "Por padrão emite Let's Encrypt; use --https-mode selfsigned para"
-    echo "gerar (ou trocar para) um certificado autoassinado com IP/domínio."
+    echo "Emite ou renova o certificado HTTPS de uma instalação já feita."
+    echo "Se você tem um domínio próprio apontando para este servidor, o"
+    echo "certificado é real e de graça (Let's Encrypt), renovado sozinho."
+    echo "Se você só tem o IP da VM/VPS (sem domínio nenhum), use o"
+    echo "certificado autoassinado — funciona igual, só que o navegador"
+    echo "avisa 'conexão não é segura' na primeira visita (normal, não é erro)."
     echo
     require_existing_install
 
     [ -f /etc/nginx/sites-available/projeto-saida ] \
         || die "Não encontrei /etc/nginx/sites-available/projeto-saida. Rode a ação 'install' primeiro."
 
-    [ -z "$HTTPS_MODE" ] && HTTPS_MODE="letsencrypt"
-    if [ "$HTTPS_MODE" != "letsencrypt" ] && [ "$HTTPS_MODE" != "selfsigned" ]; then
+    if [ -n "$HTTPS_MODE" ] && [ "$HTTPS_MODE" != "letsencrypt" ] && [ "$HTTPS_MODE" != "selfsigned" ]; then
         die "--https-mode aqui só aceita 'letsencrypt' ou 'selfsigned' (recebido: '$HTTPS_MODE')."
+    fi
+    if [ -n "$DOMAIN" ] && ! validate_domain "$DOMAIN" && ! validate_ipv4 "$DOMAIN"; then
+        die "--domain '$DOMAIN' não é um domínio nem um IPv4 válido."
     fi
 
     PUBLIC_IP="$(detect_public_ip)"
-    if [ -z "$DOMAIN" ]; then
-        if [ "$HTTPS_MODE" = "selfsigned" ]; then
-            ask_valid "Domínio ou IP para o certificado" "${PUBLIC_IP:-}" validate_domain_ou_ip \
-                "Informe um domínio válido (ex: saida.exemplo.com.br) ou um IPv4."
-        else
-            ask_valid "Domínio (ex: saida.suaorganizacao.com.br)" "" validate_domain \
-                "Domínio inválido — use um nome como saida.exemplo.com.br."
-        fi
-        DOMAIN="$REPLY_VAL"
-    elif [ "$HTTPS_MODE" = "selfsigned" ] && ! validate_domain_ou_ip "$DOMAIN"; then
+    # Modo não interativo sem --https-mode explícito: mantém o padrão de
+    # sempre (Let's Encrypt) — se faltar --domain nesse caso, o
+    # ask_valid dentro de menu_escolher_https morre com uma mensagem
+    # clara, em vez de silenciosamente trocar de modo (diferente de
+    # 'install': aqui não há um IP "de qualquer jeito" para cair de
+    # volta, porque emitir/renovar certificado é uma ação explícita).
+    [ -z "$HTTPS_MODE" ] && [ "$NON_INTERACTIVE" = "1" ] && HTTPS_MODE="letsencrypt"
+    menu_escolher_https 0
+
+    if [ "$HTTPS_MODE" = "selfsigned" ] && ! validate_domain_ou_ip "$DOMAIN"; then
         die "--domain '$DOMAIN' não é um domínio nem um IPv4 válido."
     elif [ "$HTTPS_MODE" = "letsencrypt" ] && ! validate_domain "$DOMAIN"; then
-        die "--domain '$DOMAIN' não parece um domínio válido (Let's Encrypt não emite para IP puro)."
+        die "--domain '$DOMAIN' não parece um domínio válido (Let's Encrypt não emite para IP puro — se você só tem o IP, use a opção de certificado autoassinado / --https-mode selfsigned)."
     fi
 
     if [ "$HTTPS_MODE" = "letsencrypt" ] && [ -z "$EMAIL" ] && [ "$NON_INTERACTIVE" != "1" ]; then
@@ -1147,6 +1209,18 @@ cmd_ssl() {
             apt-get update -y && apt-get install -y certbot python3-certbot-nginx
         }
         emit_letsencrypt_cert
+    fi
+
+    echo
+    ok "Concluído."
+    if [ "$HTTPS_MODE" = "selfsigned" ]; then
+        echo "Se um dia você conseguir um domínio próprio, é só rodar esta mesma"
+        echo "ação de novo (sudo projeto-saida --action ssl) e escolher a opção"
+        echo "de domínio — troca para um certificado real automaticamente."
+    else
+        echo "A renovação deste certificado já é automática (Certbot cuida disso"
+        echo "sozinho) — você não precisa rodar esta ação de novo, a menos que"
+        echo "troque de domínio."
     fi
 }
 
@@ -1227,6 +1301,53 @@ cmd_backup() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
+# Helpers de migração — localizar snapshots já gerados, para o
+# administrador não precisar decorar ou digitar caminhos de arquivo na
+# mão. Nasceu do mesmo espírito da ação 'logs': quanto menos o
+# administrador precisa lembrar/copiar comandos manualmente, menos
+# chance de erro (e menos ida-e-volta pedindo informação).
+# ─────────────────────────────────────────────────────────────────────────
+
+# _ps_candidatos_migracao — lista (um caminho por linha, mais recente
+# primeiro) os arquivos .tar.gz que parecem snapshots de migração,
+# procurando nos lugares onde eles normalmente aparecem: a pasta onde
+# 'exportar' os gera nesta própria VM, e /tmp (o destino sugerido pelo
+# comando 'scp' nas instruções que 'exportar' mostra ao final).
+_ps_candidatos_migracao() {
+    {
+        find "$INSTALL_DIR/instance/migracoes" -maxdepth 1 -name "migracao-*.tar.gz" -type f 2>/dev/null
+        find /tmp -maxdepth 1 -name "migracao-*.tar.gz" -type f 2>/dev/null
+    } | sort -u | while IFS= read -r arq; do
+        stat -c '%Y %n' "$arq" 2>/dev/null
+    done | sort -rn | cut -d' ' -f2-
+}
+
+# _ps_formatar_arquivo <caminho> — "nome (tamanho, data)" para exibir num menu.
+_ps_formatar_arquivo() {
+    local arq="$1" tamanho data
+    tamanho="$(du -h "$arq" 2>/dev/null | cut -f1)"
+    data="$(date -r "$arq" '+%d/%m/%Y %H:%M' 2>/dev/null)"
+    echo "$(basename "$arq") (${tamanho:-tamanho desconhecido}, ${data:-data desconhecida})"
+}
+
+# _ps_listar_migracoes — mostra os snapshots já exportados NESTA VM (só a
+# pasta oficial de 'exportar', não o /tmp de terceiros) com tamanho e data.
+_ps_listar_migracoes() {
+    local dir="$INSTALL_DIR/instance/migracoes" encontrados=0 arq
+    if [ -d "$dir" ]; then
+        while IFS= read -r arq; do
+            [ -z "$arq" ] && continue
+            encontrados=$((encontrados + 1))
+            echo "  - $(_ps_formatar_arquivo "$arq")"
+            echo "      $arq"
+        done < <(find "$dir" -maxdepth 1 -name "migracao-*.tar.gz" -type f 2>/dev/null | sort -r)
+    fi
+    if [ "$encontrados" -eq 0 ]; then
+        echo "  (nenhum snapshot exportado encontrado em $dir)"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────────
 # AÇÃO: exportar — empacota um snapshot desta instalação para migrar
 # para outra VM (banco de dados + uploads + chave de sessão).
 # ─────────────────────────────────────────────────────────────────────────
@@ -1296,14 +1417,18 @@ do root consegue ler o arquivo (permissão 600).
 
 Para migrar para uma VM nova:
   1) Copie o arquivo para a VM nova (rode isso NA VM ATUAL, de onde você
-     tem acesso à VM nova por SSH):
+     tem acesso à VM nova por SSH) — /tmp é o destino sugerido porque a
+     ação 'migrar'/'importar' já procura sozinha os snapshots que estão lá:
        scp $arquivo_final usuario@vm-nova:/tmp/
 
   2) Na VM nova, se ainda não instalou o sistema, instale primeiro:
-       sudo bash deploy/install.sh --action install
+       sudo projeto-saida --action install
 
-  3) Depois, importe o snapshot na VM nova:
-       sudo bash deploy/install.sh --action importar --arquivo /tmp/$(basename "$arquivo_final")
+  3) Depois, na VM nova, rode "sudo projeto-saida --action migrar" e
+     escolha "Importar" — o arquivo que você acabou de copiar para /tmp
+     já vai aparecer numa lista para escolher, sem precisar digitar o
+     caminho completo. (Ou direto: sudo projeto-saida --action importar
+     --arquivo /tmp/$(basename "$arquivo_final"))
 
 Este arquivo NÃO é apagado automaticamente — depois de confirmar que a
 migração deu certo na VM nova, você pode remover $arquivo_final daqui
@@ -1327,9 +1452,49 @@ cmd_importar() {
         if [ "$NON_INTERACTIVE" = "1" ]; then
             die "Use --arquivo /caminho/migracao-xxx.tar.gz para indicar o snapshot a importar."
         fi
-        ask_valid "Caminho do arquivo de migração (.tar.gz gerado por 'exportar')" "" validate_path \
-            "Informe o caminho absoluto do arquivo .tar.gz."
-        ARQUIVO_MIGRACAO="$REPLY_VAL"
+
+        # Em vez de exigir que o administrador já saiba/digite o caminho
+        # completo de cor, procura sozinho nos lugares onde um snapshot
+        # normalmente aparece (a pasta que 'exportar' usa nesta própria
+        # VM, e /tmp — destino sugerido pelo scp nas instruções de
+        # 'exportar') e oferece uma lista numerada para escolher.
+        local candidatos=() arq
+        while IFS= read -r arq; do
+            [ -n "$arq" ] && candidatos+=("$arq")
+        done < <(_ps_candidatos_migracao)
+
+        if [ "${#candidatos[@]}" -gt 0 ]; then
+            echo
+            echo "Encontrei estes snapshots (mais recente primeiro):"
+            local i=1
+            for arq in "${candidatos[@]}"; do
+                echo "  $i) $(_ps_formatar_arquivo "$arq")"
+                echo "      $arq"
+                i=$((i + 1))
+            done
+            echo "  $i) Digitar outro caminho"
+            echo
+            while true; do
+                ask "Qual usar? (1-$i)" "1"
+                if [[ "$REPLY_VAL" =~ ^[0-9]+$ ]] && [ "$REPLY_VAL" -ge 1 ] && [ "$REPLY_VAL" -lt "$i" ]; then
+                    ARQUIVO_MIGRACAO="${candidatos[$((REPLY_VAL - 1))]}"
+                    break
+                elif [ "$REPLY_VAL" = "$i" ]; then
+                    ask_valid "Caminho do arquivo de migração (.tar.gz gerado por 'exportar')" "" validate_path \
+                        "Informe o caminho absoluto do arquivo .tar.gz."
+                    ARQUIVO_MIGRACAO="$REPLY_VAL"
+                    break
+                else
+                    warn "Digite um número de 1 a $i."
+                fi
+            done
+        else
+            log "Não encontrei nenhum snapshot automaticamente (procurei em"
+            log "$INSTALL_DIR/instance/migracoes e /tmp)."
+            ask_valid "Caminho do arquivo de migração (.tar.gz gerado por 'exportar')" "" validate_path \
+                "Informe o caminho absoluto do arquivo .tar.gz."
+            ARQUIVO_MIGRACAO="$REPLY_VAL"
+        fi
     fi
     [ -f "$ARQUIVO_MIGRACAO" ] || die "Arquivo não encontrado: $ARQUIVO_MIGRACAO"
 
@@ -1466,6 +1631,55 @@ cmd_importar() {
     ok "Migração importada com sucesso a partir de $ARQUIVO_MIGRACAO"
     echo "  Backup de segurança do estado anterior desta VM: $backup_pre_dir"
     echo "  Logs: journalctl -u projeto-saida -f"
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# AÇÃO: migrar — menu guiado que reúne 'exportar' e 'importar' num só
+# lugar, com a explicação de qual passo roda em qual máquina na frente
+# (o ponto de maior confusão de quem nunca fez esse tipo de migração:
+# os dois passos rodam em VMs DIFERENTES, não na mesma).
+# ─────────────────────────────────────────────────────────────────────────
+cmd_migrar() {
+    banner
+    cat <<'EOF'
+Migração entre servidores — move esta instalação para uma VM nova, ou
+traz uma instalação de outro lugar para cá.
+
+O processo sempre envolve DUAS máquinas:
+  - A VM de ORIGEM: onde os dados estão HOJE. Você roda "Exportar" NELA.
+  - A VM de DESTINO: para onde os dados vão. Você roda "Importar" NELA
+    (depois de copiar o arquivo gerado na origem até lá, ex.: com scp).
+
+Ou seja: para migrar de uma VM para outra, você usa este mesmo menu DUAS
+vezes — uma na VM antiga (Exportar), outra na VM nova (Importar).
+EOF
+    require_existing_install
+
+    while true; do
+        echo
+        cat <<EOF
+O que você quer fazer NESTA VM (a que você está usando agora)?
+
+  1) Exportar esta instalação (esta VM é a ORIGEM dos dados)
+  2) Importar um snapshot (esta VM é o DESTINO — substitui os dados daqui)
+  3) Ver snapshots já exportados nesta VM
+  4) Voltar
+
+EOF
+        ask "Escolha uma opção (1-4)" "1"
+        case "$REPLY_VAL" in
+            1) cmd_exportar ;;
+            2) cmd_importar ;;
+            3)
+                echo
+                log "Snapshots exportados nesta VM ($INSTALL_DIR/instance/migracoes):"
+                _ps_listar_migracoes
+                ;;
+            4) return ;;
+            *) warn "Opção inválida — digite um número de 1 a 4." ;;
+        esac
+        [ "$NON_INTERACTIVE" = "1" ] && return
+    done
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -2156,9 +2370,9 @@ main() {
     fi
 
     case "$ACTION" in
-        install|ssl|backup|update|exportar|importar|diagnostico|logs) ;;
+        install|ssl|backup|update|migrar|exportar|importar|diagnostico|logs) ;;
         sair) echo "Até mais!"; exit 0 ;;
-        *) die "Ação desconhecida: '$ACTION' (use install|ssl|backup|update|exportar|importar|diagnostico|logs)." ;;
+        *) die "Ação desconhecida: '$ACTION' (use install|ssl|backup|update|migrar|exportar|importar|diagnostico|logs)." ;;
     esac
 
     if ! ( set -e; "cmd_${ACTION}" ); then
