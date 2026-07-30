@@ -18,8 +18,10 @@ Disponível em todos os templates:
                                    rejeitasse antes do Flask responder).
 """
 
+import os
 from datetime import datetime
 
+from flask import url_for
 from flask_login import current_user
 
 from app import db
@@ -27,6 +29,32 @@ from app.models import ConfigSistema, SolicitacaoPostoGraduacao
 
 
 def register_context_processors(app) -> None:
+    def static_v(filename: str) -> str:
+        """
+        Gera a URL de um arquivo estático PRÓPRIO da aplicação (ex.:
+        js/upload-validacao.js) com um parâmetro de versão baseado na data
+        de modificação do arquivo (?v=<mtime>).
+
+        Por quê: deploy/nginx.conf serve /static/ direto (sem passar pelo
+        Flask) com "expires 7d" — rápido, mas significa que o NAVEGADOR de
+        quem já visitou o sistema antes pode continuar usando uma cópia em
+        cache por até 7 dias, mesmo depois de uma atualização no servidor
+        trocar o conteúdo do arquivo. Isso já causou uma atualização de
+        validação de upload "não aparecer" para usuários que já tinham a
+        página aberta/visitada antes do deploy. Ao trocar a URL sempre que
+        o arquivo muda, o navegador trata como um recurso NOVO e busca a
+        versão atual, sem precisar reduzir o tempo de cache (que continua
+        valendo, e é bom, para arquivos que realmente não mudaram).
+        """
+        caminho_absoluto = os.path.join(app.static_folder or "", filename)
+        try:
+            versao = int(os.path.getmtime(caminho_absoluto))
+        except OSError:
+            versao = 0
+        return url_for("static", filename=filename) + f"?v={versao}"
+
+    app.jinja_env.globals["static_v"] = static_v
+
     @app.context_processor
     def inject_globals() -> dict:
         try:

@@ -9,6 +9,21 @@
     <title>{% block title %}Sistema de Saídas{% endblock %}</title>
 
     <script>
+        // Garante que window.avisoSistema SEMPRE exista, desde o primeiro
+        // instante da página — antes mesmo do restante do HTML/CSS/scripts
+        // carregar. A versão "de verdade" (toast estilizado, mais abaixo no
+        // corpo da página) sobrescreve esta assim que estiver pronta. Sem
+        // isso, se qualquer script entre este ponto e a definição completa
+        // falhasse por qualquer motivo (erro de outro trecho de JS, ordem de
+        // carregamento, etc.), uma checagem de arquivo (tipo/tamanho) que
+        // chamasse avisoSistema(...) diretamente lançaria
+        // "avisoSistema is not defined" e abortaria SILENCIOSAMENTE — sem
+        // nenhum aviso visível ao usuário E sem limpar o campo, deixando o
+        // arquivo inválido selecionado (e sujeito a ser enviado ao clicar
+        // Salvar). Este fallback mínimo garante que sempre haja PELO MENOS
+        // um aviso (via alert nativo, como último recurso).
+        window.avisoSistema = window.avisoSistema || function (mensagem) { window.alert(mensagem); };
+
         // Aplica a preferência de tema salva no navegador ANTES do CSS
         // carregar, para não haver flash com o tema errado. Se o usuário
         // nunca escolheu um tema neste navegador, mantém o padrão definido

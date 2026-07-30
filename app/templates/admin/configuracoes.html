@@ -338,7 +338,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/upload-validacao.js') }}"></script>
+<script src="{{ static_v('js/upload-validacao.js') }}"></script>
 <script>
 // Sync color pickers
 document.querySelectorAll('input[type="color"]').forEach(el => {
