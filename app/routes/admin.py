@@ -990,6 +990,7 @@ def configuracoes():
         campos_texto_max = {
             "nome_sistema": 100,
             "subtitulo":    150,
+            "dica_login":   150,
             "organizacao":  150,
             "rodape":       255,
             "dica_1":       200,

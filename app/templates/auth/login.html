@@ -431,10 +431,11 @@
             </div>
 
             <div class="login-body">
-                {% if config_sistema.get('subtitulo') %}
+                {% set dica_login = config_sistema.get('dica_login', 'Use os últimos 10 dígitos do CPF como login') %}
+                {% if dica_login %}
                 <div class="dica-banner">
                     <i class="bi bi-info-circle-fill flex-shrink-0"></i>
-                    <span>{{ config_sistema.get('subtitulo') }}</span>
+                    <span>{{ dica_login }}</span>
                 </div>
                 {% endif %}
 

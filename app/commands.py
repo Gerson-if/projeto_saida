@@ -45,7 +45,13 @@ def register_commands(app) -> None:
 
         defaults = [
             ("nome_sistema",  "Sistema de Controle de Saídas",                  "Nome exibido no sistema"),
-            ("subtitulo",     "Use os últimos 10 dígitos do CPF como login",    "Dica no login"),
+            ("subtitulo",     "Sistema de Gestão",                               "Subtítulo exibido junto ao nome do sistema"),
+            # Mensagem de ajuda mostrada na tela de login (ex.: explicando o
+            # formato esperado do CPF) — chave PRÓPRIA, separada de
+            # "subtitulo": antes, os dois usavam a mesma chave, então o admin
+            # não conseguia personalizar o subtítulo da barra lateral sem
+            # também alterar (ou perder) a dica de login, e vice-versa.
+            ("dica_login",    "Use os últimos 10 dígitos do CPF como login",    "Mensagem de ajuda na tela de login"),
             ("organizacao",   "Organização Militar",                             "Nome da organização"),
             ("rodape",        "© Sistema de Controle de Saídas — Gerado automaticamente", "Rodapé PDF"),
             ("cor_primaria",  "#1a3a5c",                                         "Cor primária"),
