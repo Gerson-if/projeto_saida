@@ -61,6 +61,15 @@ def register_error_handlers(app: Flask) -> None:
     @app.errorhandler(413)
     def erro_413(e):
         limite_mb = app.config.get("MAX_CONTENT_LENGTH", 5 * 1024 * 1024) / (1024 * 1024)
+        # Registra em log para o administrador conseguir investigar depois
+        # (ex: usuários tentando enviar arquivos grandes com frequência pode
+        # indicar que os limites configurados precisam ser revistos, ou que
+        # falta orientação mais clara na tela de upload).
+        app.logger.warning(
+            "Upload recusado por exceder o limite (413): %s bytes recebidos "
+            "(Content-Length), limite configurado %.0fMB. Rota: %s",
+            request.content_length, limite_mb, request.path,
+        )
         return _render_erro(
             413, "bi-file-earmark-x",
             "Arquivo muito grande",

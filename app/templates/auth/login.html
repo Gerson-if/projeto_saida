@@ -30,9 +30,19 @@
             margin: 0;
             padding: 0;
             width: 100%;
-            height: 100vh;
-            height: 100dvh;
-            overflow: hidden; 
+            min-height: 100vh;
+            min-height: 100dvh;
+            /* Sem rolagem horizontal (o fundo customizado, se houver, é
+               position:fixed cobrindo a tela toda — não deve gerar
+               barra de rolagem lateral). Rolagem VERTICAL fica como
+               rede de segurança: o objetivo é que o scroll aconteça
+               dentro de .login-body (ver acima), mas se mesmo assim o
+               conteúdo não couber (fonte do sistema aumentada pelo
+               usuário, tela extremamente baixa, etc.), a página inteira
+               ainda pode rolar em vez de simplesmente cortar o formulário
+               fora da tela sem nenhuma forma de alcançá-lo. */
+            overflow-x: hidden;
+            overflow-y: auto;
             background-color: #0d2137;
         }
 
@@ -66,10 +76,23 @@
         .login-wrapper {
             width: 100%;
             max-width: 420px;
-            max-height: calc(100vh - 40px); 
+            max-height: calc(100vh - 40px);
+            max-height: calc(100dvh - 40px);
+            /* min-height:0 é ESSENCIAL aqui: por padrão, um item flex tem
+               min-height:auto, o que faz o navegador ignorar o
+               max-height acima e deixar o card crescer além da tela em
+               telas baixas (celular deitado, janela pequena) — como
+               html/body têm overflow:hidden (de propósito, para não
+               rolar a página toda), o conteúdo que "vazasse" ficaria
+               simplesmente cortado e inacessível (login/senha/botão
+               sumindo da tela sem nenhuma forma de rolar até eles). Com
+               min-height:0, o card realmente respeita o limite acima e
+               o scroll interno do .login-body (mais abaixo) passa a
+               funcionar como previsto. */
+            min-height: 0;
             display: flex;
             flex-direction: column;
-            
+
             opacity: 0;
             transform: translateY(12px); /* Subida bem sutil */
             animation: surgirCard 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -77,13 +100,14 @@
         }
 
         .login-card {
-            background: #f7f9fc; 
-            border-radius: 24px; 
+            background: #f7f9fc;
+            border-radius: 24px;
             box-shadow: 0 20px 45px rgba(0, 0, 0, 0.3);
             border: none;
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            min-height: 0; /* mesmo motivo do .login-wrapper acima */
         }
 
         .login-header {
@@ -137,8 +161,15 @@
 
         .login-body {
             padding: clamp(20px, 4vh, 40px) clamp(20px, 5vw, 36px) clamp(20px, 4vh, 36px);
-            overflow-y: auto; 
-            scrollbar-width: none; 
+            overflow-y: auto;
+            scrollbar-width: none;
+            /* Mesmo motivo do min-height:0 em .login-wrapper/.login-card:
+               esta é a área que precisa "ceder" (encolher e rolar por
+               dentro) quando a tela é baixa demais para caber tudo — o
+               cabeçalho (.login-header) fica fixo (flex-shrink:0), então
+               é aqui que o scroll interno precisa acontecer. */
+            min-height: 0;
+            flex: 1 1 auto;
         }
         .login-body::-webkit-scrollbar {
             display: none; 

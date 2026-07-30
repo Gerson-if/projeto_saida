@@ -8,6 +8,14 @@ Disponível em todos os templates:
                                    aguardando aprovação (só calculado para o
                                    super-usuário logado — é a "notificação"
                                    de que há alterações pedidas por militares)
+  max_content_length_mb       →  limite de upload (MAX_CONTENT_LENGTH) em MB,
+                                   para telas com formulário de upload
+                                   validarem no navegador ANTES de enviar —
+                                   evita que o usuário só descubra que
+                                   passou do limite depois de esperar o
+                                   upload inteiro (e, sem isso, poderia
+                                   nem ver mensagem nenhuma, caso o Nginx
+                                   rejeitasse antes do Flask responder).
 """
 
 from datetime import datetime
@@ -54,4 +62,5 @@ def register_context_processors(app) -> None:
             "config_sistema": configs,
             "now": datetime.now(),
             "solicitacoes_pendentes_count": pendentes,
+            "max_content_length_mb": app.config.get("MAX_CONTENT_LENGTH", 0) / (1024 * 1024),
         }

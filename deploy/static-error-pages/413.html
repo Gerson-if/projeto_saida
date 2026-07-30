@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<!--
+  deploy/static-error-pages/413.html — Página amigável para upload grande demais.
+
+  POR QUE ISSO PRECISA SER UM ARQUIVO ESTÁTICO (e não um template Flask)
+  ------------------------------------------------------------------------
+  Quando o corpo da requisição excede `client_max_body_size` do Nginx, o
+  Nginx rejeita a requisição e devolve o erro 413 SOZINHO — ele nunca
+  chega a repassar nada para o Gunicorn/Flask. Ou seja, o handler de erro
+  413 amigável que existe em app/error_handlers.py NUNCA é executado
+  nesse caso: quem responde é o próprio Nginx, direto. Sem esta página,
+  o usuário via a tela padrão e genérica do Nginx ("413 Request Entity
+  Too Large — nginx/1.24.0 (Ubuntu)"), sem nenhuma explicação do que
+  aconteceu ou do que fazer a respeito.
+
+  Este arquivo é servido diretamente pelo Nginx (ver `error_page 413` em
+  deploy/nginx.conf) — por isso não usa Jinja, não depende do Flask
+  estar de pé, e todo o CSS fica embutido (sem dependência de arquivos
+  em app/static/vendor/, para funcionar mesmo se algo mais também
+  estiver com problema).
+-->
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arquivo muito grande</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; width: 100%; min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #1a3a5c 0%, #0d2137 100%);
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .card {
+            background: #f7f9fc;
+            border-radius: 24px;
+            box-shadow: 0 20px 45px rgba(0,0,0,0.3);
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+            padding: 48px 32px;
+        }
+        .icone {
+            font-size: 3rem;
+            line-height: 1;
+            margin-bottom: 12px;
+        }
+        .codigo {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #1a3a5c;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        h1 {
+            font-weight: 600;
+            font-size: 1.15rem;
+            color: #1f2937;
+            margin: 8px 0 4px;
+        }
+        p {
+            color: #6b7280;
+            margin: 0 0 12px;
+            line-height: 1.5;
+        }
+        .dica {
+            background: #eef2f7;
+            border-radius: 12px;
+            padding: 14px 16px;
+            font-size: 0.85rem;
+            color: #374151;
+            text-align: left;
+            margin-top: 20px;
+        }
+        .dica ul { margin: 6px 0 0; padding-left: 20px; }
+        .btn-voltar {
+            background: #1a3a5c;
+            border: none;
+            color: #fff;
+            padding: 10px 28px;
+            border-radius: 10px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icone">📁⚠️</div>
+        <div class="codigo">413</div>
+        <h1>O arquivo enviado é grande demais</h1>
+        <p>
+            O arquivo (ou a soma dos arquivos) que você tentou enviar
+            excede o limite máximo de upload permitido pelo servidor.
+            Nada foi salvo — não é preciso se preocupar em duplicar o
+            cadastro.
+        </p>
+        <div class="dica">
+            O que fazer:
+            <ul>
+                <li>Envie os arquivos um de cada vez, em vez de vários no mesmo formulário.</li>
+                <li>Se for uma foto, tente reduzir a resolução antes de enviar.</li>
+                <li>Se for um vídeo, use um clipe mais curto (poucos segundos).</li>
+            </ul>
+        </div>
+        <a href="javascript:history.back()" class="btn-voltar">Voltar e tentar novamente</a>
+    </div>
+</body>
+</html>

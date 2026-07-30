@@ -291,5 +291,42 @@ def register_commands(app) -> None:
                 "Para instalar: sudo apt-get install -y ffmpeg"
             )
 
+        # Limite de upload do Nginx vs do Flask — best-effort: só faz
+        # sentido em produção, atrás de um Nginx configurado por
+        # deploy/install.sh. Sem isso, um Nginx desatualizado (ex: uma
+        # instalação antiga que nunca rodou a sincronização automática do
+        # `--action update`) rejeitaria uploads ANTES de chegarem ao Flask,
+        # e o usuário veria isso como um erro genérico do Nginx em vez da
+        # mensagem amigável por campo do próprio sistema.
+        import re as _re
+        nginx_conf_path = "/etc/nginx/sites-available/projeto-saida"
+        try:
+            with open(nginx_conf_path, "r", encoding="utf-8") as f:
+                conteudo_nginx = f.read()
+            m = _re.search(r"client_max_body_size\s+([0-9]+)\s*([kKmMgG]?)\s*;", conteudo_nginx)
+            if m:
+                unidade = {"": 1, "k": 1024, "m": 1024**2, "g": 1024**3}[m.group(2).lower()]
+                nginx_bytes = int(m.group(1)) * unidade
+                flask_bytes = app.config.get("MAX_CONTENT_LENGTH", 0)
+                if nginx_bytes < flask_bytes:
+                    click.echo(
+                        f"⚠️  client_max_body_size do Nginx ({nginx_bytes // (1024*1024)}MB) é MENOR que "
+                        f"MAX_CONTENT_LENGTH do Flask ({flask_bytes // (1024*1024)}MB) — uploads dentro do "
+                        "limite do sistema podem ser rejeitados pelo Nginx antes mesmo de chegar na "
+                        "aplicação, com uma página de erro genérica em vez da mensagem amigável. "
+                        "Rode 'sudo bash deploy/install.sh --action update' para sincronizar automaticamente."
+                    )
+                else:
+                    click.echo(
+                        f"Limite de upload: Nginx={nginx_bytes // (1024*1024)}MB, "
+                        f"Flask={flask_bytes // (1024*1024)}MB — OK (Nginx com margem confortável)."
+                    )
+            else:
+                click.echo("Não encontrei 'client_max_body_size' na config do Nginx — verifique manualmente.")
+        except FileNotFoundError:
+            pass  # Ambiente de desenvolvimento, sem Nginx — nada a checar aqui.
+        except OSError:
+            click.echo("Não consegui ler a config do Nginx para conferir o limite de upload (permissão?).")
+
         click.echo("─────────────────────────────────────────────────────────")
         click.echo("✅ Diagnóstico concluído.")

@@ -133,7 +133,14 @@ class Config:
     #
     # IMPORTANTE: se mudar este valor, mude também `client_max_body_size`
     # em deploy/nginx.conf — o Nginx rejeita a requisição ANTES dela
-    # sequer chegar ao Flask se o valor de lá for menor.
+    # sequer chegar ao Flask se o valor de lá for menor. De propósito, o
+    # Nginx é configurado um pouco ACIMA deste valor (hoje 100M lá contra
+    # 90M aqui): assim, na prática, é quase sempre o Flask quem recusa
+    # primeiro — com uma mensagem amigável por campo — em vez do Nginx,
+    # que devolveria a página genérica dele (ver
+    # deploy/static-error-pages/413.html para quando isso acontece mesmo
+    # assim). `flask diagnosticar` avisa se os dois ficarem dessincronizados
+    # numa instalação em produção.
     MAX_CONTENT_LENGTH: int = 90 * 1024 * 1024
     ALLOWED_EXTENSIONS: set = {"png", "jpg", "jpeg", "gif", "webp", "ico"}
     ALLOWED_VIDEO_EXTENSIONS: set = {"mp4", "webm", "ogg"}

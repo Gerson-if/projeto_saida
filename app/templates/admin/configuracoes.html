@@ -289,8 +289,8 @@
                         {% endif %}
                         <input type="hidden" name="remover_login_bg_video" id="remover_login_bg_video" value="">
 
-                        <input type="file" name="login_bg_video" class="form-control form-control-sm"
-                               accept="video/mp4,video/webm,video/ogg">
+                        <input type="file" name="login_bg_video" id="file-login_bg_video" class="form-control form-control-sm"
+                               accept="video/mp4,video/webm,video/ogg" onchange="validarTamanhoVideo(this)">
                         <small class="text-muted">Formatos: MP4, WEBM ou OGG — máx. 20MB. Use um clipe bem curto (poucos segundos); o vídeo é recomprimido automaticamente para não pesar o carregamento.</small>
                     </div>
 
@@ -358,6 +358,53 @@ function previewImagem(campo, input) {
     // Cancelar remoção se o usuário escolheu novo arquivo
     document.getElementById('remover_' + campo).value = '';
 }
+
+// Valida o tamanho do vídeo assim que selecionado — mesmo limite validado
+// no servidor (ver TAMANHO_MAXIMO_VIDEO_BYTES em app/uploads.py).
+function validarTamanhoVideo(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const TAMANHO_MAXIMO_VIDEO = 20 * 1024 * 1024; // 20 MB
+    if (file.size > TAMANHO_MAXIMO_VIDEO) {
+        alert('O vídeo excede o tamanho máximo permitido (20 MB). Use um clipe mais curto.');
+        input.value = '';
+    }
+}
+
+// Checagem AGREGADA antes de enviar o formulário: este formulário tem
+// vários campos de arquivo (até 4 imagens + imagem/vídeo de fundo do
+// login) no mesmo POST. Cada campo isolado pode estar dentro do próprio
+// limite, mas a SOMA de todos pode ultrapassar o limite total aceito pelo
+// servidor (MAX_CONTENT_LENGTH no Flask / client_max_body_size no Nginx)
+// — nesse caso, sem esta checagem, o navegador enviaria tudo, esperaria o
+// upload inteiro terminar, e só então o usuário veria o erro (na melhor
+// das hipóteses, a página amigável do Flask; na pior, se o Nginx rejeitar
+// primeiro, uma página genérica dele). Aqui avisamos ANTES de enviar,
+// sem gastar tempo/dados do usuário com um upload que já sabemos que vai
+// falhar.
+const LIMITE_TOTAL_MB = {{ (max_content_length_mb or 90) | round(0, 'floor') }};
+
+document.getElementById('formConfig').addEventListener('submit', function (ev) {
+    let totalBytes = 0;
+    document.querySelectorAll('#formConfig input[type="file"]').forEach(function (input) {
+        if (input.files && input.files[0]) {
+            totalBytes += input.files[0].size;
+        }
+    });
+    const totalMB = totalBytes / (1024 * 1024);
+    // Margem de segurança (10%) para o overhead do multipart/form-data
+    // (cabeçalhos de cada parte, boundary, etc.) — pequeno, mas em uploads
+    // já próximos do limite pode fazer diferença.
+    if (totalMB > LIMITE_TOTAL_MB * 0.9) {
+        ev.preventDefault();
+        alert(
+            'A soma dos arquivos selecionados (~' + totalMB.toFixed(1) + ' MB) está muito perto ou ' +
+            'acima do limite total permitido pelo servidor (' + LIMITE_TOTAL_MB + ' MB) para esta tela. ' +
+            'Salve as configurações em mais de uma etapa (ex: primeiro as imagens, depois o vídeo) ' +
+            'ou escolha arquivos menores.'
+        );
+    }
+});
 
 // Alterna os blocos de imagem/vídeo/ajustes conforme o tipo de fundo do login escolhido
 function atualizarFundoLogin() {

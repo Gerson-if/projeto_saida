@@ -1125,6 +1125,91 @@ cmd_backup() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
+# Mantém o Nginx de uma instalação já existente sincronizado com o
+# repositório em cada atualização (limite de upload + página amigável de
+# erro 413).
+# ─────────────────────────────────────────────────────────────────────────
+# De propósito, NÃO regera o arquivo inteiro a partir do template — o
+# Certbot (Let's Encrypt) edita esse mesmo arquivo para adicionar o bloco
+# HTTPS (listen 443 ssl ...) depois da instalação inicial; sobrescrever
+# tudo aqui apagaria esse bloco e derrubaria o HTTPS a cada atualização.
+# Em vez disso, ajusta só a diretiva client_max_body_size e garante o
+# bloco de erro 413 amigável, preservando o resto do arquivo como está.
+sync_nginx_upload_limit() {
+    local site_conf="/etc/nginx/sites-available/projeto-saida"
+    if [ ! -f "$site_conf" ]; then
+        warn "Config do Nginx não encontrada em $site_conf — pulando sincronização (o site pode ter sido configurado manualmente)."
+        return 0
+    fi
+
+    local valor_desejado
+    valor_desejado="$(grep -oP 'client_max_body_size\s+\K[^;]+' "$INSTALL_DIR/deploy/nginx.conf" 2>/dev/null | head -n1 | tr -d ' ')"
+    if [ -z "$valor_desejado" ]; then
+        warn "Não consegui ler client_max_body_size do template — pulando sincronização do Nginx."
+        return 0
+    fi
+
+    local backup_conf
+    backup_conf="$(mktemp)"
+    cp "$site_conf" "$backup_conf"
+
+    if ! INSTALL_DIR="$INSTALL_DIR" VALOR="$valor_desejado" SITE_CONF="$site_conf" python3 - <<'PYEOF'
+import os, re
+
+site_conf = os.environ["SITE_CONF"]
+valor = os.environ["VALOR"]
+install_dir = os.environ["INSTALL_DIR"]
+
+with open(site_conf, "r", encoding="utf-8") as f:
+    conteudo = f.read()
+
+# 1) Ajusta o valor do limite de upload para o mesmo do template atual.
+conteudo = re.sub(r"client_max_body_size\s+[^;]+;", f"client_max_body_size {valor};", conteudo)
+
+# 2) Garante a página amigável de erro 413 (idempotente — só adiciona se
+# ainda não existir uma instalação anterior deste bloco).
+if "erro-upload-grande.html" not in conteudo:
+    bloco = (
+        "\n    error_page 413 /erro-upload-grande.html;\n"
+        "    location = /erro-upload-grande.html {\n"
+        "        internal;\n"
+        f"        alias {install_dir}/deploy/static-error-pages/413.html;\n"
+        "    }\n"
+    )
+    conteudo, n = re.subn(
+        r"(client_max_body_size\s+[^;]+;)",
+        lambda m: m.group(1) + bloco,
+        conteudo,
+        count=1,
+    )
+    if n == 0:
+        # Instalação muito antiga sem a diretiva — não arrisca inserir em
+        # lugar arbitrário; quem rodar 'diagnostico' depois vai ver o aviso.
+        raise SystemExit(1)
+
+with open(site_conf, "w", encoding="utf-8") as f:
+    f.write(conteudo)
+PYEOF
+    then
+        warn "Não consegui ajustar automaticamente $site_conf (formato inesperado) — revise manualmente."
+        rm -f "$backup_conf"
+        return 0
+    fi
+
+    if nginx -t 2>/tmp/nginx_test_update.log; then
+        systemctl reload nginx
+        ok "Nginx sincronizado (limite de upload + página de erro amigável para uploads grandes)."
+    else
+        warn "A configuração do Nginx ficou inválida ao tentar sincronizar — revertendo para a versão anterior."
+        tail -n 20 /tmp/nginx_test_update.log >&2
+        cp "$backup_conf" "$site_conf"
+        nginx -t >/dev/null 2>&1 && systemctl reload nginx || true
+        warn "Ajuste manualmente depois: $site_conf (backup preservado em $backup_conf)."
+    fi
+    rm -f "$backup_conf"
+}
+
+# ─────────────────────────────────────────────────────────────────────────
 # AÇÃO: update — atualiza uma instalação existente
 # ─────────────────────────────────────────────────────────────────────────
 cmd_update() {
@@ -1275,6 +1360,16 @@ cmd_update() {
         rollback_update
         die "Atualização revertida. Log completo em /tmp/flask_db_upgrade.log."
     fi
+
+    # Instalações antigas (de antes desta versão do script) ficam com o
+    # Nginx desatualizado para sempre, mesmo puxando o código novo — porque
+    # o arquivo em /etc/nginx/sites-available não é gerado a partir do
+    # repositório em toda atualização (só na instalação inicial). Sincroniza
+    # aqui o limite de upload e a página amigável de erro 413. Não é motivo
+    # de rollback se falhar (a aplicação em si já está saudável nesse
+    # ponto) — só um aviso para o administrador revisar.
+    log "Sincronizando configuração de upload do Nginx"
+    sync_nginx_upload_limit
 
     log "Reiniciando serviço"
     systemctl restart projeto-saida
