@@ -27,6 +27,10 @@
 #   ssl           Emite/renova o certificado HTTPS de uma instalação já existente
 #   backup        Configura backup automático diário (banco + uploads)
 #   update        Atualiza uma instalação existente (git pull + migrações + restart)
+#   exportar      Empacota banco + uploads + chave de sessão num arquivo único,
+#                 para migrar esta instalação para outra VM
+#   importar      Restaura, nesta instalação, um arquivo gerado por 'exportar'
+#                 em outra VM (--arquivo /caminho/migracao-xxx.tar.gz)
 #   diagnostico   Roda verificações de saúde da instalação
 #
 # Rodar de novo é seguro (idempotente na maior parte dos passos) — útil
@@ -71,6 +75,7 @@ ADMIN_CPF=""
 ADMIN_SENHA=""
 BACKUP_RETENCAO_DIAS="14"
 BACKUP_HORA="03:00"
+ARQUIVO_MIGRACAO=""      # --arquivo, usado só pela ação 'importar'
 ASSUME_YES="0"
 NON_INTERACTIVE="0"
 SKIP_SSL="0"             # legado: --skip-ssl equivale a --https-mode selfsigned
@@ -96,6 +101,7 @@ while [ $# -gt 0 ]; do
         --admin-senha) ADMIN_SENHA="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --backup-dias) BACKUP_RETENCAO_DIAS="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --backup-hora) BACKUP_HORA="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
+        --arquivo) ARQUIVO_MIGRACAO="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --https-mode) HTTPS_MODE="$2"; FLAGS_INFORMADAS="1"; shift 2 ;;
         --skip-ssl) SKIP_SSL="1"; FLAGS_INFORMADAS="1"; shift ;;   # legado, use --https-mode selfsigned
         --yes|-y) ASSUME_YES="1"; NON_INTERACTIVE="1"; shift ;;
@@ -379,20 +385,24 @@ O que você quer fazer?
   2) Emitir/renovar certificado HTTPS (Let's Encrypt)
   3) Configurar backup automático diário
   4) Atualizar uma instalação existente (git pull + migrações)
-  5) Diagnóstico (verifica se está tudo saudável)
-  6) Sair
+  5) Migrar para outra VM — exportar um snapshot desta instalação
+  6) Migrar para outra VM — importar um snapshot de outra instalação
+  7) Diagnóstico (verifica se está tudo saudável)
+  8) Sair
 
 EOF
     while true; do
-        ask "Escolha uma opção (1-6)" "1"
+        ask "Escolha uma opção (1-8)" "1"
         case "$REPLY_VAL" in
             1) ACTION="install"; return ;;
             2) ACTION="ssl"; return ;;
             3) ACTION="backup"; return ;;
             4) ACTION="update"; return ;;
-            5) ACTION="diagnostico"; return ;;
-            6) ACTION="sair"; return ;;
-            *) warn "Opção inválida — digite um número de 1 a 6." ;;
+            5) ACTION="exportar"; return ;;
+            6) ACTION="importar"; return ;;
+            7) ACTION="diagnostico"; return ;;
+            8) ACTION="sair"; return ;;
+            *) warn "Opção inválida — digite um número de 1 a 8." ;;
         esac
     done
 }
@@ -1157,6 +1167,248 @@ cmd_backup() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
+# AÇÃO: exportar — empacota um snapshot desta instalação para migrar
+# para outra VM (banco de dados + uploads + chave de sessão).
+# ─────────────────────────────────────────────────────────────────────────
+cmd_exportar() {
+    banner
+    echo "Empacota um snapshot completo desta instalação — banco de dados,"
+    echo "arquivos enviados (logos/fotos/vídeo de fundo) e chave de sessão —"
+    echo "num único arquivo, pronto para levar a uma VM nova."
+    echo
+    require_existing_install
+
+    grep -q '^DATABASE_URL=mysql' "$INSTALL_DIR/.env" 2>/dev/null \
+        || die "$INSTALL_DIR/.env não tem um DATABASE_URL de MariaDB — essa instalação não parece ter sido feita por este script (produção não usa SQLite)."
+
+    local stamp dir_migracoes dir_staging arquivo_final
+    stamp="$(date +%Y%m%d_%H%M%S)"
+    dir_migracoes="$INSTALL_DIR/instance/migracoes"
+    dir_staging="$dir_migracoes/migracao-$stamp"
+    arquivo_final="$dir_migracoes/migracao-$stamp.tar.gz"
+    mkdir -p "$dir_staging"
+
+    log "Copiando banco de dados"
+    local db_url db_user_b db_pass_b db_name_b
+    db_url="$(grep '^DATABASE_URL=' "$INSTALL_DIR/.env" | cut -d= -f2-)"
+    db_user_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://([^:]+):.*#\1#')"
+    db_pass_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://[^:]+:([^@]+)@.*#\1#')"
+    db_name_b="$(echo "$db_url" | sed -E 's#.*/([^/?]+)$#\1#')"
+    if ! mysqldump -u "$db_user_b" -p"$db_pass_b" "$db_name_b" 2>/tmp/mysqldump_export.log | gzip > "$dir_staging/db.sql.gz"; then
+        err "Falha ao exportar o banco de dados:"
+        tail -n 20 /tmp/mysqldump_export.log >&2
+        rm -rf "$dir_staging"
+        die "Exportação cancelada. Log completo em /tmp/mysqldump_export.log."
+    fi
+
+    log "Copiando arquivos enviados (logos, fotos, vídeo de fundo do login)"
+    if ! tar -czf "$dir_staging/uploads.tar.gz" -C "$INSTALL_DIR/app/static" uploads 2>/dev/null; then
+        warn "Pasta de uploads vazia ou ausente — nada para copiar aí (normal se nunca subiu nenhuma imagem/vídeo nesta instalação)."
+    fi
+
+    log "Salvando metadados da migração"
+    local commit_atual secret_key_atual
+    commit_atual="$(sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git rev-parse HEAD" 2>/dev/null || echo "desconhecido")"
+    secret_key_atual="$(grep '^SECRET_KEY=' "$INSTALL_DIR/.env" 2>/dev/null | cut -d= -f2-)"
+    {
+        echo "gerado_em=$(date -Iseconds)"
+        echo "commit_origem=$commit_atual"
+        echo "secret_key_origem=$secret_key_atual"
+    } > "$dir_staging/meta.txt"
+    # meta.txt carrega a SECRET_KEY em texto puro — restringe leitura antes
+    # de empacotar, mesma cautela usada com o .env em outras partes do script.
+    chmod 600 "$dir_staging/meta.txt"
+
+    log "Empacotando tudo em um único arquivo"
+    tar -czf "$arquivo_final" -C "$dir_migracoes" "migracao-$stamp"
+    rm -rf "$dir_staging"
+    chown "$SYS_USER:$SYS_USER" "$arquivo_final"
+    chmod 600 "$arquivo_final"
+
+    echo
+    ok "Migração exportada: $arquivo_final"
+    cat <<EOF
+
+Esse arquivo tem o banco de dados completo, os arquivos enviados e a
+chave de sessão desta instalação — trate-o como informação sensível
+(contém senhas/hashes de usuários). Ninguém além do dono ($SYS_USER) e
+do root consegue ler o arquivo (permissão 600).
+
+Para migrar para uma VM nova:
+  1) Copie o arquivo para a VM nova (rode isso NA VM ATUAL, de onde você
+     tem acesso à VM nova por SSH):
+       scp $arquivo_final usuario@vm-nova:/tmp/
+
+  2) Na VM nova, se ainda não instalou o sistema, instale primeiro:
+       sudo bash deploy/install.sh --action install
+
+  3) Depois, importe o snapshot na VM nova:
+       sudo bash deploy/install.sh --action importar --arquivo /tmp/$(basename "$arquivo_final")
+
+Este arquivo NÃO é apagado automaticamente — depois de confirmar que a
+migração deu certo na VM nova, você pode remover $arquivo_final daqui
+e do destino.
+EOF
+}
+
+# ─────────────────────────────────────────────────────────────────────────
+# AÇÃO: importar — restaura, nesta instalação, um snapshot gerado por
+# 'exportar' em outra VM (banco de dados + uploads + chave de sessão).
+# ─────────────────────────────────────────────────────────────────────────
+cmd_importar() {
+    banner
+    echo "Restaura um snapshot gerado pela ação 'exportar' (de outra VM) nesta"
+    echo "instalação: banco de dados, arquivos enviados e, se você quiser, a"
+    echo "chave de sessão original."
+    echo
+    require_existing_install
+
+    if [ -z "$ARQUIVO_MIGRACAO" ]; then
+        if [ "$NON_INTERACTIVE" = "1" ]; then
+            die "Use --arquivo /caminho/migracao-xxx.tar.gz para indicar o snapshot a importar."
+        fi
+        ask_valid "Caminho do arquivo de migração (.tar.gz gerado por 'exportar')" "" validate_path \
+            "Informe o caminho absoluto do arquivo .tar.gz."
+        ARQUIVO_MIGRACAO="$REPLY_VAL"
+    fi
+    [ -f "$ARQUIVO_MIGRACAO" ] || die "Arquivo não encontrado: $ARQUIVO_MIGRACAO"
+
+    grep -q '^DATABASE_URL=mysql' "$INSTALL_DIR/.env" 2>/dev/null \
+        || die "$INSTALL_DIR/.env não tem um DATABASE_URL de MariaDB — rode a ação 'install' primeiro nesta VM."
+
+    warn "Isso SUBSTITUI o banco de dados e os arquivos enviados ATUAIS desta instalação pelos do snapshot."
+    warn "Um backup de segurança do estado atual desta VM é feito automaticamente antes de mexer em qualquer coisa."
+    if ! yesno "Continuar com a importação?" "n"; then
+        die "Importação cancelada — nada foi alterado."
+    fi
+
+    mkdir -p "$INSTALL_DIR/instance"
+    local lockfile="$INSTALL_DIR/instance/.update.lock"
+    exec 9>"$lockfile"
+    if ! flock -n 9; then
+        die "Já existe uma atualização/importação em andamento nesta instalação (lock: $lockfile). Aguarde terminar antes de rodar de novo."
+    fi
+
+    local dir_tmp
+    dir_tmp="$(mktemp -d)"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$dir_tmp'" EXIT
+
+    log "Extraindo o snapshot"
+    tar -xzf "$ARQUIVO_MIGRACAO" -C "$dir_tmp" \
+        || die "Não consegui extrair '$ARQUIVO_MIGRACAO' — arquivo corrompido ou não é uma migração válida."
+    local conteudo
+    conteudo="$(find "$dir_tmp" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+    [ -n "$conteudo" ] && [ -f "$conteudo/db.sql.gz" ] \
+        || die "'$ARQUIVO_MIGRACAO' não parece uma migração válida gerada por 'exportar' (faltando db.sql.gz)."
+
+    log "Fazendo backup de segurança do estado ATUAL desta VM antes de importar"
+    local backup_stamp backup_pre_dir db_url db_user_b db_pass_b db_name_b
+    backup_stamp="$(date +%Y%m%d_%H%M%S)"
+    backup_pre_dir="$INSTALL_DIR/instance/backups/pre-importacao-$backup_stamp"
+    mkdir -p "$backup_pre_dir"
+    cp "$INSTALL_DIR/.env" "$backup_pre_dir/.env.bak" 2>/dev/null || true
+    db_url="$(grep '^DATABASE_URL=' "$INSTALL_DIR/.env" | cut -d= -f2-)"
+    db_user_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://([^:]+):.*#\1#')"
+    db_pass_b="$(echo "$db_url" | sed -E 's#mysql\+pymysql://[^:]+:([^@]+)@.*#\1#')"
+    db_name_b="$(echo "$db_url" | sed -E 's#.*/([^/?]+)$#\1#')"
+    if ! mysqldump -u "$db_user_b" -p"$db_pass_b" "$db_name_b" 2>/tmp/mysqldump_pre_import.log | gzip > "$backup_pre_dir/db.sql.gz"; then
+        err "Falha ao fazer o backup de segurança do banco atual desta VM:"
+        tail -n 20 /tmp/mysqldump_pre_import.log >&2
+        die "Importação cancelada por segurança — sem backup do estado atual, não sigo. Log em /tmp/mysqldump_pre_import.log."
+    fi
+    tar -czf "$backup_pre_dir/uploads.tar.gz" -C "$INSTALL_DIR/app/static" uploads 2>/dev/null || true
+    chown -R "$SYS_USER:$SYS_USER" "$backup_pre_dir"
+    ok "Backup de segurança (estado antes da importação) salvo em $backup_pre_dir"
+
+    # rollback_import — desfaz a importação, restaurando o estado desta VM
+    # de antes de começar (backup_pre_dir), igual em espírito ao
+    # rollback_update de 'cmd_update'.
+    rollback_import() {
+        err "Restaurando o estado desta VM anterior à importação..."
+        if [ -f "$backup_pre_dir/db.sql.gz" ]; then
+            gunzip -c "$backup_pre_dir/db.sql.gz" | mysql -u "$db_user_b" -p"$db_pass_b" "$db_name_b" \
+                || warn "Não consegui restaurar o banco automaticamente — restaure na mão a partir de $backup_pre_dir/db.sql.gz"
+        fi
+        if [ -f "$backup_pre_dir/uploads.tar.gz" ]; then
+            rm -rf "$INSTALL_DIR/app/static/uploads"
+            tar -xzf "$backup_pre_dir/uploads.tar.gz" -C "$INSTALL_DIR/app/static" \
+                || warn "Não consegui restaurar os uploads automaticamente — restaure na mão a partir de $backup_pre_dir/uploads.tar.gz"
+            chown -R "$SYS_USER:$SYS_USER" "$INSTALL_DIR/app/static/uploads" 2>/dev/null || true
+        fi
+        if [ -f "$backup_pre_dir/.env.bak" ]; then
+            cp "$backup_pre_dir/.env.bak" "$INSTALL_DIR/.env"
+        fi
+        systemctl restart projeto-saida 2>/dev/null || true
+        if wait_for_service_ativo projeto-saida 15 && wait_for_http "http://127.0.0.1:8000/" 15; then
+            ok "Reversão concluída — esta VM voltou ao estado anterior à importação."
+        else
+            err "ATENÇÃO: mesmo após a reversão, o serviço não voltou a responder."
+            err "Intervenção manual necessária — comece por: journalctl -u projeto-saida --no-pager -n 80"
+        fi
+        err "Backup preservado em $backup_pre_dir para investigação."
+    }
+
+    log "Restaurando banco de dados do snapshot"
+    if ! gunzip -c "$conteudo/db.sql.gz" | mysql -u "$db_user_b" -p"$db_pass_b" "$db_name_b" 2>/tmp/mysql_import.log; then
+        err "Falha ao restaurar o banco de dados do snapshot:"
+        tail -n 30 /tmp/mysql_import.log >&2
+        rollback_import
+        die "Importação revertida. Log completo em /tmp/mysql_import.log."
+    fi
+
+    if [ -f "$conteudo/uploads.tar.gz" ]; then
+        log "Restaurando arquivos enviados (logos, fotos, vídeo de fundo)"
+        rm -rf "$INSTALL_DIR/app/static/uploads"
+        if ! tar -xzf "$conteudo/uploads.tar.gz" -C "$INSTALL_DIR/app/static"; then
+            err "Falha ao restaurar os arquivos enviados do snapshot."
+            rollback_import
+            die "Importação revertida."
+        fi
+        chown -R "$SYS_USER:$SYS_USER" "$INSTALL_DIR/app/static/uploads"
+    fi
+
+    if [ -f "$conteudo/meta.txt" ]; then
+        local secret_key_origem
+        secret_key_origem="$(grep '^secret_key_origem=' "$conteudo/meta.txt" | cut -d= -f2-)"
+        if [ -n "$secret_key_origem" ]; then
+            if yesno "Usar a mesma chave de sessão (SECRET_KEY) da instalação original? (evita deslogar quem já estava com sessão 'lembrar-me')" "s"; then
+                sed -i "s#^SECRET_KEY=.*#SECRET_KEY=$secret_key_origem#" "$INSTALL_DIR/.env"
+                ok "SECRET_KEY da instalação original aplicada."
+            fi
+        fi
+    fi
+
+    # O snapshot pode ter vindo de uma versão do código diferente desta VM
+    # (mais antiga ou mais nova) — 'flask db-adotar-legado' cobre o caso
+    # raro de o snapshot ter vindo de uma instalação anterior ao controle
+    # de versão por Alembic, e 'flask db upgrade' aplica qualquer migração
+    # pendente que o código desta VM já tenha e o snapshot ainda não.
+    log "Ajustando o esquema do banco importado à versão do código desta VM"
+    if ! run_as_app_user "flask db-adotar-legado && flask db upgrade" > /tmp/flask_db_upgrade_import.log 2>&1; then
+        err "Falha ao ajustar o esquema do banco importado:"
+        tail -n 30 /tmp/flask_db_upgrade_import.log >&2
+        rollback_import
+        die "Importação revertida. Log completo em /tmp/flask_db_upgrade_import.log."
+    fi
+
+    log "Reiniciando serviço"
+    systemctl restart projeto-saida
+
+    if ! wait_for_service_ativo projeto-saida 15 || ! wait_for_http "http://127.0.0.1:8000/" 15; then
+        err "O serviço não voltou saudável depois da importação."
+        journalctl -u projeto-saida --no-pager -n 40 >&2 || true
+        rollback_import
+        die "Importação revertida por falha no health-check pós-restart."
+    fi
+
+    echo
+    ok "Migração importada com sucesso a partir de $ARQUIVO_MIGRACAO"
+    echo "  Backup de segurança do estado anterior desta VM: $backup_pre_dir"
+    echo "  Logs: journalctl -u projeto-saida -f"
+}
+
+# ─────────────────────────────────────────────────────────────────────────
 # Instala/atualiza um atalho global "projeto-saida" em /usr/local/sbin.
 #
 # Sem isso, rodar uma ação (ex: update) exige lembrar o caminho completo do
@@ -1578,9 +1830,9 @@ main() {
     fi
 
     case "$ACTION" in
-        install|ssl|backup|update|diagnostico) ;;
+        install|ssl|backup|update|exportar|importar|diagnostico) ;;
         sair) echo "Até mais!"; exit 0 ;;
-        *) die "Ação desconhecida: '$ACTION' (use install|ssl|backup|update|diagnostico)." ;;
+        *) die "Ação desconhecida: '$ACTION' (use install|ssl|backup|update|exportar|importar|diagnostico)." ;;
     esac
 
     if ! ( set -e; "cmd_${ACTION}" ); then

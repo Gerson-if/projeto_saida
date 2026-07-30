@@ -174,7 +174,55 @@ anterior, sem deixar produção no ar quebrada.
 
 ---
 
-## 5. Comandos do dia a dia
+## 5. Migrando para outra VM (exportar / importar)
+
+Trocar de servidor — mudar de provedor, subir de plano, etc. — sem perder
+dados: o menu tem duas ações que empacotam e restauram um snapshot
+completo (banco de dados + logos/fotos/vídeo enviados + chave de sessão).
+
+**Na VM atual (origem):**
+
+```bash
+sudo projeto-saida --action exportar
+```
+
+Gera um único arquivo em `instance/migracoes/migracao-<data_hora>.tar.gz`
+(permissão 600 — contém senhas com hash e a chave de sessão, trate como
+informação sensível). O comando termina mostrando o `scp` exato para
+copiar esse arquivo para a VM nova.
+
+**Na VM nova (destino):**
+
+```bash
+# 1) Instalação normal, se ainda não fez (cria venv, MariaDB, systemd, Nginx, HTTPS)
+sudo bash deploy/install.sh --action install
+
+# 2) Importa o snapshot da VM antiga
+sudo projeto-saida --action importar --arquivo /tmp/migracao-<data_hora>.tar.gz
+```
+
+A importação:
+
+1. Pede confirmação antes de mexer em qualquer coisa (ela **substitui** o
+   banco e os uploads atuais da VM nova).
+2. Faz backup de segurança do estado atual da VM nova antes de tocar em
+   nada — se algo der errado, desfaz sozinha e devolve esse estado (mesmo
+   princípio de segurança da ação `update`, com o mesmo tipo de reversão
+   automática).
+3. Restaura o banco e os uploads do snapshot.
+4. Pergunta se você quer usar a mesma `SECRET_KEY` da instalação original
+   — dizer "sim" evita que sessões com "lembrar-me" ativas percam a
+   validade na troca de servidor.
+5. Ajusta o esquema do banco à versão do código desta VM nova (útil se a
+   VM nova estiver numa versão do sistema diferente da VM de origem) e
+   reinicia o serviço, conferindo se voltou a responder de verdade.
+
+O snapshot não é apagado automaticamente nem da origem nem do destino —
+depois de confirmar que está tudo certo na VM nova, apague os dois na mão.
+
+---
+
+## 6. Comandos do dia a dia
 
 Todos os comandos abaixo funcionam com `sudo projeto-saida ...` (atalho
 global, de qualquer diretório) ou `sudo bash /opt/projeto_saida/deploy/install.sh ...`
@@ -186,6 +234,8 @@ global, de qualquer diretório) ou `sudo bash /opt/projeto_saida/deploy/install.
 | Atualizar com segurança | `sudo projeto-saida --action update` |
 | Emitir/trocar HTTPS | `sudo projeto-saida --action ssl` |
 | Configurar backup automático | `sudo projeto-saida --action backup` |
+| Exportar para migrar de VM | `sudo projeto-saida --action exportar` |
+| Importar snapshot de outra VM | `sudo projeto-saida --action importar --arquivo /caminho/arquivo.tar.gz` |
 | Diagnóstico de saúde | `sudo projeto-saida --action diagnostico` |
 | Ver status do serviço | `sudo systemctl status projeto-saida` |
 | Reiniciar o serviço | `sudo systemctl restart projeto-saida` |
