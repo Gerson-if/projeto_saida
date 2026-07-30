@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login — {{ config_sistema.get('nome_sistema', 'Controle de Saídas') }}</title>
-    
+
     <link href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='vendor/fonts/inter/inter.css') }}" rel="stylesheet">
@@ -21,9 +21,9 @@
             --cor-secundaria: {{ config_sistema.get('cor_secundaria', '#2980b9') }};
         }
 
-        *, *::before, *::after { 
-            font-family: 'Inter', sans-serif; 
-            box-sizing: border-box; 
+        *, *::before, *::after {
+            font-family: 'Inter', sans-serif;
+            box-sizing: border-box;
         }
 
         html, body {
@@ -47,7 +47,7 @@
         }
 
         body {
-            background: linear-gradient(135deg, var(--cor-primaria) 0%, #0d2137 100%);
+            background: linear-gradient(135deg, var(--cor-primaria) 0%, #16222a 50%, #0d2137 100%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -72,19 +72,56 @@
         }
         .login-wrapper { position: relative; z-index: 2; }
 
-        /* ── NOTIFICAÇÕES (toasts) — mesmo componente Bootstrap Toast
-           usado no resto do sistema (ver base.html), só reposicionado
-           para o topo central: numa tela de login sem barra lateral, um
-           aviso centralizado chama mais atenção do que um no canto. ── */
+        /* ── NOTIFICAÇÕES (toasts flutuantes, com efeito elástico e
+           fundo desfocado — visual de referência do mockup enviado) ── */
         .toast-container-login {
             position: fixed;
-            top: 20px;
+            top: 24px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
             width: 92%;
             max-width: 420px;
+            pointer-events: none; /* deixa clicar "através" do contêiner invisível */
         }
+
+        .toast-custom {
+            pointer-events: auto; /* reativa o clique só no balão em si */
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            font-size: 0.9rem;
+            font-weight: 500;
+            line-height: 1.4;
+            opacity: 0;
+            animation: toastEnter 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        .toast-custom.hide {
+            animation: toastLeave 0.4s ease-in forwards;
+        }
+        .toast-custom .icon-main { font-size: 1.3rem; flex-shrink: 0; }
+        .toast-custom .text-content { flex-grow: 1; }
+        .btn-close-toast {
+            background: none;
+            border: none;
+            color: inherit;
+            opacity: 0.5;
+            cursor: pointer;
+            padding: 4px;
+            margin-left: auto;
+            transition: opacity 0.2s, transform 0.2s;
+            display: flex;
+        }
+        .btn-close-toast:hover { opacity: 1; transform: scale(1.1); }
 
         /* ── ANIMAÇÃO DE ENTRADA DO CARD ── */
         .login-wrapper {
@@ -108,16 +145,19 @@
             flex-direction: column;
 
             opacity: 0;
-            transform: translateY(12px); /* Subida bem sutil */
-            animation: surgirCard 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            transform: translateY(20px);
+            animation: surgirCard 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
             will-change: transform, opacity; /* Avisa o navegador para usar aceleração de hardware */
         }
 
+        /* ── CARTÃO DE LOGIN — tom único (sem faixa escura de cabeçalho),
+           como no mockup de referência: o chip do logo é que carrega a
+           cor de destaque, não o cartão inteiro. ── */
         .login-card {
-            background: #f7f9fc;
+            background: rgba(255, 255, 255, 0.98);
             border-radius: 24px;
-            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.3);
-            border: none;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -125,56 +165,56 @@
         }
 
         .login-header {
-            background: linear-gradient(135deg, var(--cor-primaria) 0%, #112942 100%);
-            padding: clamp(20px, 4vh, 44px) 32px clamp(16px, 3vh, 36px);
+            padding: clamp(28px, 5vh, 40px) 32px clamp(14px, 2.5vh, 20px);
             text-align: center;
-            border-bottom: 4px solid var(--cor-secundaria);
             flex-shrink: 0;
         }
 
+        .login-logo, .logo-placeholder {
+            width: clamp(56px, 9vh, 76px);
+            height: clamp(56px, 9vh, 76px);
+            border-radius: 20px;
+            margin: 0 auto clamp(10px, 2vh, 18px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+        }
+
         .login-logo {
-            width: clamp(50px, 8vh, 76px);
-            height: clamp(50px, 8vh, 76px);
             object-fit: contain;
-            border-radius: 18px;
-            background: rgba(255, 255, 255, 0.12);
+            background: #fff;
             padding: 10px;
-            margin-bottom: clamp(8px, 1.5vh, 16px);
         }
 
         .logo-placeholder {
-            width: clamp(50px, 8vh, 76px);
-            height: clamp(50px, 8vh, 76px);
-            border-radius: 18px;
-            background: rgba(255, 255, 255, 0.12);
+            background: linear-gradient(135deg, var(--cor-secundaria) 0%, var(--cor-primaria) 100%);
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto clamp(8px, 1.5vh, 16px);
         }
-        .logo-placeholder i { 
-            font-size: clamp(1.5rem, 3vh, 2.4rem); 
-            color: #fff; 
+        .logo-placeholder i {
+            font-size: clamp(1.6rem, 3.2vh, 2.3rem);
+            color: #fff;
         }
 
         .login-title {
-            color: #fff;
+            color: #1f2937;
             font-weight: 700;
-            font-size: clamp(1.1rem, 2.5vh, 1.45rem);
+            font-size: clamp(1.15rem, 2.6vh, 1.45rem);
             margin-bottom: 4px;
             line-height: 1.2;
             letter-spacing: -0.5px;
         }
 
         .login-subtitle {
-            color: rgba(255, 255, 255, 0.65);
-            font-size: clamp(0.75rem, 1.5vh, 0.9rem);
-            font-weight: 400;
+            color: #6b7280;
+            font-size: clamp(0.72rem, 1.4vh, 0.85rem);
+            font-weight: 500;
             margin-bottom: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .login-body {
-            padding: clamp(20px, 4vh, 40px) clamp(20px, 5vw, 36px) clamp(20px, 4vh, 36px);
+            padding: clamp(10px, 2vh, 18px) clamp(20px, 5vw, 36px) clamp(24px, 4vh, 36px);
             overflow-y: auto;
             scrollbar-width: none;
             /* Mesmo motivo do min-height:0 em .login-wrapper/.login-card:
@@ -186,7 +226,7 @@
             flex: 1 1 auto;
         }
         .login-body::-webkit-scrollbar {
-            display: none; 
+            display: none;
         }
 
         .dica-banner {
@@ -204,28 +244,28 @@
         }
 
         .form-group-custom {
-            margin-bottom: clamp(12px, 2.2vh, 22px);
+            margin-bottom: clamp(14px, 2.4vh, 22px);
         }
 
         .form-label {
             font-size: 0.85rem;
             font-weight: 600;
             color: #4b5563;
-            margin-bottom: 6px;
-            padding-left: 6px;
+            margin-bottom: 8px;
+            padding-left: 4px;
         }
 
         .input-group {
-            border-radius: 50px !important; 
-            border: 1.5px solid #d1d5db;
-            background: #ffffff;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            border-radius: 12px !important;
+            border: 1.5px solid #e5e7eb;
+            background: #f9fafb;
+            transition: all 0.3s ease;
             overflow: hidden;
-            padding: 1px;
         }
 
         .input-group:focus-within {
             border-color: var(--cor-secundaria);
+            background: #ffffff;
             box-shadow: 0 0 0 4px rgba(41, 128, 185, 0.15);
         }
 
@@ -233,8 +273,7 @@
             border: none !important;
             background: transparent !important;
             color: #9ca3af;
-            padding-left: 18px;
-            padding-right: 4px;
+            padding-left: 16px;
             font-size: 1.1rem;
             display: flex;
             align-items: center;
@@ -242,36 +281,40 @@
 
         .form-control {
             border: none !important;
-            padding: clamp(8px, 1.2vh, 11px) 16px clamp(8px, 1.2vh, 11px) 10px;
-            font-size: 0.92rem;
+            padding: clamp(10px, 1.6vh, 12px) 16px clamp(10px, 1.6vh, 12px) 10px;
+            font-size: 1rem; /* 16px evita o auto-zoom em campos de formulário no iOS */
             color: #1f2937;
             background: transparent !important;
             box-shadow: none !important;
         }
+        .form-control::placeholder { color: #9ca3af; }
 
         .toggle-senha {
             border: none !important;
             background: transparent !important;
             color: #9ca3af;
-            padding-right: 18px;
+            padding-right: 16px;
             padding-left: 10px;
             display: flex;
             align-items: center;
+            transition: color 0.2s;
         }
+        .toggle-senha:hover { color: #4b5563; }
 
         .form-check {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding-left: 6px;
+            padding-left: 4px;
         }
         .form-check-input {
             cursor: pointer;
-            border-radius: 6px;
+            border-radius: 4px;
             border: 1.5px solid #d1d5db;
-            width: 16px;
-            height: 16px;
+            width: 18px;
+            height: 18px;
             margin: 0;
+            transition: all 0.2s;
         }
         .form-check-input:checked {
             background-color: var(--cor-secundaria);
@@ -284,60 +327,61 @@
             font-size: 0.88rem;
         }
 
-        /* ── MICRO-INTERAÇÃO DO BOTÃO (SUPER LEVE) ── */
+        /* ── BOTÃO DE LOGIN ── */
         .btn-login {
             background: linear-gradient(135deg, var(--cor-secundaria) 0%, var(--cor-primaria) 100%);
             border: none;
-            border-radius: 8px; 
-            padding: clamp(10px, 1.5vh, 13px);
+            border-radius: 12px;
+            padding: clamp(11px, 1.8vh, 14px);
             font-weight: 600;
-            font-size: 0.95rem;
+            font-size: 1rem;
             color: #fff;
             width: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            box-shadow: 0 4px 12px rgba(41, 128, 185, 0.2);
-            margin-top: clamp(8px, 1.5vh, 14px);
-            
-            /* Transição suave usando apenas propriedades rápidas */
-            transition: filter 0.2s, transform 0.1s; 
+            gap: 10px;
+            box-shadow: 0 4px 12px rgba(41, 128, 185, 0.3);
+            margin-top: clamp(10px, 1.8vh, 16px);
+            transition: filter 0.2s, transform 0.2s, box-shadow 0.2s;
             will-change: transform;
         }
 
         .btn-login:hover {
-            filter: brightness(1.1);
+            filter: brightness(1.08);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(41, 128, 185, 0.4);
             color: #fff;
         }
-
-        .btn-login:active {
-            transform: scale(0.98); /* Feedback de clique físico */
-        }
+        .btn-login:active { transform: translateY(0) scale(0.98); }
 
         .login-footer {
             text-align: center;
-            padding-top: clamp(12px, 2vh, 24px);
+            padding-top: clamp(14px, 2.2vh, 24px);
             font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.45);
+            color: rgba(255, 255, 255, 0.5);
             flex-shrink: 0;
         }
 
-        /* ── DEFINIÇÃO DA ANIMAÇÃO DE HARDWARE ── */
+        /* ── ANIMAÇÕES ── */
         @keyframes surgirCard {
-            from {
-                opacity: 0;
-                transform: translateY(12px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes toastEnter {
+            0% { opacity: 0; transform: translateY(-20px) scale(0.9); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes toastLeave {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-10px) scale(0.95); margin-top: -60px; }
         }
 
         /* Respeita a configuração de acessibilidade do usuário do Windows/Linux */
         @media (prefers-reduced-motion: reduce) {
-            .login-wrapper {
+            .login-wrapper, .toast-custom {
                 animation: none;
                 opacity: 1;
                 transform: none;
@@ -366,21 +410,8 @@
         <div class="login-bg-overlay" style="background:rgba(3,10,20,{{ overlay_pct / 100 }});"></div>
     {% endif %}
 
-    <div class="toast-container-login">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% for category, message in messages %}
-                <div class="toast align-items-center text-bg-{{ 'danger' if category in ('error', 'danger') else category }} border-0 show mb-2" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div class="d-flex">
-                        <div class="toast-body d-flex align-items-center gap-2">
-                            <i class="bi bi-{% if category == 'success' %}check-circle-fill{% elif category in ('danger', 'error') %}exclamation-triangle-fill{% elif category == 'warning' %}exclamation-triangle-fill{% else %}info-circle-fill{% endif %}"></i>
-                            <span>{{ message }}</span>
-                        </div>
-                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar"></button>
-                    </div>
-                </div>
-            {% endfor %}
-        {% endwith %}
-    </div>
+    <!-- Contêiner global fixo para notificações (toasts) -->
+    <div class="toast-container-login" id="toastContainer"></div>
 
     <div class="login-wrapper">
         <div class="login-card">
@@ -452,11 +483,6 @@
 
     <script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
     <script>
-        // Mesmo padrão de auto-dismiss usado no resto do sistema (ver base.html).
-        document.querySelectorAll('.toast').forEach(function (el) {
-            new bootstrap.Toast(el, { delay: 5000 }).show();
-        });
-
         function toggleSenha() {
             const input = document.getElementById('senhaInput');
             const icon = document.getElementById('senhaIcon');
@@ -468,6 +494,74 @@
                 icon.className = 'bi bi-eye';
             }
         }
+
+        /**
+         * Cria e exibe uma notificação flutuante (toast) — usada para os
+         * avisos do sistema (login incorreto, conta bloqueada, etc.).
+         * @param {string} mensagem - texto a exibir (inserido com textContent, nunca HTML)
+         * @param {string} tipo - 'info' | 'erro' | 'sucesso' | 'aviso'
+         * @param {number} duracao - tempo em ms antes de sumir sozinho (0 = não some)
+         */
+        function mostrarNotificacao(mensagem, tipo, duracao) {
+            tipo = tipo || 'info';
+            duracao = duracao === undefined ? 6000 : duracao;
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+
+            let icone = 'bi-info-circle-fill', corTexto = '#0369a1', corBorda = '#38bdf8', corFundo = '#f0f9ff';
+            if (tipo === 'erro') {
+                icone = 'bi-exclamation-triangle-fill'; corTexto = '#b91c1c'; corBorda = '#f87171'; corFundo = '#fef2f2';
+            } else if (tipo === 'sucesso') {
+                icone = 'bi-check-circle-fill'; corTexto = '#15803d'; corBorda = '#4ade80'; corFundo = '#f0fdf4';
+            } else if (tipo === 'aviso') {
+                icone = 'bi-exclamation-triangle-fill'; corTexto = '#92400e'; corBorda = '#fbbf24'; corFundo = '#fffbeb';
+            }
+
+            toast.className = 'toast-custom';
+            toast.style.borderLeft = '5px solid ' + corBorda;
+            toast.style.color = corTexto;
+            toast.style.backgroundColor = corFundo;
+
+            const iconeEl = document.createElement('i');
+            iconeEl.className = 'bi ' + icone + ' icon-main';
+            const textoEl = document.createElement('span');
+            textoEl.className = 'text-content';
+            textoEl.textContent = mensagem; // nunca innerHTML — evita qualquer injeção de HTML
+            const fecharBtn = document.createElement('button');
+            fecharBtn.type = 'button';
+            fecharBtn.className = 'btn-close-toast';
+            fecharBtn.setAttribute('aria-label', 'Fechar');
+            fecharBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+
+            toast.appendChild(iconeEl);
+            toast.appendChild(textoEl);
+            toast.appendChild(fecharBtn);
+            container.appendChild(toast);
+
+            const fecharToast = function () {
+                if (toast.classList.contains('hide')) return;
+                toast.classList.add('hide');
+                setTimeout(function () { toast.remove(); }, 400);
+            };
+            fecharBtn.addEventListener('click', fecharToast);
+            if (duracao > 0) setTimeout(fecharToast, duracao);
+        }
+
+        // Mensagens vindas do sistema (flash do Flask) — mostradas como
+        // toast assim que a página carrega, uma após a outra.
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        var mensagensFlash = {{ messages | tojson }};
+        {% endwith %}
+        var mapaCategoriaToast = { danger: 'erro', error: 'erro', success: 'sucesso', warning: 'aviso', info: 'info' };
+        window.addEventListener('DOMContentLoaded', function () {
+            mensagensFlash.forEach(function (item, i) {
+                var categoria = item[0], mensagem = item[1];
+                setTimeout(function () {
+                    mostrarNotificacao(mensagem, mapaCategoriaToast[categoria] || 'info');
+                }, 150 + i * 450);
+            });
+        });
     </script>
 </body>
 </html>

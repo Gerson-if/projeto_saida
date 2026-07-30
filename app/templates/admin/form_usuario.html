@@ -181,7 +181,7 @@ function previewFoto(input) {
 
         const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
         if (file.size > TAMANHO_MAXIMO) {
-            alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
+            avisoSistema('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.', 'erro');
             input.value = '';
             return;
         }

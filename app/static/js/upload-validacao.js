@@ -126,11 +126,19 @@
                 const esperado = modo === "video"
                     ? "um vídeo (MP4, WEBM ou OGG)"
                     : "uma imagem (PNG, JPG, GIF ou WEBP)";
-                window.alert(
+                const mensagem =
                     'O arquivo selecionado ("' + file.name + '") não parece ser ' + esperado + ". " +
                     "Confira se o arquivo certo foi escolhido (por exemplo, uma foto selecionada onde " +
-                    "era esperado um vídeo, ou vice-versa) e tente novamente."
-                );
+                    "era esperado um vídeo, ou vice-versa) e tente novamente.";
+                // Aviso mostrado PELO SISTEMA (não um alert() nativo do navegador)
+                // — usa avisoSistema() quando disponível (páginas com base.html);
+                // cai para alert() só como último recurso (ex.: página sem esse
+                // helper carregado), para nunca deixar o usuário sem feedback.
+                if (typeof window.avisoSistema === "function") {
+                    window.avisoSistema(mensagem, "erro");
+                } else {
+                    window.alert(mensagem);
+                }
                 input.value = "";
                 if (aoValidar) aoValidar(false);
                 return;

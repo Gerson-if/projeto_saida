@@ -270,10 +270,24 @@ def novo_usuario():
                 subunidades=subunidades, postos=postos,
             )
 
+        # Foto (opcional na criação): valida e salva ANTES de criar o
+        # registro do usuário — o próprio nome de arquivo não depende do ID
+        # (é um UUID), então não há problema em salvar antes do INSERT. Se a
+        # validação falhar (tamanho, tipo, dimensões), nada é criado.
+        foto, erro_foto = _save_upload("foto", f"user_{cpf}")
+        if erro_foto:
+            flash(erro_foto, "danger")
+            return render_template(
+                "admin/form_usuario.html", acao="novo",
+                subunidades=subunidades, postos=postos,
+            )
+
         usuario = Usuario(nome=nome, cpf=cpf, tipo=tipo)
         usuario.set_senha(senha.strip())
         usuario.subunidade_id = subunidade_id_valida
         usuario.posto_graduacao_id = posto_id_valido
+        if foto:
+            usuario.foto = foto
 
         db.session.add(usuario)
         ok, erro = commit_seguro(
@@ -282,6 +296,11 @@ def novo_usuario():
             mensagem_duplicado="Este CPF já está cadastrado.",
         )
         if not ok:
+            # Evita deixar um arquivo de foto órfão em disco se o usuário
+            # acabou não sendo criado (ex.: CPF duplicado detectado só no
+            # commit, por uma corrida entre duas requisições simultâneas).
+            if foto:
+                remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], foto)
             flash(erro, "danger")
             return render_template(
                 "admin/form_usuario.html", acao="novo",
@@ -1007,6 +1026,15 @@ def configuracoes():
             "1" if request.form.get("postos_habilitados") == "on" else "0",
         )
 
+        # Controla se algum upload falhou nesta submissão — usado para NÃO
+        # mostrar "Configurações salvas com sucesso!" isoladamente quando na
+        # verdade um ou mais arquivos foram recusados. Sem isso, o usuário via
+        # o erro específico (ex.: "excede o tamanho máximo") E, logo em
+        # seguida, um aviso verde de sucesso — dando a impressão de que o
+        # arquivo recusado tinha sido salvo mesmo assim, quando na verdade só
+        # os OUTROS campos (texto, cores, etc.) foram salvos.
+        houve_erro_upload = False
+
         for campo_img in ["logo", "logo_relatorio", "brasao", "favicon"]:
             if request.form.get(f"remover_{campo_img}") == "1":
                 valor_atual = ConfigSistema.get(campo_img)
@@ -1017,6 +1045,7 @@ def configuracoes():
             nome_arquivo, erro_upload = _save_upload(campo_img, campo_img)
             if erro_upload:
                 flash(f"{campo_img}: {erro_upload}", "danger")
+                houve_erro_upload = True
                 continue
             if nome_arquivo:
                 valor_antigo = ConfigSistema.get(campo_img)
@@ -1056,6 +1085,7 @@ def configuracoes():
             nome_imagem, erro_imagem = _save_upload("login_bg_imagem", "login_bg")
             if erro_imagem:
                 flash(f"Imagem de fundo do login: {erro_imagem}", "danger")
+                houve_erro_upload = True
             elif nome_imagem:
                 valor_antigo = ConfigSistema.get("login_bg_imagem")
                 ConfigSistema.set("login_bg_imagem", nome_imagem)
@@ -1068,12 +1098,21 @@ def configuracoes():
             nome_video, erro_video = _save_video_upload("login_bg_video", "login_bg")
             if erro_video:
                 flash(f"Vídeo de fundo do login: {erro_video}", "danger")
+                houve_erro_upload = True
             elif nome_video:
                 valor_antigo = ConfigSistema.get("login_bg_video")
                 ConfigSistema.set("login_bg_video", nome_video)
                 remover_upload_seguro(current_app.config["UPLOAD_FOLDER"], valor_antigo)
 
-        flash("Configurações salvas com sucesso!", "success")
+        if houve_erro_upload:
+            flash(
+                "Configurações salvas. Os demais campos foram atualizados, mas "
+                "um ou mais arquivos foram recusados — veja os avisos acima e "
+                "tente novamente apenas com esses arquivos.",
+                "warning",
+            )
+        else:
+            flash("Configurações salvas com sucesso!", "success")
         return redirect(url_for("admin.configuracoes"))
 
     configs = {c.chave: c.valor for c in ConfigSistema.query.all()}

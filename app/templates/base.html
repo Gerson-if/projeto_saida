@@ -216,6 +216,22 @@
 
         .toast-container { position: fixed; top: 70px; right: 20px; z-index: 9999; }
 
+        /* Barra fina de progresso no topo — dá o retorno visual imediato de
+           que a navegação entre seções está acontecendo (ver navegação
+           dinâmica no script no fim da página), já que a troca de conteúdo
+           por AJAX não dispara o indicador de carregamento nativo do
+           navegador (a barra de progresso da aba). */
+        #barra-carregamento-nav {
+            position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+            background: var(--cor-secundaria); z-index: 10050;
+            opacity: 0; transition: width 0.25s ease, opacity 0.2s ease;
+            box-shadow: 0 0 8px var(--cor-secundaria);
+        }
+        #barra-carregamento-nav.ativa { opacity: 1; }
+        @media (prefers-reduced-motion: reduce) {
+            #barra-carregamento-nav { transition: opacity 0.2s ease; }
+        }
+
         .user-avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 2px solid var(--cor-secundaria); }
         .user-avatar-placeholder { width: 34px; height: 34px; border-radius: 50%; background: var(--cor-secundaria); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
 
@@ -411,10 +427,35 @@
         .theme-option { display: flex; align-items: center; gap: 0.6rem; }
         .theme-option .bi-check-lg { margin-left: auto; color: #16a34a; display: none; }
         .theme-option.active .bi-check-lg { display: inline-block; }
+
+        /* Ícone do botão de tema no topo: muda de acordo com o tema ATIVO
+           (sol = claro, lua = escuro, ramo/árvore = verde-oliva militar) —
+           em vez do ícone genérico fixo de paleta — e gira/pulsa ao trocar
+           de tema, para o usuário perceber que o clique realmente disparou
+           uma ação (a troca de tema recarrega a página logo em seguida). */
+        #botaoTema { position: relative; overflow: visible; }
+        #temaIconAtual { transition: color 0.3s ease; }
+        #temaIconAtual.tema-icone-sol  { color: #f59e0b; }
+        #temaIconAtual.tema-icone-lua  { color: #6366f1; }
+        #temaIconAtual.tema-icone-oliva { color: #4d5a2f; }
+
+        @keyframes girarTrocaTema {
+            0%   { transform: rotate(0deg) scale(1); }
+            40%  { transform: rotate(200deg) scale(1.35); }
+            70%  { transform: rotate(330deg) scale(0.9); }
+            100% { transform: rotate(360deg) scale(1); }
+        }
+        #temaIconAtual.tema-icone-animando { animation: girarTrocaTema 0.55s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        @media (prefers-reduced-motion: reduce) {
+            #temaIconAtual.tema-icone-animando { animation: none; }
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+
+<div id="barra-carregamento-nav"></div>
 
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="mobileSidebarClose()"></div>
 
@@ -527,8 +568,8 @@
                 <i class="bi bi-calendar3 me-1"></i>{{ now.strftime('%d/%m/%Y') }}
             </span>
             <div class="dropdown">
-                <button class="btn btn-sm btn-light d-flex align-items-center justify-content-center" data-bs-toggle="dropdown" title="Tema da interface" style="width:34px;height:34px;border-radius:8px;">
-                    <i class="bi bi-palette2"></i>
+                <button id="botaoTema" class="btn btn-sm btn-light d-flex align-items-center justify-content-center" data-bs-toggle="dropdown" title="Tema da interface" style="width:34px;height:34px;border-radius:8px;">
+                    <i id="temaIconAtual" class="bi bi-sun-fill"></i>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="min-width:200px;">
                     <li><h6 class="dropdown-header">Tema da interface</h6></li>
@@ -572,7 +613,7 @@
         </div>
     </div>
 
-    <div class="toast-container">
+    <div class="toast-container" id="toastContainer">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
                 <div class="toast align-items-center text-bg-{{ 'danger' if category == 'error' else category }} border-0 show mb-2" role="alert">
@@ -588,7 +629,7 @@
         {% endwith %}
     </div>
 
-    <div class="container-fluid p-3 p-md-4">
+    <div class="container-fluid p-3 p-md-4" id="page-content">
         {% block content %}{% endblock %}
     </div>
 </div>
@@ -652,8 +693,82 @@
         new bootstrap.Toast(el, { delay: 4500 }).show();
     });
 
+    /**
+     * avisoSistema(mensagem, tipo) — mostra um aviso no MESMO padrão visual
+     * dos toasts gerados pelo servidor (flash messages) acima, mas
+     * disparado pelo JavaScript do próprio sistema (validações no
+     * navegador, como tipo/tamanho de arquivo antes do envio do
+     * formulário). Existe especificamente para NUNCA usar `window.alert()`
+     * / `window.confirm()` — esses são diálogos nativos do NAVEGADOR (cinza,
+     * sem identidade visual, bloqueiam a aba inteira), e o usuário precisa
+     * que os avisos sejam claramente do sistema, não do navegador.
+     *
+     * `tipo`: 'erro' | 'aviso' | 'sucesso' | 'info' (mesmo vocabulário usado
+     * na tela de login) — mapeado para as classes text-bg-* do Bootstrap.
+     */
+    window.avisoSistema = function (mensagem, tipo) {
+        tipo = tipo || 'aviso';
+        const mapaClasse = { erro: 'danger', aviso: 'warning', sucesso: 'success', info: 'info' };
+        const mapaIcone  = {
+            danger: 'bi-x-circle', warning: 'bi-exclamation-triangle',
+            success: 'bi-check-circle', info: 'bi-info-circle',
+        };
+        const classeCor = mapaClasse[tipo] || 'warning';
+        const icone = mapaIcone[classeCor];
+
+        const container = document.querySelector('.toast-container');
+        if (!container) { window.alert(mensagem); return; } // fallback extremo
+
+        const toastEl = document.createElement('div');
+        toastEl.className = 'toast align-items-center text-bg-' + classeCor + ' border-0 mb-2';
+        toastEl.setAttribute('role', 'alert');
+        toastEl.innerHTML =
+            '<div class="d-flex">' +
+                '<div class="toast-body d-flex align-items-center gap-2"><i class="bi ' + icone + '"></i><span></span></div>' +
+                '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' +
+            '</div>';
+        // Texto inserido via textContent (não innerHTML) para evitar injeção,
+        // já que a mensagem pode incluir o nome do arquivo escolhido pelo usuário.
+        toastEl.querySelector('.toast-body span').textContent = mensagem;
+        container.appendChild(toastEl);
+        const toast = new bootstrap.Toast(toastEl, { delay: 7000 });
+        toastEl.addEventListener('hidden.bs.toast', function () { toastEl.remove(); });
+        toast.show();
+    };
+
     // ── Seletor de tema (claro / escuro / verde-oliva) ──
     const THEME_STORAGE_KEY = 'app_theme';
+
+    // Ícone (Bootstrap Icons) representando cada tema no botão do topo:
+    // sol para o tema claro, lua para o escuro, e um ramo/árvore (associado
+    // ao verde-oliva do Exército) para o tema militar.
+    const ICONE_POR_TEMA = {
+        light: 'bi-sun-fill',
+        dark:  'bi-moon-stars-fill',
+        olive: 'bi-tree-fill',
+    };
+    const CLASSE_COR_POR_TEMA = {
+        light: 'tema-icone-sol',
+        dark:  'tema-icone-lua',
+        olive: 'tema-icone-oliva',
+    };
+
+    function atualizarIconeTema(tema, animar) {
+        const icone = document.getElementById('temaIconAtual');
+        if (!icone) return;
+        Object.values(ICONE_POR_TEMA).forEach(cls => icone.classList.remove(cls));
+        Object.values(CLASSE_COR_POR_TEMA).forEach(cls => icone.classList.remove(cls));
+        icone.classList.add(ICONE_POR_TEMA[tema] || ICONE_POR_TEMA.light);
+        icone.classList.add(CLASSE_COR_POR_TEMA[tema] || CLASSE_COR_POR_TEMA.light);
+        if (animar) {
+            // Reinicia a animação mesmo que já esteja rodando (ex.: cliques
+            // rápidos em sequência) removendo e forçando reflow antes de
+            // reaplicar a classe.
+            icone.classList.remove('tema-icone-animando');
+            void icone.offsetWidth;
+            icone.classList.add('tema-icone-animando');
+        }
+    }
 
     function aplicarTema(tema) {
         if (!['dark', 'olive', 'light'].includes(tema)) tema = 'light';
@@ -662,11 +777,22 @@
             if (jaAtivo === tema) return; // já está nesse tema, nada a fazer
             localStorage.setItem(THEME_STORAGE_KEY, tema);
         } catch (e) {}
-        // Recarrega a página: garante que TUDO fique consistente com o novo
-        // tema, inclusive elementos desenhados em <canvas> (gráficos) que só
-        // leem a cor uma vez, no carregamento — trocar só os atributos do
-        // <html> sem recarregar deixaria esses gráficos com a cor antiga.
-        window.location.reload();
+
+        // Dá o retorno visual IMEDIATO do clique (ícone gira/pulsa e já
+        // troca para o ícone/cor do novo tema) antes de recarregar — sem
+        // isso, o usuário só veria o efeito do clique quando a página toda
+        // já tivesse recarregado, o que não passa a sensação de "meu clique
+        // funcionou", e sim de "a página travou por um instante".
+        atualizarIconeTema(tema, true);
+        marcarTemaAtivo(tema);
+
+        // Recarrega a página (com um pequeno atraso para a animação do
+        // ícone ser percebida antes do flash do recarregamento): garante que
+        // TUDO fique consistente com o novo tema, inclusive elementos
+        // desenhados em <canvas> (gráficos) que só leem a cor uma vez, no
+        // carregamento — trocar só os atributos do <html> sem recarregar
+        // deixaria esses gráficos com a cor antiga.
+        window.setTimeout(function () { window.location.reload(); }, 260);
     }
 
     function marcarTemaAtivo(tema) {
@@ -687,8 +813,197 @@
             }
         } catch (e) {}
         marcarTemaAtivo(temaAtual);
+        atualizarIconeTema(temaAtual, false);
+    })();
+
+    // ─────────────────────────────────────────────────────────────────
+    // Navegação dinâmica entre seções (evita recarregar a página toda)
+    // ─────────────────────────────────────────────────────────────────
+    // Hoje, cada clique num link da barra lateral recarrega o documento
+    // inteiro (HTML, CSS, JS, fontes já em cache do navegador, mas o HTML
+    // em si sempre volta a ser baixado e renderizado do zero) — com vários
+    // cliques seguidos entre seções isso acumula e o sistema parece lento.
+    //
+    // Esta função intercepta cliques nos links da barra lateral, busca
+    // (fetch) só o HTML da página de destino, troca apenas o conteúdo
+    // principal (#page-content) e reexecuta os scripts específicos daquela
+    // página — a barra lateral, o topo e os vendors (Bootstrap, Chart.js já
+    // carregado) continuam os mesmos, sem precisar recarregar nada disso.
+    //
+    // Sempre com uma saída seguridade: qualquer coisa fora do esperado
+    // (resposta que não é a mesma "casca" da aplicação — ex.: sessão expirou
+    // e o servidor devolveu a tela de login — ou erro de rede) cai para uma
+    // navegação normal (window.location), nunca deixa o usuário preso numa
+    // tela quebrada.
+    (function initNavegacaoDinamica() {
+        const barra = document.getElementById('barra-carregamento-nav');
+        const pageContent = document.getElementById('page-content');
+        if (!pageContent) return; // segurança: se o layout mudar, desliga-se sozinho
+
+        let controladorAtual = null;
+
+        function iniciarBarra() {
+            if (!barra) return;
+            barra.style.width = '0%';
+            barra.classList.add('ativa');
+            // Força reflow para a transição de largura funcionar a partir de 0%.
+            void barra.offsetWidth;
+            barra.style.width = '75%';
+        }
+
+        function concluirBarra() {
+            if (!barra) return;
+            barra.style.width = '100%';
+            setTimeout(function () {
+                barra.classList.remove('ativa');
+                setTimeout(function () { barra.style.width = '0%'; }, 250);
+            }, 150);
+        }
+
+        function atualizarLinkAtivo(url) {
+            const destino = new URL(url, window.location.origin);
+            document.querySelectorAll('#sidebar .sidebar-nav a.nav-link').forEach(function (a) {
+                const linkUrl = new URL(a.getAttribute('href'), window.location.origin);
+                a.classList.toggle('active', linkUrl.pathname === destino.pathname);
+            });
+        }
+
+        function reexecutarScriptsDaPagina(novoContainerExtraJs) {
+            const atual = document.getElementById('extra-js-container');
+            if (!atual) return;
+            atual.innerHTML = novoContainerExtraJs ? novoContainerExtraJs.innerHTML : '';
+            // Scripts inseridos via innerHTML NUNCA são executados pelo
+            // navegador — é preciso criar elementos <script> novos e
+            // reanexá-los para que realmente rodem.
+            atual.querySelectorAll('script').forEach(function (scriptAntigo) {
+                const novo = document.createElement('script');
+                for (const attr of scriptAntigo.attributes) {
+                    novo.setAttribute(attr.name, attr.value);
+                }
+                if (scriptAntigo.src) {
+                    // Script externo (ex.: upload-validacao.js) — já é
+                    // escrito de forma segura para rodar mais de uma vez
+                    // (se auto-encapsula, só reatribui funções a `window`).
+                    novo.textContent = scriptAntigo.textContent;
+                } else {
+                    // Script inline da própria página (ex.: inicialização de
+                    // gráficos). Ao navegar de volta para a MESMA página mais
+                    // de uma vez na sessão, um `const`/`let` de nível
+                    // superior já declarado antes faria o navegador lançar
+                    // "Identifier ... has already been declared" na segunda
+                    // execução — porque bindings `let`/`const` de nível
+                    // superior de uma tag <script> clássica vivem no escopo
+                    // léxico global da PÁGINA (não são liberados só por
+                    // remover a tag do DOM). Envolver em um bloco `{ ... }`
+                    // dá um escopo léxico novo a cada execução para
+                    // `let`/`const`, e por compatibilidade legada do
+                    // JavaScript (Annex B), `function nome(){}` de nível
+                    // superior dentro desse bloco continua virando global
+                    // (necessário para os `onclick=`/`onchange=` inline
+                    // continuarem funcionando).
+                    novo.textContent = '{\n' + scriptAntigo.textContent + '\n}';
+                }
+                scriptAntigo.replaceWith(novo);
+            });
+        }
+
+        function reexibirToastsFlash(novoToastContainer) {
+            const atual = document.getElementById('toastContainer');
+            if (!atual || !novoToastContainer) return;
+            atual.innerHTML = novoToastContainer.innerHTML;
+            atual.querySelectorAll('.toast').forEach(function (el) {
+                new bootstrap.Toast(el, { delay: 4500 }).show();
+            });
+        }
+
+        function navegarAjax(url, opts) {
+            opts = opts || {};
+            const pushState = opts.pushState !== false;
+
+            if (controladorAtual) controladorAtual.abort();
+            const controlador = new AbortController();
+            controladorAtual = controlador;
+
+            iniciarBarra();
+
+            fetch(url, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                signal: controlador.signal,
+                credentials: 'same-origin',
+            })
+                .then(function (resp) {
+                    if (!resp.ok) throw new Error('http-' + resp.status);
+                    return resp.text();
+                })
+                .then(function (html) {
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    const novoConteudo = doc.getElementById('page-content');
+                    if (!novoConteudo) {
+                        // Resposta não é a "casca" esperada do sistema (ex.: tela
+                        // de login após sessão expirar) — melhor deixar o
+                        // navegador tratar de verdade, com a URL certa.
+                        window.location.href = url;
+                        return;
+                    }
+
+                    pageContent.innerHTML = novoConteudo.innerHTML;
+                    reexibirToastsFlash(doc.getElementById('toastContainer'));
+                    reexecutarScriptsDaPagina(doc.getElementById('extra-js-container'));
+
+                    const novoTitulo = doc.querySelector('title');
+                    if (novoTitulo) document.title = novoTitulo.textContent;
+
+                    atualizarLinkAtivo(url);
+                    if (pushState) history.pushState({ ajaxNav: true }, '', url);
+                    window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+                    if (typeof mobileSidebarClose === 'function') mobileSidebarClose();
+                    concluirBarra();
+                })
+                .catch(function (err) {
+                    if (err && err.name === 'AbortError') return; // outra navegação começou antes
+                    // Qualquer falha (rede, erro inesperado) — nunca deixar o
+                    // usuário preso: cai para uma navegação normal de verdade.
+                    window.location.href = url;
+                });
+        }
+
+        function linkElegivelParaAjax(link, evento) {
+            if (!link || !link.getAttribute('href')) return false;
+            if (evento.defaultPrevented) return false;
+            if (evento.button !== 0) return false; // só botão esquerdo
+            if (evento.metaKey || evento.ctrlKey || evento.shiftKey || evento.altKey) return false; // abrir em nova aba, etc.
+            if (link.target && link.target !== '' && link.target !== '_self') return false;
+            if (link.hasAttribute('download')) return false;
+            const href = link.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return false;
+            let destino;
+            try { destino = new URL(href, window.location.href); } catch (e) { return false; }
+            if (destino.origin !== window.location.origin) return false;
+            if (destino.href === window.location.href) return false; // já está nesta página
+            return true;
+        }
+
+        // Delegação de evento: cobre também links da barra lateral que
+        // aparecem/desaparecem conforme o tipo de usuário (admin/usuário).
+        document.querySelector('#sidebar .sidebar-nav').addEventListener('click', function (ev) {
+            const link = ev.target.closest('a.nav-link');
+            if (!linkElegivelParaAjax(link, ev)) return;
+            ev.preventDefault();
+            navegarAjax(link.getAttribute('href'));
+        });
+
+        window.addEventListener('popstate', function () {
+            navegarAjax(window.location.href, { pushState: false });
+        });
     })();
 </script>
+{# Envolvido num container próprio (não removido do DOM) para que a
+   navegação dinâmica (ver #navegacao-dinamica abaixo) consiga localizar e
+   RE-EXECUTAR os scripts específicos de cada página depois de trocar o
+   conteúdo por AJAX — scripts inseridos via innerHTML não rodam sozinhos,
+   então esse bloco existe só como um "depósito" identificável. #}
+<div id="extra-js-container" style="display:none">
 {% block extra_js %}{% endblock %}
+</div>
 </body>
 </html>

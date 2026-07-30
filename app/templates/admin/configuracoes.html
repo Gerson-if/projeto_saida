@@ -349,7 +349,7 @@ function previewImagem(campo, input) {
 
         const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
         if (file.size > TAMANHO_MAXIMO) {
-            alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
+            avisoSistema('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.', 'erro');
             input.value = '';
             return;
         }
@@ -375,7 +375,7 @@ function validarTamanhoVideo(input) {
         if (!ok) return; // aviso já mostrado e seleção já limpa
         const TAMANHO_MAXIMO_VIDEO = 20 * 1024 * 1024; // 20 MB
         if (file.size > TAMANHO_MAXIMO_VIDEO) {
-            alert('O vídeo excede o tamanho máximo permitido (20 MB). Use um clipe mais curto.');
+            avisoSistema('O vídeo excede o tamanho máximo permitido (20 MB). Use um clipe mais curto.', 'erro');
             input.value = '';
         }
     });
@@ -407,11 +407,12 @@ document.getElementById('formConfig').addEventListener('submit', function (ev) {
     // já próximos do limite pode fazer diferença.
     if (totalMB > LIMITE_TOTAL_MB * 0.9) {
         ev.preventDefault();
-        alert(
+        avisoSistema(
             'A soma dos arquivos selecionados (~' + totalMB.toFixed(1) + ' MB) está muito perto ou ' +
             'acima do limite total permitido pelo servidor (' + LIMITE_TOTAL_MB + ' MB) para esta tela. ' +
             'Salve as configurações em mais de uma etapa (ex: primeiro as imagens, depois o vídeo) ' +
-            'ou escolha arquivos menores.'
+            'ou escolha arquivos menores.',
+            'erro'
         );
     }
 });
