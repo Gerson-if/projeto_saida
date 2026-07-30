@@ -11,6 +11,140 @@
     body { background: #fff; }
     @page { margin: 1.5cm; }
 }
+
+/* ── Status Selector moderno ── */
+.status-selector-wrap {
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 1rem 1.1rem 0.9rem;
+}
+.status-selector-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.7rem;
+}
+.status-selector-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #64748b;
+}
+.status-resumo-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.18rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: #e2e8f0;
+    color: #475569;
+    transition: all .2s;
+}
+.status-resumo-pill.tem-filtro {
+    background: #dbeafe;
+    color: #1e40af;
+}
+.status-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+/* Chip base */
+.schip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 50px;
+    border: 2px solid #cbd5e1;
+    background: #fff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: all .18s cubic-bezier(0.4,0,0.2,1);
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.schip:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+.schip input[type=checkbox] { display: none; }
+.schip .schip-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    transition: all .18s;
+    flex-shrink: 0;
+}
+.schip .schip-check {
+    display: none;
+    font-size: 0.7rem;
+}
+
+/* Chip "Todos" */
+.schip-todos {
+    border-color: #94a3b8;
+    color: #475569;
+}
+.schip-todos .schip-dot { background: #94a3b8; }
+.schip-todos.active {
+    border-color: #334155;
+    background: #334155;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(51,65,85,0.3);
+}
+.schip-todos.active .schip-dot { background: #fff; }
+
+/* Chip Agendada */
+.schip-agendada { border-color: #fbbf24; color: #92400e; }
+.schip-agendada .schip-dot { background: #fbbf24; }
+.schip-agendada.active { background: #f59e0b; border-color: #d97706; color: #fff; box-shadow: 0 4px 12px rgba(245,158,11,0.35); }
+.schip-agendada.active .schip-dot { background: rgba(255,255,255,0.7); }
+
+/* Chip Em Trânsito */
+.schip-em_transito { border-color: #60a5fa; color: #1e40af; }
+.schip-em_transito .schip-dot { background: #60a5fa; }
+.schip-em_transito.active { background: #3b82f6; border-color: #2563eb; color: #fff; box-shadow: 0 4px 12px rgba(59,130,246,0.35); }
+.schip-em_transito.active .schip-dot { background: rgba(255,255,255,0.7); }
+
+/* Chip Retornado */
+.schip-retornado { border-color: #4ade80; color: #14532d; }
+.schip-retornado .schip-dot { background: #4ade80; }
+.schip-retornado.active { background: #22c55e; border-color: #16a34a; color: #fff; box-shadow: 0 4px 12px rgba(34,197,94,0.35); }
+.schip-retornado.active .schip-dot { background: rgba(255,255,255,0.7); }
+
+/* Chip Cancelado */
+.schip-cancelado { border-color: #94a3b8; color: #475569; }
+.schip-cancelado .schip-dot { background: #94a3b8; }
+.schip-cancelado.active { background: #64748b; border-color: #475569; color: #fff; box-shadow: 0 4px 12px rgba(100,116,139,0.35); }
+.schip-cancelado.active .schip-dot { background: rgba(255,255,255,0.7); }
+
+/* Chip Finalizado */
+.schip-finalizado { border-color: #6b7280; color: #1f2937; }
+.schip-finalizado .schip-dot { background: #6b7280; }
+.schip-finalizado.active { background: #374151; border-color: #1f2937; color: #fff; box-shadow: 0 4px 12px rgba(55,65,81,0.35); }
+.schip-finalizado.active .schip-dot { background: rgba(255,255,255,0.7); }
+
+/* Checkmark no chip ativo */
+.schip.active .schip-check { display: inline; }
+
+/* Barra de progresso de seleção */
+.status-progress-bar {
+    height: 3px;
+    border-radius: 2px;
+    background: #e2e8f0;
+    margin-top: 0.75rem;
+    overflow: hidden;
+}
+.status-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #22c55e);
+    border-radius: 2px;
+    transition: width .3s ease;
+}
 </style>
 {% endblock %}
 
@@ -67,15 +201,47 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Status (opcional)</label>
-                    <select name="status" class="form-select">
-                        <option value="">Todos</option>
-                        <option value="agendada" {{ 'selected' if filtros.get('status') == 'agendada' }}>Agendada</option>
-                        <option value="em_transito" {{ 'selected' if filtros.get('status') == 'em_transito' }}>Em Trânsito</option>
-                        <option value="retornado" {{ 'selected' if filtros.get('status') == 'retornado' }}>Retornado</option>
-                        <option value="cancelado" {{ 'selected' if filtros.get('status') == 'cancelado' }}>Cancelado</option>
-                    </select>
+
+                <!-- Seletor de Categorias de Status — redesenhado -->
+                <div class="col-12">
+                    <div class="status-selector-wrap">
+                        <div class="status-selector-header">
+                            <span class="status-selector-label"><i class="bi bi-tags me-1"></i>Categorias de Status</span>
+                            <span class="status-resumo-pill" id="statusResumoPill">
+                                <i class="bi bi-check2-all"></i>
+                                <span id="statusResumoTexto">Todos incluídos</span>
+                            </span>
+                        </div>
+
+                        <div class="status-chips-row" id="statusGrid">
+                            <!-- Chip "Todos" -->
+                            <label class="schip schip-todos" id="chipTodos" title="Selecionar todos os status">
+                                <span class="schip-dot"></span>
+                                <i class="bi bi-check2-all schip-check"></i>
+                                Todos
+                            </label>
+
+                            {% set status_selecionados = filtros.get('status_list', []) %}
+                            {% for valor, label in status_opcoes %}
+                            {% set icons = {'agendada':'bi-clock','em_transito':'bi-truck','retornado':'bi-house-check','cancelado':'bi-x-circle','finalizado':'bi-check-circle'} %}
+                            <label class="schip schip-{{ valor }}" data-valor="{{ valor }}" title="{{ label }}">
+                                <span class="schip-dot"></span>
+                                <i class="bi {{ icons.get(valor, 'bi-circle') }} schip-check"></i>
+                                <input type="checkbox" name="status[]" value="{{ valor }}"
+                                       {{ 'checked' if valor in status_selecionados }}>
+                                {{ label }}
+                            </label>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Barra de progresso visual -->
+                        <div class="status-progress-bar">
+                            <div class="status-progress-fill" id="statusProgressFill" style="width:100%"></div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="status_todos" id="statusTodosInput"
+                           value="{{ filtros.get('status_todos', '1') }}">
                 </div>
             </div>
 
@@ -170,5 +336,76 @@
 function setFormato(fmt) {
     document.getElementById('formatoInput').value = fmt;
 }
+
+(function() {
+    const chips = document.querySelectorAll('.schip[data-valor]');
+    const chipTodos = document.getElementById('chipTodos');
+    const todosInput = document.getElementById('statusTodosInput');
+    const resumoPill = document.getElementById('statusResumoPill');
+    const resumoTexto = document.getElementById('statusResumoTexto');
+    const progressFill = document.getElementById('statusProgressFill');
+    const totalChips = chips.length;
+
+    const LABELS = {
+        agendada: 'Agendada', em_transito: 'Em Trânsito',
+        retornado: 'Retornado', cancelado: 'Cancelado', finalizado: 'Finalizado'
+    };
+
+    function getChecked() {
+        return [...chips].filter(c => c.querySelector('input').checked);
+    }
+
+    function atualizarUI() {
+        const marcados = getChecked();
+        const qtd = marcados.length;
+        const todos = qtd === 0 || qtd === totalChips;
+
+        // Chip "Todos"
+        chipTodos.classList.toggle('active', todos);
+
+        // Chips individuais — adiciona classe active e mostra ícone de check
+        chips.forEach(chip => {
+            const checked = chip.querySelector('input').checked;
+            chip.classList.toggle('active', checked);
+        });
+
+        // Pill de resumo
+        if (todos) {
+            resumoPill.classList.remove('tem-filtro');
+            resumoTexto.textContent = 'Todos incluídos';
+        } else if (qtd === 1) {
+            resumoPill.classList.add('tem-filtro');
+            resumoTexto.textContent = LABELS[marcados[0].dataset.valor];
+        } else {
+            resumoPill.classList.add('tem-filtro');
+            resumoTexto.textContent = `${qtd} selecionados`;
+        }
+
+        // Barra de progresso
+        const pct = todos ? 100 : (qtd / totalChips) * 100;
+        progressFill.style.width = pct + '%';
+
+        // Input hidden
+        todosInput.value = todos ? '1' : '0';
+    }
+
+    // Clique em "Todos"
+    chipTodos.addEventListener('click', function() {
+        chips.forEach(chip => chip.querySelector('input').checked = false);
+        atualizarUI();
+    });
+
+    // Clique em chip individual
+    chips.forEach(chip => {
+        chip.addEventListener('click', function() {
+            const cb = this.querySelector('input');
+            cb.checked = !cb.checked;
+            atualizarUI();
+        });
+    });
+
+    // Estado inicial
+    atualizarUI();
+})();
 </script>
 {% endblock %}

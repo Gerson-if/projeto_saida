@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block title %}Motivos de Cancelamento — Admin{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h4 class="mb-0 fw-bold">
+        <i class="bi bi-x-octagon me-2" style="color:var(--cor-secundaria);"></i>
+        Motivos de Cancelamento
+    </h4>
+    <small class="text-muted">Configure os motivos disponíveis para o usuário selecionar ao cancelar uma saída</small>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h6 class="mb-0 fw-semibold"><i class="bi bi-list-check me-2"></i>Motivos Cadastrados</h6>
+                <span class="badge bg-secondary">{{ motivos|length }}</span>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.salvar_motivos') }}" id="formMotivos">
+
+                    {% if motivos %}
+                    <div class="d-flex flex-column gap-2 mb-4" id="listaMotivos">
+                        {% for m in motivos %}
+                        <div class="motivo-row d-flex align-items-center gap-2 p-2 border rounded-3" style="background:{% if m.ativo %}#fff{% else %}#f8f9fa{% endif %};">
+                            <input type="hidden" name="motivo_id" value="{{ m.id }}">
+
+                            <!-- Checkbox ativo -->
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox"
+                                       name="motivo_ativo" value="{{ m.id }}"
+                                       {% if m.ativo %}checked{% endif %}
+                                       title="Ativo/Inativo">
+                            </div>
+
+                            <!-- Texto -->
+                            <input type="text" name="motivo_texto" class="form-control form-control-sm"
+                                   value="{{ m.texto }}" maxlength="150" required
+                                   placeholder="Texto do motivo..." style="flex:1;">
+
+                            <!-- Ordem -->
+                            <input type="number" name="motivo_ordem" class="form-control form-control-sm"
+                                   value="{{ m.ordem }}" min="0" max="99" style="width:60px;"
+                                   title="Ordem de exibição">
+
+                            <!-- Excluir -->
+                            <button type="button" class="btn btn-sm btn-outline-danger rounded-2 px-2"
+                                    onclick="marcarExcluir(this, {{ m.id }})"
+                                    title="Remover este motivo">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4 mb-4">
+                        <i class="bi bi-inbox fs-2 d-block mb-2 opacity-40"></i>
+                        Nenhum motivo cadastrado ainda.
+                    </div>
+                    {% endif %}
+
+                    <!-- Novos motivos -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-secondary">
+                            <i class="bi bi-plus-circle me-1"></i>Adicionar novos motivos
+                        </label>
+                        <div id="novosMotivos" class="d-flex flex-column gap-2"></div>
+                        <button type="button" class="btn btn-outline-primary btn-sm rounded-2 mt-2"
+                                onclick="adicionarLinha()">
+                            <i class="bi bi-plus me-1"></i>Novo motivo
+                        </button>
+                    </div>
+
+                    <hr class="my-3">
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary rounded-3 px-4">
+                            <i class="bi bi-check-lg me-1"></i>Salvar Todos
+                        </button>
+                        <a href="{{ url_for('admin.dashboard') }}" class="btn btn-light rounded-3 px-4">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coluna de dicas -->
+    <div class="col-lg-4">
+        <div class="card border-0" style="background:#f8fafc;">
+            <div class="card-body">
+                <h6 class="fw-semibold mb-3"><i class="bi bi-lightbulb text-warning me-2"></i>Como funciona</h6>
+                <ul class="list-unstyled d-flex flex-column gap-3" style="font-size:0.85rem;color:#475569;">
+                    <li class="d-flex gap-2">
+                        <i class="bi bi-check-circle-fill text-success mt-1 flex-shrink-0"></i>
+                        <span>Os motivos ativos aparecem como opções de seleção quando o usuário cancela uma saída.</span>
+                    </li>
+                    <li class="d-flex gap-2">
+                        <i class="bi bi-sort-numeric-down text-primary mt-1 flex-shrink-0"></i>
+                        <span>O campo <strong>Ordem</strong> define a sequência de exibição (menor número = primeiro).</span>
+                    </li>
+                    <li class="d-flex gap-2">
+                        <i class="bi bi-toggle-off text-secondary mt-1 flex-shrink-0"></i>
+                        <span>Desative um motivo sem excluí-lo para preservar o histórico dos cancelamentos já realizados.</span>
+                    </li>
+                    <li class="d-flex gap-2">
+                        <i class="bi bi-pencil-square text-warning mt-1 flex-shrink-0"></i>
+                        <span>O usuário ainda pode incluir uma <strong>observação curta</strong> (até 200 caracteres) além do motivo selecionado.</span>
+                    </li>
+                </ul>
+
+                {% if motivos %}
+                <hr>
+                <div class="d-flex flex-column gap-1" style="font-size:0.82rem;">
+                    <strong class="text-secondary">Motivos ativos:</strong>
+                    {% for m in motivos if m.ativo %}
+                    <span class="badge bg-light text-dark border px-2 py-1 text-start fw-normal">{{ m.texto }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Hidden inputs para marcar exclusão
+const excluirIds = new Set();
+
+function marcarExcluir(btn, id) {
+    const row = btn.closest('.motivo-row');
+    excluirIds.add(id);
+
+    // Remove visualmente com animação
+    row.style.transition = 'opacity 0.3s, transform 0.3s';
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(20px)';
+    setTimeout(() => row.remove(), 300);
+
+    // Cria hidden input para enviar o id a excluir
+    const form = document.getElementById('formMotivos');
+    const inp = document.createElement('input');
+    inp.type = 'hidden';
+    inp.name = 'motivo_excluir';
+    inp.value = id;
+    form.appendChild(inp);
+}
+
+let linhaIdx = 0;
+function adicionarLinha() {
+    linhaIdx++;
+    const div = document.createElement('div');
+    div.className = 'd-flex align-items-center gap-2 p-2 border rounded-3 novo-motivo-row';
+    div.style.background = '#f0f9ff';
+    div.innerHTML = `
+        <i class="bi bi-plus-circle text-primary flex-shrink-0"></i>
+        <input type="text" name="novo_texto" class="form-control form-control-sm"
+               placeholder="Digite o motivo..." maxlength="150" required style="flex:1;" autofocus>
+        <input type="number" name="nova_ordem" class="form-control form-control-sm"
+               value="${linhaIdx * 10}" min="0" max="99" style="width:60px;" title="Ordem">
+        <button type="button" class="btn btn-sm btn-outline-secondary rounded-2 px-2"
+                onclick="this.closest('.novo-motivo-row').remove()">
+            <i class="bi bi-x"></i>
+        </button>
+    `;
+    document.getElementById('novosMotivos').appendChild(div);
+    div.querySelector('input[name="novo_texto"]').focus();
+}
+</script>
+{% endblock %}

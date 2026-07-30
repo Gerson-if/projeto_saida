@@ -15,7 +15,7 @@ import click
 from flask.cli import with_appcontext
 
 from app import db
-from app.models import ConfigSistema, Registro, StatusSaida, Subunidade, TipoUsuario, Usuario
+from app.models import ConfigSistema, MotivoCancelamento, Registro, StatusSaida, Subunidade, TipoUsuario, Usuario
 
 
 def register_commands(app) -> None:
@@ -43,6 +43,18 @@ def register_commands(app) -> None:
         for chave, valor, desc in defaults:
             if not ConfigSistema.query.filter_by(chave=chave).first():
                 db.session.add(ConfigSistema(chave=chave, valor=valor, descricao=desc))
+
+        # Motivos de cancelamento padrão
+        motivos_padrao = [
+            ("Desistência pessoal", 1),
+            ("Problema de saúde", 2),
+            ("Serviço imprevisto na unidade", 3),
+            ("Problema no transporte", 4),
+            ("Outros", 99),
+        ]
+        for texto, ordem in motivos_padrao:
+            if not MotivoCancelamento.query.filter_by(texto=texto).first():
+                db.session.add(MotivoCancelamento(texto=texto, ativo=True, ordem=ordem))
 
         db.session.commit()
         click.echo("✅ Banco de dados inicializado com configurações padrão.")

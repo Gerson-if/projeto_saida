@@ -20,7 +20,7 @@ A sequência recomendada de instalação é:
 8. Executar os comandos de inicialização do banco de dados.
 9. Iniciar a aplicação.
 
-> **Importante:** O banco de dados deve existir antes da execução dos comandos `flask init-db` ou `flask db upgrade`. Caso contrário, ocorrerá erro de conexão informando que o banco de dados não foi encontrado.
+> **Importante: A configuração padrão do projeto utiliza SQLite, que é criado automaticamente durante a inicialização. Caso deseje utilizar MariaDB/MySQL, será necessário criar previamente o banco de dados antes de executar flask init-db ou flask db upgrade. Caso contrário, a aplicação não conseguirá estabelecer conexão com o banco informado.
 
 
 Após concluir essas etapas, siga as instruções de instalação e execução descritas nas próximas seções deste README.
@@ -62,8 +62,8 @@ Além disso, o processo de instalação foi atualizado com orientações para co
 ### 1. Clone e configure o ambiente
 
 ```bash
-git clone <repo>
-cd sistema_saida
+git clone https://github.com/Gerson-if/projeto_saida.git
+cd projeto_saida
 python -m venv venv
 source venv/bin/activate        # Linux/Mac
 venv\Scripts\activate           # Windows

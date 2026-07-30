@@ -66,17 +66,38 @@ class Subunidade(db.Model):
     ativa        = db.Column(db.Boolean, default=True, nullable=False)
     data_criacao = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    # lazy="select" (padrão) é mais seguro do que "dynamic" para contagens
-    # pequenas e evita erros ao fechar a sessão fora de contexto.
     usuarios = db.relationship("Usuario", backref="subunidade", lazy="select")
 
     @property
     def total_usuarios(self) -> int:
-        """Quantidade de usuários vinculados (ativo ou não)."""
         return len(self.usuarios)
 
     def __repr__(self) -> str:
         return f"<Subunidade {self.nome}>"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Modelo: MotivoCancelamento
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MotivoCancelamento(db.Model):
+    """Motivos de cancelamento configuráveis pelo super-usuário/admin."""
+
+    __tablename__ = "motivos_cancelamento"
+
+    id     = db.Column(db.Integer, primary_key=True)
+    texto  = db.Column(db.String(150), nullable=False)
+    ativo  = db.Column(db.Boolean, default=True, nullable=False)
+    ordem  = db.Column(db.Integer, default=0, nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<MotivoCancelamento {self.texto!r}>"
+
+    @staticmethod
+    def listar_ativos():
+        return MotivoCancelamento.query.filter_by(ativo=True).order_by(
+            MotivoCancelamento.ordem, MotivoCancelamento.id
+        ).all()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -104,6 +125,9 @@ class Usuario(UserMixin, db.Model):
         nullable=True,
         index=True,
     )
+    # Dados não-críticos editáveis pelo próprio usuário
+    telefone      = db.Column(db.String(20), nullable=True)
+    email         = db.Column(db.String(120), nullable=True)
 
     registros = db.relationship(
         "Registro",
@@ -161,8 +185,9 @@ class Registro(db.Model):
     )
     status_atualizado_em = db.Column(db.DateTime, nullable=True)
 
-    # Campos de cancelamento
-    motivo_cancelamento  = db.Column(db.String(500), nullable=True)
+    # Campos de cancelamento — motivo agora é selecionado de uma lista
+    motivo_cancelamento  = db.Column(db.String(150), nullable=True)   # texto do motivo selecionado
+    obs_cancelamento     = db.Column(db.String(200), nullable=True)   # observação opcional curta
     data_cancelamento    = db.Column(db.DateTime, nullable=True)
 
     @property
@@ -175,7 +200,6 @@ class Registro(db.Model):
 
     @property
     def editavel(self) -> bool:
-        """Pode ser editado/cancelado enquanto a data_retorno não passou."""
         if self.status in (StatusSaida.CANCELADO, StatusSaida.FINALIZADO):
             return False
         if self.data_retorno and self.data_retorno.date() < date.today():
@@ -231,7 +255,6 @@ class ConfigSistema(db.Model):
 
     @staticmethod
     def set(chave: str, valor: str) -> None:
-        """Upsert de uma chave de configuração."""
         config = ConfigSistema.query.filter_by(chave=chave).first()
         if config:
             config.valor = valor

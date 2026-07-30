@@ -1,0 +1,345 @@
+{% extends 'base.html' %}
+{% block title %}Meu Perfil{% endblock %}
+
+{% block extra_css %}
+<style>
+.avatar-wrap {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    margin: 0 auto;
+}
+.avatar-wrap img, .avatar-placeholder {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #e2e8f0;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+.avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--cor-primaria);
+    color: #fff;
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+.avatar-edit-btn {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--cor-secundaria);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    transition: transform 0.18s;
+    font-size: 0.8rem;
+}
+.avatar-edit-btn:hover { transform: scale(1.1); }
+.card-perfil {
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+    background: #fff;
+}
+.info-badge {
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.83rem;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.info-badge i { color: var(--cor-secundaria); font-size: 1rem; }
+.nav-tabs-perfil .nav-link {
+    color: #64748b;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+.nav-tabs-perfil .nav-link.active {
+    color: var(--cor-primaria);
+    border-bottom-color: var(--cor-primaria);
+    background: transparent;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h4 class="mb-0 fw-bold" style="color:#0f172a;">
+        <i class="bi bi-person-circle me-2" style="color:var(--cor-secundaria);"></i>
+        Meu Perfil
+    </h4>
+    <small class="text-muted">Atualize sua foto e informações pessoais</small>
+</div>
+
+<div class="row g-4">
+    <!-- Coluna esquerda: avatar + dados fixos -->
+    <div class="col-lg-4">
+        <div class="card-perfil p-4 text-center">
+            <!-- Avatar com botão de troca -->
+            <div class="avatar-wrap mb-3">
+                {% if current_user.foto %}
+                    <img id="avatarPreview" src="{{ url_for('static', filename='uploads/' + current_user.foto) }}" alt="Foto">
+                {% else %}
+                    <div class="avatar-placeholder" id="avatarPlaceholder">{{ current_user.nome[0].upper() }}</div>
+                    <img id="avatarPreview" src="" alt="Foto" class="d-none">
+                {% endif %}
+                <label class="avatar-edit-btn" for="fotoInput" title="Trocar foto">
+                    <i class="bi bi-camera-fill"></i>
+                </label>
+            </div>
+
+            <h5 class="fw-bold mb-0" style="color:#1e293b;">{{ current_user.nome }}</h5>
+            <small class="text-muted">{{ 'Administrador' if current_user.is_admin else 'Usuário' }}</small>
+
+            {% if current_user.subunidade %}
+            <div class="mt-2">
+                <span class="badge px-3 py-1" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;font-size:0.8rem;">
+                    <i class="bi bi-building me-1"></i>{{ current_user.subunidade.nome }}
+                </span>
+            </div>
+            {% endif %}
+
+            <!-- Dados não editáveis -->
+            <div class="mt-4 text-start d-flex flex-column gap-2">
+                <div class="info-badge">
+                    <i class="bi bi-person-badge"></i>
+                    <div>
+                        <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;">CPF / Identificação</div>
+                        <strong style="color:#1e293b;">{{ current_user.cpf }}</strong>
+                    </div>
+                </div>
+                <div class="info-badge">
+                    <i class="bi bi-calendar3"></i>
+                    <div>
+                        <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;">Membro desde</div>
+                        <strong style="color:#1e293b;">{{ current_user.data_criacao.strftime('%d/%m/%Y') }}</strong>
+                    </div>
+                </div>
+                {% if current_user.telefone %}
+                <div class="info-badge">
+                    <i class="bi bi-telephone"></i>
+                    <div>
+                        <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;">Telefone</div>
+                        <strong style="color:#1e293b;">{{ current_user.telefone }}</strong>
+                    </div>
+                </div>
+                {% endif %}
+                {% if current_user.email %}
+                <div class="info-badge">
+                    <i class="bi bi-envelope"></i>
+                    <div>
+                        <div style="font-size:0.7rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;">E-mail</div>
+                        <strong style="color:#1e293b;">{{ current_user.email }}</strong>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Coluna direita: formulários em abas -->
+    <div class="col-lg-8">
+        <div class="card-perfil">
+            <ul class="nav nav-tabs-perfil border-bottom px-3 pt-2" id="perfilTabs">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabDados">
+                        <i class="bi bi-pencil-square me-1"></i>Dados e Foto
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSenha">
+                        <i class="bi bi-lock me-1"></i>Alterar Senha
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content p-4">
+                <!-- Aba: Dados e Foto -->
+                <div class="tab-pane fade show active" id="tabDados">
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="acao" value="dados">
+                        <input type="hidden" name="remover_foto" id="removerFotoInput" value="">
+                        <input type="file" id="fotoInput" name="foto" accept="image/png,image/jpeg,image/gif,image/webp"
+                               class="d-none" onchange="previewFoto(this)">
+
+                        <!-- Preview da foto selecionada -->
+                        <div id="fotoPreviewBox" class="mb-4 p-3 border rounded-3 d-none" style="background:#f0f9ff;border-color:#bee3f8!important;">
+                            <div class="d-flex align-items-center gap-3">
+                                <img id="fotoPreviewImg" src="" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #93c5fd;">
+                                <div class="flex-grow-1">
+                                    <div style="font-size:0.83rem;font-weight:600;color:#1e40af;">Nova foto selecionada</div>
+                                    <div class="text-muted" style="font-size:0.75rem;">Clique em Salvar para confirmar</div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-2" onclick="cancelarFoto()">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        {% if current_user.foto %}
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-sm btn-outline-danger rounded-2" onclick="removerFoto()">
+                                <i class="bi bi-trash me-1"></i>Remover foto atual
+                            </button>
+                            <span id="removerFotoAviso" class="text-danger ms-2 d-none" style="font-size:0.8rem;">
+                                <i class="bi bi-exclamation-circle me-1"></i>Foto será removida ao salvar
+                            </span>
+                        </div>
+                        {% endif %}
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Telefone de contato</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-telephone"></i></span>
+                                    <input type="text" name="telefone" class="form-control"
+                                           value="{{ current_user.telefone or '' }}"
+                                           placeholder="(XX) XXXXX-XXXX" maxlength="20">
+                                </div>
+                                <div class="form-text">Usado nos registros de saída como contato padrão.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">E-mail</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                    <input type="email" name="email" class="form-control"
+                                           value="{{ current_user.email or '' }}"
+                                           placeholder="seu@email.com" maxlength="120">
+                                </div>
+                                <div class="form-text">Opcional, apenas para fins de contato.</div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-light border mt-4 mb-3 rounded-3 py-2 px-3" style="font-size:0.82rem;color:#64748b;">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Nome, CPF, tipo e subunidade só podem ser alterados pelo administrador.
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary rounded-3 px-4">
+                                <i class="bi bi-check-lg me-1"></i>Salvar Alterações
+                            </button>
+                            <a href="{{ url_for('user.dashboard') }}" class="btn btn-light rounded-3 px-4">Cancelar</a>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Aba: Alterar Senha -->
+                <div class="tab-pane fade" id="tabSenha">
+                    <form method="POST">
+                        <input type="hidden" name="acao" value="senha">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Senha atual <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                                <input type="password" name="senha_atual" class="form-control" required placeholder="••••••••">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Nova senha <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                                <input type="password" name="nova_senha" id="novaSenha" class="form-control" required
+                                       placeholder="Mínimo 4 caracteres" minlength="4" maxlength="72">
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold small">Confirmar nova senha <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+                                <input type="password" name="confirmar_senha" id="confirmarSenha" class="form-control" required
+                                       placeholder="Repita a nova senha" minlength="4" maxlength="72">
+                            </div>
+                            <div id="senhaMatch" class="form-text"></div>
+                        </div>
+
+                        <button type="submit" class="btn btn-warning rounded-3 px-4 fw-semibold">
+                            <i class="bi bi-shield-lock me-1"></i>Alterar Senha
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Foto ──────────────────────────────────────────────────────────────────
+function previewFoto(input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const preview = document.getElementById('avatarPreview');
+        const placeholder = document.getElementById('avatarPlaceholder');
+        const box = document.getElementById('fotoPreviewBox');
+        const img = document.getElementById('fotoPreviewImg');
+        const removerInput = document.getElementById('removerFotoInput');
+        preview.src = e.target.result;
+        preview.classList.remove('d-none');
+        if (placeholder) placeholder.classList.add('d-none');
+        img.src = e.target.result;
+        box.classList.remove('d-none');
+        removerInput.value = '';
+        document.getElementById('removerFotoAviso') && (document.getElementById('removerFotoAviso').classList.add('d-none'));
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
+function cancelarFoto() {
+    document.getElementById('fotoInput').value = '';
+    document.getElementById('fotoPreviewBox').classList.add('d-none');
+    const preview = document.getElementById('avatarPreview');
+    const placeholder = document.getElementById('avatarPlaceholder');
+    {% if not current_user.foto %}
+    preview.classList.add('d-none');
+    if (placeholder) placeholder.classList.remove('d-none');
+    {% endif %}
+}
+
+function removerFoto() {
+    document.getElementById('removerFotoInput').value = '1';
+    const aviso = document.getElementById('removerFotoAviso');
+    if (aviso) aviso.classList.remove('d-none');
+    const preview = document.getElementById('avatarPreview');
+    const placeholder = document.getElementById('avatarPlaceholder');
+    if (placeholder) { placeholder.classList.remove('d-none'); preview.classList.add('d-none'); }
+}
+
+// ── Validação de senha ────────────────────────────────────────────────────
+const novaSenha = document.getElementById('novaSenha');
+const confirmarSenha = document.getElementById('confirmarSenha');
+const senhaMatch = document.getElementById('senhaMatch');
+
+function verificarSenhas() {
+    if (!confirmarSenha.value) { senhaMatch.textContent = ''; return; }
+    if (novaSenha.value === confirmarSenha.value) {
+        senhaMatch.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Senhas coincidem</span>';
+    } else {
+        senhaMatch.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Senhas não coincidem</span>';
+    }
+}
+if (novaSenha) novaSenha.addEventListener('input', verificarSenhas);
+if (confirmarSenha) confirmarSenha.addEventListener('input', verificarSenhas);
+</script>
+{% endblock %}
+<!-- foi removido a seção recentes de perfil e ficou pedente sua implemnteção e outra template -->
