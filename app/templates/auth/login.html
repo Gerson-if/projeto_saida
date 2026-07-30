@@ -72,6 +72,20 @@
         }
         .login-wrapper { position: relative; z-index: 2; }
 
+        /* ── NOTIFICAÇÕES (toasts) — mesmo componente Bootstrap Toast
+           usado no resto do sistema (ver base.html), só reposicionado
+           para o topo central: numa tela de login sem barra lateral, um
+           aviso centralizado chama mais atenção do que um no canto. ── */
+        .toast-container-login {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            width: 92%;
+            max-width: 420px;
+        }
+
         /* ── ANIMAÇÃO DE ENTRADA DO CARD ── */
         .login-wrapper {
             width: 100%;
@@ -352,9 +366,25 @@
         <div class="login-bg-overlay" style="background:rgba(3,10,20,{{ overlay_pct / 100 }});"></div>
     {% endif %}
 
+    <div class="toast-container-login">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="toast align-items-center text-bg-{{ 'danger' if category in ('error', 'danger') else category }} border-0 show mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body d-flex align-items-center gap-2">
+                            <i class="bi bi-{% if category == 'success' %}check-circle-fill{% elif category in ('danger', 'error') %}exclamation-triangle-fill{% elif category == 'warning' %}exclamation-triangle-fill{% else %}info-circle-fill{% endif %}"></i>
+                            <span>{{ message }}</span>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar"></button>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endwith %}
+    </div>
+
     <div class="login-wrapper">
         <div class="login-card">
-            
+
             <div class="login-header">
                 {% if config_sistema.get('logo') %}
                     <img src="{{ url_for('static', filename='uploads/' + config_sistema.get('logo')) }}" class="login-logo" alt="Logo">
@@ -376,15 +406,6 @@
                     <span>{{ config_sistema.get('subtitulo') }}</span>
                 </div>
                 {% endif %}
-
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-danger d-flex align-items-center gap-2 mb-3" style="border-radius: 12px; font-size: 0.85rem; padding: 8px 12px;">
-                            <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
-                            <div>{{ message }}</div>
-                        </div>
-                    {% endfor %}
-                {% endwith %}
 
                 <form method="POST" novalidate>
                     <div class="form-group-custom">
@@ -431,6 +452,11 @@
 
     <script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
     <script>
+        // Mesmo padrão de auto-dismiss usado no resto do sistema (ver base.html).
+        document.querySelectorAll('.toast').forEach(function (el) {
+            new bootstrap.Toast(el, { delay: 5000 }).show();
+        });
+
         function toggleSenha() {
             const input = document.getElementById('senhaInput');
             const icon = document.getElementById('senhaIcon');
