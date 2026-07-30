@@ -466,7 +466,15 @@
             #temaIconAtual.tema-icone-animando { animation: none; }
         }
     </style>
+    {# Marcadores (não visíveis, não afetam nada) usados pela navegação
+       dinâmica (ver script no fim da página) para localizar e trocar só o
+       CSS específico de cada página dentro de <head> ao navegar por AJAX.
+       Sem isso, o CSS teria que ficar de fora da troca — e páginas com
+       estilo próprio (relatórios, dashboard, etc.) apareceriam com HTML
+       "puro", sem o visual esperado, depois de uma navegação pelo menu. #}
+    <meta name="extra-css-inicio">
     {% block extra_css %}{% endblock %}
+    <meta name="extra-css-fim">
 </head>
 <body>
 
@@ -922,6 +930,35 @@
             });
         }
 
+        function sincronizarExtraCss(doc) {
+            // Troca o conteúdo de <head> entre os marcadores <meta
+            // name="extra-css-inicio"> e <meta name="extra-css-fim"> pelo
+            // equivalente da página buscada — é aqui que vive o CSS
+            // específico de cada página (bloco "extra_css" de cada template). Sem isso,
+            // trocar só #page-content deixaria páginas com estilo próprio
+            // (relatórios, dashboards, etc.) com a aparência de "HTML puro"
+            // depois de uma navegação pelo menu, mesmo com o conteúdo certo.
+            const inicioAtual = document.head.querySelector('meta[name="extra-css-inicio"]');
+            const fimAtual = document.head.querySelector('meta[name="extra-css-fim"]');
+            const inicioNovo = doc.head && doc.head.querySelector('meta[name="extra-css-inicio"]');
+            const fimNovo = doc.head && doc.head.querySelector('meta[name="extra-css-fim"]');
+            if (!inicioAtual || !fimAtual || !inicioNovo || !fimNovo) return; // segurança: layout mudou, não mexe
+
+            // Remove tudo que está atualmente entre os marcadores.
+            while (inicioAtual.nextSibling && inicioAtual.nextSibling !== fimAtual) {
+                inicioAtual.nextSibling.remove();
+            }
+
+            // Insere cópias dos nós da página nova, na mesma posição.
+            let no = inicioNovo.nextSibling;
+            const fragmento = document.createDocumentFragment();
+            while (no && no !== fimNovo) {
+                fragmento.appendChild(document.importNode(no, true));
+                no = no.nextSibling;
+            }
+            inicioAtual.after(fragmento);
+        }
+
         function reexibirToastsFlash(novoToastContainer) {
             const atual = document.getElementById('toastContainer');
             if (!atual || !novoToastContainer) return;
@@ -961,6 +998,7 @@
                         return;
                     }
 
+                    sincronizarExtraCss(doc);
                     pageContent.innerHTML = novoConteudo.innerHTML;
                     reexibirToastsFlash(doc.getElementById('toastContainer'));
                     reexecutarScriptsDaPagina(doc.getElementById('extra-js-container'));
