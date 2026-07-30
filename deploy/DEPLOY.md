@@ -237,11 +237,36 @@ global, de qualquer diretório) ou `sudo bash /opt/projeto_saida/deploy/install.
 | Exportar para migrar de VM | `sudo projeto-saida --action exportar` |
 | Importar snapshot de outra VM | `sudo projeto-saida --action importar --arquivo /caminho/arquivo.tar.gz` |
 | Diagnóstico de saúde | `sudo projeto-saida --action diagnostico` |
+| **Ver logs (app, Nginx, systemd) + gerar pacote de diagnóstico** | `sudo projeto-saida --action logs` |
 | Ver status do serviço | `sudo systemctl status projeto-saida` |
 | Reiniciar o serviço | `sudo systemctl restart projeto-saida` |
 | Ver logs em tempo real | `journalctl -u projeto-saida -f` |
-| Log da aplicação | `instance/logs/app.log` (rotativo, 5×1MB automático) |
+| Log da aplicação | `instance/logs/app.log` (rotativo, 8×2MB automático) |
 | Criar outro admin | `flask create-admin "Nome" cpf senha` (dentro do venv, com `.env` carregado) |
+
+### Ação `logs` — investigar erros e pedir ajuda
+
+`sudo projeto-saida --action logs` abre um menu para consultar, num só
+lugar: as últimas linhas (ou acompanhar em tempo real) do log da
+aplicação e do serviço systemd, os logs de acesso/erro do Nginx, e uma
+busca só pelos erros recentes em todos eles.
+
+A opção mais útil quando algo dá errado e você precisa de ajuda (sua ou
+de outra pessoa) para investigar é **"Gerar pacote de diagnóstico"**: ela
+junta, num único `.tar.gz` em `/tmp/`, a saída de `flask diagnosticar`,
+`nginx -T` (a configuração do Nginx efetivamente carregada — importante
+porque um site com HTTPS tem mais de um bloco `server{}`, e um problema
+pode estar em só um deles), o status do serviço, o journal recente e as
+últimas linhas de cada log. **Nunca inclui** o `.env` (que tem a
+`SECRET_KEY` e a senha do banco) nem a chave privada do certificado —
+só o que ajuda a diagnosticar, nada sensível. Basta enviar esse arquivo
+para quem for ajudar a investigar.
+
+Cada linha do log da aplicação (`instance/logs/app.log`) também vem com
+um id de correlação (`req=...`), o IP, o usuário e a rota da requisição —
+o mesmo id aparece no cabeçalho de resposta `X-Request-ID`, então dá pra
+localizar exatamente a linha certa mesmo sem saber o horário exato do
+problema.
 
 Rodar qualquer ação de novo é seguro — o script detecta o que já existe
 e não sobrescreve/duplica nada às cegas.

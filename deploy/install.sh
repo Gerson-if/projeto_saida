@@ -32,6 +32,9 @@
 #   importar      Restaura, nesta instalação, um arquivo gerado por 'exportar'
 #                 em outra VM (--arquivo /caminho/migracao-xxx.tar.gz)
 #   diagnostico   Roda verificações de saúde da instalação
+#   logs          Consulta os logs do sistema (app, Nginx, systemd) — inclui
+#                 gerar um pacote de diagnóstico para enviar a quem for
+#                 ajudar a investigar um problema
 #
 # Rodar de novo é seguro (idempotente na maior parte dos passos) — útil
 # se algo falhar no meio e você quiser continuar de onde parou.
@@ -388,11 +391,12 @@ O que você quer fazer?
   5) Migrar para outra VM — exportar um snapshot desta instalação
   6) Migrar para outra VM — importar um snapshot de outra instalação
   7) Diagnóstico (verifica se está tudo saudável)
-  8) Sair
+  8) Ver logs do sistema (útil para investigar erros)
+  9) Sair
 
 EOF
     while true; do
-        ask "Escolha uma opção (1-8)" "1"
+        ask "Escolha uma opção (1-9)" "1"
         case "$REPLY_VAL" in
             1) ACTION="install"; return ;;
             2) ACTION="ssl"; return ;;
@@ -401,8 +405,9 @@ EOF
             5) ACTION="exportar"; return ;;
             6) ACTION="importar"; return ;;
             7) ACTION="diagnostico"; return ;;
-            8) ACTION="sair"; return ;;
-            *) warn "Opção inválida — digite um número de 1 a 8." ;;
+            8) ACTION="logs"; return ;;
+            9) ACTION="sair"; return ;;
+            *) warn "Opção inválida — digite um número de 1 a 9." ;;
         esac
     done
 }
@@ -877,6 +882,13 @@ SQL
         none) ok "Seguindo sem HTTPS, conforme escolhido (só http://$DOMAIN)." ;;
     esac
 
+    # Rede de segurança: depois de qualquer modo de HTTPS (o Certbot ou o
+    # certificado autoassinado podem ter criado um segundo bloco server{}
+    # para a porta 443), garante que TODOS os blocos do arquivo tenham o
+    # limite de upload e a página amigável de erro 413 — não só o bloco
+    # original da porta 80. Idempotente; não faz nada se já estiver tudo ok.
+    sync_nginx_upload_limit
+
     # ── 11. Backup automático (se escolhido) ───────────────────────────────
     if [ "$QUER_BACKUP" = "s" ]; then
         setup_backup
@@ -923,6 +935,17 @@ emit_selfsigned_cert() {
     warn "O navegador vai avisar 'conexão não é segura' na primeira visita —"
     warn "isso é esperado para um certificado autoassinado, não é um erro."
 
+    # Lido do MESMO template usado pelo bloco HTTP (nginx.conf), em vez de
+    # cravar "120M" aqui na mão — evita que este bloco HTTPS fique
+    # desatualizado se o valor do template mudar no futuro (foi exatamente
+    # por um valor cravado à parte, neste mesmo bloco, que o limite de
+    # upload de vídeo de fundo do login ficava no padrão do Nginx de 1M
+    # mesmo com tudo "OK" no bloco HTTP: este bloco 443 autoassinado era
+    # gerado do zero, sem client_max_body_size nem error_page 413 nenhum).
+    local valor_upload
+    valor_upload="$(grep -oP 'client_max_body_size\s+\K[^;]+' "$INSTALL_DIR/deploy/nginx.conf" 2>/dev/null | head -n1 | tr -d ' ')"
+    [ -z "$valor_upload" ] && valor_upload="120M"
+
     mkdir -p /etc/ssl/projeto-saida
 
     # SAN correto (IP ou DNS) é obrigatório — navegadores modernos (Chrome,
@@ -951,6 +974,14 @@ emit_selfsigned_cert() {
     ok "Certificado autoassinado gerado (válido por ~2 anos, SAN=$DOMAIN)"
 
     if ! grep -q "listen 443 ssl" /etc/nginx/sites-available/projeto-saida 2>/dev/null; then
+        # IMPORTANTE: este bloco precisa das MESMAS proteções de upload do
+        # bloco HTTP (client_max_body_size + error_page 413 amigável) — é
+        # este bloco 443 quem recebe o tráfego real do navegador quando o
+        # site tem HTTPS. Sem isso, uploads acima de 1M (o padrão do
+        # Nginx) batem na página crua e genérica do Nginx, mesmo com o
+        # bloco HTTP corretamente configurado (o que confunde muito o
+        # diagnóstico, já que 'nginx -T' mostra o valor certo... só que
+        # no bloco errado).
         cat >> /etc/nginx/sites-available/projeto-saida <<EOF
 
 server {
@@ -959,7 +990,36 @@ server {
     server_name $DOMAIN;
     ssl_certificate     /etc/ssl/projeto-saida/selfsigned.crt;
     ssl_certificate_key /etc/ssl/projeto-saida/selfsigned.key;
-    location / { proxy_pass http://127.0.0.1:8000; proxy_set_header Host \$host; }
+
+    client_max_body_size ${valor_upload};
+
+    error_page 413 /erro-upload-grande.html;
+    location = /erro-upload-grande.html {
+        internal;
+        alias $INSTALL_DIR/deploy/static-error-pages/413.html;
+    }
+
+    access_log /var/log/nginx/projeto-saida.access.log;
+    error_log  /var/log/nginx/projeto-saida.error.log;
+
+    location /static/ {
+        alias $INSTALL_DIR/app/static/;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              \$host;
+        proxy_set_header X-Real-IP         \$remote_addr;
+        proxy_set_header X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Host  \$host;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout    60s;
+        proxy_read_timeout    60s;
+    }
 }
 EOF
     fi
@@ -1475,54 +1535,96 @@ install_dir = os.environ["INSTALL_DIR"]
 with open(site_conf, "r", encoding="utf-8") as f:
     conteudo = f.read()
 
-# 1) Ajusta o valor do limite de upload para o mesmo do template atual —
-# ou, se a diretiva nem existir ainda (instalação muito antiga, de antes
-# dela existir no template), INSERE uma nova logo após CADA "server_name
-# ...;" em vez de desistir. IMPORTANTE: sem contagem limitada — depois do
-# Certbot configurar HTTPS, o arquivo tem DOIS blocos server{} (um para a
-# porta 80, outro para a 443 que o Certbot cria, cada um com seu próprio
-# "server_name"), e é a porta 443 que recebe o tráfego real do navegador.
-# Corrigir só o PRIMEIRO bloco deixaria o segundo (o que realmente importa)
-# sem a diretiva, e o Nginx continuaria rejeitando uploads com o limite
-# padrão dele (1M) bem depois do administrador achar que já tinha
-# corrigido.
-if re.search(r"client_max_body_size\s+[^;]+;", conteudo):
-    conteudo = re.sub(r"client_max_body_size\s+[^;]+;", f"client_max_body_size {valor};", conteudo)
-else:
-    conteudo, n_insercao = re.subn(
-        r"(server_name\s+[^;]+;)",
-        lambda m: m.group(1) + f"\n\n    client_max_body_size {valor};",
-        conteudo,
-    )
-    if n_insercao == 0:
-        # Nem "server_name" foi encontrado — formato realmente fora do
-        # esperado (site configurado manualmente de um jeito muito
-        # diferente). Não arrisca inserir em lugar arbitrário.
-        raise SystemExit(1)
+# IMPORTANTE — corrigido depois de um caso real: um arquivo Nginx pode ter
+# MAIS DE UM bloco "server { ... }" (porta 80 original + porta 443 do
+# Certbot, ou porta 443 autoassinada gerada à parte por
+# emit_selfsigned_cert). Cada bloco precisa da diretiva "client_max_body_size"
+# e da página amigável de erro 413 DE FORMA INDEPENDENTE — não basta a
+# diretiva existir EM ALGUM LUGAR do arquivo. A versão anterior deste
+# script checava "a diretiva já existe no arquivo?" de forma global: se o
+# bloco da porta 80 já tinha o valor certo, o script concluía que estava
+# tudo certo e nunca notava que o bloco da porta 443 (o que realmente
+# recebe o tráfego do navegador, quando há HTTPS) não tinha NADA disso —
+# ficando com o limite padrão do Nginx (1M) e a página de erro crua, do
+# jeito mais silencioso possível: 'nginx -T' mostrava o valor certo (só
+# que no bloco errado), então o diagnóstico "parecia" OK.
+def encontrar_blocos_server(texto):
+    """Posições (início do 'server', fim do '}' de fechamento) de cada
+    bloco server{} de nível mais alto, usando contagem de chaves (regex
+    simples não dá conta por causa das chaves aninhadas de location{})."""
+    blocos = []
+    for m in re.finditer(r"^[ \t]*server\s*\{", texto, re.MULTILINE):
+        profundidade = 1
+        i = m.end()
+        while i < len(texto) and profundidade > 0:
+            if texto[i] == "{":
+                profundidade += 1
+            elif texto[i] == "}":
+                profundidade -= 1
+            i += 1
+        blocos.append((m.start(), i))
+    return blocos
 
-# 2) Garante a página amigável de erro 413 em CADA bloco server{} (mesmo
-# motivo do item 1 — o bloco HTTPS do Certbot também precisa da sua
-# própria diretiva "error_page 413 ..."; sem count ilimitado, só o
-# primeiro client_max_body_size encontrado ganharia o bloco de erro
-# amigável, e o outro continuaria mostrando a página crua e genérica do
-# próprio Nginx quando um upload excedesse o limite).
-if "erro-upload-grande.html" not in conteudo:
-    bloco = (
-        "\n    error_page 413 /erro-upload-grande.html;\n"
-        "    location = /erro-upload-grande.html {\n"
-        "        internal;\n"
-        f"        alias {install_dir}/deploy/static-error-pages/413.html;\n"
-        "    }\n"
-    )
-    conteudo, n = re.subn(
-        r"(client_max_body_size\s+[^;]+;)",
-        lambda m: m.group(1) + bloco,
-        conteudo,
-    )
-    if n == 0:
-        # Instalação muito antiga sem a diretiva — não arrisca inserir em
-        # lugar arbitrário; quem rodar 'diagnostico' depois vai ver o aviso.
-        raise SystemExit(1)
+blocos = encontrar_blocos_server(conteudo)
+if not blocos:
+    # Formato realmente fora do esperado (site configurado manualmente de
+    # um jeito muito diferente) — não arrisca mexer no arquivo.
+    raise SystemExit(1)
+
+bloco_erro413 = (
+    "\n    error_page 413 /erro-upload-grande.html;\n"
+    "    location = /erro-upload-grande.html {\n"
+    "        internal;\n"
+    f"        alias {install_dir}/deploy/static-error-pages/413.html;\n"
+    "    }\n"
+)
+
+# Processa de trás pra frente: inserir texto num bloco não pode invalidar
+# os índices (início, fim) dos blocos anteriores, que ainda não foram
+# tocados.
+novo_conteudo = conteudo
+algum_bloco_sem_server_name = False
+for inicio, fim in reversed(blocos):
+    trecho = novo_conteudo[inicio:fim]
+
+    # 1) client_max_body_size — ajusta o valor se já existir NESTE bloco,
+    # ou insere logo após "server_name ...;" DESTE bloco se faltar.
+    if re.search(r"client_max_body_size\s+[^;]+;", trecho):
+        trecho = re.sub(r"client_max_body_size\s+[^;]+;", f"client_max_body_size {valor};", trecho)
+    else:
+        trecho, n_insercao = re.subn(
+            r"(server_name\s+[^;]+;)",
+            lambda m: m.group(1) + f"\n\n    client_max_body_size {valor};",
+            trecho,
+            count=1,
+        )
+        if n_insercao == 0:
+            # Bloco sem "server_name" (formato incomum) — pula só este
+            # bloco, não desiste do arquivo inteiro.
+            algum_bloco_sem_server_name = True
+            novo_conteudo = novo_conteudo[:inicio] + trecho + novo_conteudo[fim:]
+            continue
+
+    # 2) Página amigável de erro 413 — mesma lógica, por bloco.
+    if "erro-upload-grande.html" not in trecho:
+        trecho, n = re.subn(
+            r"(client_max_body_size\s+[^;]+;)",
+            lambda m: m.group(1) + bloco_erro413,
+            trecho,
+            count=1,
+        )
+        if n == 0:
+            algum_bloco_sem_server_name = True
+
+    novo_conteudo = novo_conteudo[:inicio] + trecho + novo_conteudo[fim:]
+
+conteudo = novo_conteudo
+
+if algum_bloco_sem_server_name:
+    # Não é fatal — os blocos que puderam ser corrigidos já foram; só
+    # avisa que pelo menos um bloco ficou fora do padrão esperado.
+    import sys
+    print("aviso: pelo menos um bloco server{} não seguia o formato esperado e foi deixado como estava", file=sys.stderr)
 
 with open(site_conf, "w", encoding="utf-8") as f:
     f.write(conteudo)
@@ -1792,6 +1894,205 @@ cmd_update_fase2() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
+# AÇÃO: logs — consulta os logs do sistema
+# ─────────────────────────────────────────────────────────────────────────
+# Nasceu de uma investigação real que levou várias rodadas para resolver
+# (erro "413 Request Entity Too Large" que só acontecia num bloco Nginx
+# específico) — boa parte do tempo foi gasto pedindo ao administrador para
+# rodar, um de cada vez, vários comandos manuais de diagnóstico. Esta ação
+# reúne os lugares certos para olhar (log da aplicação, do systemd e do
+# Nginx) num só lugar, e sabe empacotar tudo de uma vez para quem for
+# ajudar a investigar (você mesmo depois, outro administrador, ou uma IA
+# assistente numa próxima conversa).
+_ps_log_app() { echo "$INSTALL_DIR/instance/logs/app.log"; }
+
+_ps_logs_tail_app() {
+    local n="${1:-200}" caminho
+    caminho="$(_ps_log_app)"
+    if [ -f "$caminho" ]; then
+        log "Últimas $n linhas de $caminho"
+        tail -n "$n" "$caminho"
+    else
+        warn "Ainda não existe log da aplicação em $caminho (o app já rodou desde a instalação?)."
+    fi
+}
+
+_ps_logs_follow_app() {
+    local caminho
+    caminho="$(_ps_log_app)"
+    [ -f "$caminho" ] || { warn "Ainda não existe log da aplicação em $caminho."; return; }
+    log "Seguindo $caminho (Ctrl+C para sair)"
+    # "|| true": o script roda com 'set -e' — sem isso, Ctrl+C (que faz o
+    # 'tail -f' sair com código de erro) derrubaria o instalador inteiro
+    # em vez de só voltar para este menu.
+    tail -n 50 -f "$caminho" || true
+}
+
+_ps_logs_tail_systemd() {
+    local n="${1:-200}"
+    log "Últimas $n linhas de 'journalctl -u projeto-saida'"
+    journalctl -u projeto-saida --no-pager -n "$n" || warn "Não consegui ler o journal do serviço 'projeto-saida'."
+}
+
+_ps_logs_follow_systemd() {
+    log "Seguindo 'journalctl -u projeto-saida -f' (Ctrl+C para sair)"
+    # "|| true" pelo mesmo motivo do _ps_logs_follow_app: não deixar o
+    # Ctrl+C do usuário derrubar o instalador inteiro (script roda com 'set -e').
+    journalctl -u projeto-saida -f || true
+}
+
+_ps_logs_tail_nginx() {
+    local n="${1:-100}" arq
+    for arq in /var/log/nginx/projeto-saida.access.log /var/log/nginx/projeto-saida.error.log; do
+        if [ -f "$arq" ]; then
+            log "Últimas $n linhas de $arq"
+            tail -n "$n" "$arq"
+            echo
+        else
+            warn "$arq não encontrado."
+        fi
+    done
+    echo "Atenção: quando é o PRÓPRIO Nginx quem recusa uma requisição (ex.: um"
+    echo "upload maior que 'client_max_body_size', com o Nginx respondendo 413"
+    echo "antes de chegar ao Flask), é só aqui que fica registrado — o log da"
+    echo "aplicação (opção do menu para o app) nunca chega a ver essa requisição."
+}
+
+_ps_logs_buscar_erros() {
+    local caminho
+    caminho="$(_ps_log_app)"
+    log "Procurando por ERROR/CRITICAL/Traceback e erros recentes"
+
+    if [ -f "$caminho" ]; then
+        echo "--- $caminho (log da aplicação) ---"
+        grep -nE "ERROR|CRITICAL|Traceback" "$caminho" | tail -n 100 || true
+    else
+        warn "Log da aplicação ainda não existe em $caminho."
+    fi
+
+    echo
+    echo "--- journalctl -u projeto-saida (últimas 24h, prioridade erro ou pior) ---"
+    # "|| warn ...": com 'set -e' ativo, checar "$?" numa linha separada
+    # depois de um pipeline NUNCA seria alcançado se o pipeline falhasse —
+    # o script já teria abortado antes. O tratamento tem que estar na
+    # própria linha do pipeline.
+    journalctl -u projeto-saida --no-pager --since "-24 hours" -p err 2>/dev/null | tail -n 100 \
+        || warn "Não consegui consultar o journal do serviço."
+
+    if [ -f /var/log/nginx/projeto-saida.error.log ]; then
+        echo
+        echo "--- /var/log/nginx/projeto-saida.error.log (últimas 100 linhas) ---"
+        tail -n 100 /var/log/nginx/projeto-saida.error.log
+    fi
+}
+
+_ps_logs_gerar_pacote() {
+    log "Gerando pacote de diagnóstico"
+    local carimbo tmp destino
+    carimbo="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo "sem-data")"
+    tmp="$(mktemp -d)"
+    destino="/tmp/projeto-saida-diagnostico-${carimbo}.tar.gz"
+
+    # Nenhum destes comandos pode derrubar o script inteiro se falhar (ex.:
+    # serviço parado, unidade inexistente, certbot ausente) — o script roda
+    # com 'set -e', então cada um precisa do próprio "|| true"/"|| echo...";
+    # um pacote de diagnóstico incompleto é sempre melhor que nenhum.
+    {
+        echo "=== uname -a ==="
+        uname -a
+        echo
+        echo "=== espaço em disco ==="
+        df -h "$INSTALL_DIR" 2>&1
+        echo
+        echo "=== memória ==="
+        free -h 2>&1
+        echo
+        echo "=== versão instalada (git) ==="
+        sudo -u "$SYS_USER" -H bash -c "cd '$INSTALL_DIR' && git log -1 --format='%H %ci %s'" 2>&1
+    } > "$tmp/00-resumo-sistema.txt" 2>&1 || true
+
+    run_as_app_user "flask diagnosticar" > "$tmp/01-flask-diagnosticar.txt" 2>&1 || true
+
+    systemctl --no-pager status projeto-saida > "$tmp/02-systemd-status.txt" 2>&1 || true
+    journalctl -u projeto-saida --no-pager -n 1000 > "$tmp/03-journal-app.txt" 2>&1 || true
+    journalctl -u nginx --no-pager -n 300 > "$tmp/04-journal-nginx.txt" 2>&1 || true
+
+    if [ -f "$(_ps_log_app)" ]; then
+        tail -n 2000 "$(_ps_log_app)" > "$tmp/05-app-log.txt" 2>&1 || true
+    fi
+    if [ -f /var/log/nginx/projeto-saida.access.log ]; then
+        tail -n 1000 /var/log/nginx/projeto-saida.access.log > "$tmp/06-nginx-access.txt" 2>&1 || true
+    fi
+    if [ -f /var/log/nginx/projeto-saida.error.log ]; then
+        tail -n 1000 /var/log/nginx/projeto-saida.error.log > "$tmp/07-nginx-error.txt" 2>&1 || true
+    fi
+
+    # "nginx -T" mostra a config efetivamente carregada (todos os blocos
+    # server{}, o que teria evitado boa parte de uma investigação passada
+    # em que um segundo bloco HTTPS estava com configuração diferente do
+    # primeiro) — não inclui segredos, só caminhos e diretivas.
+    nginx -T > "$tmp/08-nginx-T.txt" 2>&1 || true
+
+    # NUNCA inclui o .env (SECRET_KEY, senha do banco) nem a chave privada
+    # do certificado — só o que ajuda a investigar um erro, nada secreto.
+    if ! tar -C "$tmp" -czf "$destino" . 2>/tmp/ps_tar_err.log; then
+        err "Falha ao gerar o pacote de diagnóstico:"
+        tail -n 10 /tmp/ps_tar_err.log >&2 || true
+        rm -rf "$tmp"
+        return 1
+    fi
+    rm -rf "$tmp"
+
+    ok "Pacote gerado em: $destino"
+    echo "Envie esse arquivo para quem for te ajudar a investigar (ex.: anexe"
+    echo "numa conversa, ou copie para sua máquina com 'scp'). Ele NÃO contém"
+    echo "senhas, SECRET_KEY nem a chave privada do certificado HTTPS — só"
+    echo "logs e diagnósticos dos últimos eventos."
+}
+
+cmd_logs() {
+    banner
+    echo "Consulta os logs do sistema — ajuda a investigar um erro e a"
+    echo "compartilhar informação com quem for te ajudar a corrigi-lo."
+    echo
+    require_existing_install
+
+    while true; do
+        echo
+        cat <<EOF
+O que você quer ver?
+
+  1) Últimas linhas do log da aplicação
+  2) Seguir o log da aplicação em tempo real (Ctrl+C para sair)
+  3) Últimas linhas do serviço systemd (journalctl)
+  4) Seguir o serviço systemd em tempo real (Ctrl+C para sair)
+  5) Últimas linhas do Nginx (acesso + erro)
+  6) Buscar só erros recentes (em todos os logs acima)
+  7) Gerar pacote de diagnóstico (para enviar a quem for te ajudar)
+  8) Voltar
+
+EOF
+        ask "Escolha uma opção (1-8)" "1"
+        # "|| true" em cada opção: nenhuma falha aqui dentro (serviço
+        # parado, arquivo ausente, etc.) deve derrubar o instalador
+        # inteiro — o script roda com 'set -e', e isso é só um menu de
+        # consulta, sem nada destrutivo.
+        case "$REPLY_VAL" in
+            1) _ps_logs_tail_app 200 || true ;;
+            2) _ps_logs_follow_app || true ;;
+            3) _ps_logs_tail_systemd 200 || true ;;
+            4) _ps_logs_follow_systemd || true ;;
+            5) _ps_logs_tail_nginx 100 || true ;;
+            6) _ps_logs_buscar_erros || true ;;
+            7) _ps_logs_gerar_pacote || true ;;
+            8) return ;;
+            *) warn "Opção inválida — digite um número de 1 a 8." ;;
+        esac
+        [ "$NON_INTERACTIVE" = "1" ] && return
+    done
+}
+
+# ─────────────────────────────────────────────────────────────────────────
 # AÇÃO: diagnostico — verifica saúde da instalação
 # ─────────────────────────────────────────────────────────────────────────
 cmd_diagnostico() {
@@ -1855,9 +2156,9 @@ main() {
     fi
 
     case "$ACTION" in
-        install|ssl|backup|update|exportar|importar|diagnostico) ;;
+        install|ssl|backup|update|exportar|importar|diagnostico|logs) ;;
         sair) echo "Até mais!"; exit 0 ;;
-        *) die "Ação desconhecida: '$ACTION' (use install|ssl|backup|update|exportar|importar|diagnostico)." ;;
+        *) die "Ação desconhecida: '$ACTION' (use install|ssl|backup|update|exportar|importar|diagnostico|logs)." ;;
     esac
 
     if ! ( set -e; "cmd_${ACTION}" ); then

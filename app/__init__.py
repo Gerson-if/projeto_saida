@@ -8,6 +8,8 @@ Uso:
 """
 
 import os
+import time
+import uuid
 
 from flask import Flask, request
 from flask_bcrypt import Bcrypt
@@ -123,6 +125,22 @@ def _init_logging(app: Flask) -> None:
     `current_app.logger.exception(...)` (usado em app/db_utils.py e nos
     handlers de erro) grava o traceback completo em
     instance/logs/app.log.
+
+    Cada linha também ganha um "req=<id>" de correlação (o mesmo em todas as
+    linhas de uma mesma requisição, inclusive um eventual traceback), além de
+    IP, usuário, método e caminho — sem isso, investigar um problema relatado
+    por um usuário significava vasculhar o log inteiro tentando adivinhar
+    qual linha era dela pelo horário aproximado. Esse mesmo id também vai no
+    cabeçalho de resposta "X-Request-ID", então dá pra pedir pro usuário
+    olhar as ferramentas de desenvolvedor do navegador e já saber
+    exatamente qual linha procurar no log.
+
+    IMPORTANTE (lição de uma investigação real de "413 Request Entity Too
+    Large" que levou várias rodadas para resolver): quando é o Nginx quem
+    recusa a requisição (ex.: limite de upload excedido ANTES de chegar ao
+    Flask), nada disso aparece aqui — o Flask nunca chega a rodar. Esses
+    casos só aparecem em /var/log/nginx/projeto-saida.error.log (veja a
+    ação 'logs' do instalador, que já mostra os dois lados).
     """
     import logging
     from logging.handlers import RotatingFileHandler
@@ -134,14 +152,45 @@ def _init_logging(app: Flask) -> None:
     log_dir = os.path.join(INSTANCE_DIR, "logs")
     os.makedirs(log_dir, exist_ok=True)
 
+    class _ContextoRequisicaoFilter(logging.Filter):
+        """Anexa dados da requisição em andamento a cada LogRecord (ou um
+        "-" em cada campo quando o log acontece fora de uma requisição,
+        como no agendador de status em background)."""
+
+        def filter(self, record: logging.LogRecord) -> bool:
+            from flask import g, has_request_context
+
+            if has_request_context():
+                record.request_id = getattr(g, "request_id", "-")
+                record.remote_addr = request.remote_addr or "-"
+                record.metodo = request.method
+                record.caminho = request.path
+                try:
+                    from flask_login import current_user
+                    record.usuario = (
+                        current_user.cpf if current_user.is_authenticated else "anon"
+                    )
+                except Exception:
+                    record.usuario = "-"
+            else:
+                record.request_id = "-"
+                record.remote_addr = "-"
+                record.metodo = "-"
+                record.caminho = "-"
+                record.usuario = "-"
+            return True
+
     handler = RotatingFileHandler(
         os.path.join(log_dir, "app.log"),
-        maxBytes=1_000_000,
-        backupCount=5,
+        maxBytes=2_000_000,
+        backupCount=8,
         encoding="utf-8",
     )
+    handler.addFilter(_ContextoRequisicaoFilter())
     handler.setFormatter(logging.Formatter(
-        "%(asctime)s %(levelname)s [%(name)s] %(message)s"
+        "%(asctime)s %(levelname)s [%(name)s] "
+        "req=%(request_id)s ip=%(remote_addr)s usuario=%(usuario)s "
+        "%(metodo)s %(caminho)s :: %(message)s"
     ))
     nivel = logging.DEBUG if app.config.get("DEBUG") else logging.INFO
     handler.setLevel(nivel)
@@ -149,6 +198,27 @@ def _init_logging(app: Flask) -> None:
     if not any(isinstance(h, RotatingFileHandler) for h in app.logger.handlers):
         app.logger.addHandler(handler)
     app.logger.setLevel(nivel)
+
+    # ── Id de correlação por requisição + log-resumo de cada requisição ────
+    @app.before_request
+    def _marcar_inicio_requisicao():
+        from flask import g
+        g.request_id = uuid.uuid4().hex[:12]
+        g._inicio_requisicao_monotonico = time.monotonic()
+
+    @app.after_request
+    def _registrar_requisicao_concluida(response):
+        from flask import g
+        response.headers["X-Request-ID"] = getattr(g, "request_id", "-")
+        # Não registra estático: em produção o Nginx serve /static/ direto
+        # (nem passa pelo Flask); em dev ainda passaria, mas só geraria
+        # ruído sem ajudar a diagnosticar nada.
+        if not request.path.startswith("/static/"):
+            inicio = getattr(g, "_inicio_requisicao_monotonico", None)
+            duracao_ms = int((time.monotonic() - inicio) * 1000) if inicio is not None else -1
+            app.logger.info("requisição concluída: status=%s duracao_ms=%s",
+                             response.status_code, duracao_ms)
+        return response
 
 
 def _init_response_headers(app: Flask) -> None:
