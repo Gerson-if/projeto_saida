@@ -303,7 +303,15 @@ def validar_e_salvar_imagem(
 # Upload de vídeo (fundo animado da tela de login)
 # ─────────────────────────────────────────────────────────────────────────────
 
-TAMANHO_MAXIMO_VIDEO_BYTES = 20 * 1024 * 1024  # 20 MB — suficiente para um clipe curto
+# 40 MB de entrada dá espaço confortável para um clipe curto (poucos
+# segundos a ~1 minuto) gravado direto do celular, SEM comprimir antes —
+# já que o sistema sempre recomprime automaticamente antes de salvar (ver
+# _otimizar_video_com_ffmpeg, mais abaixo), rejeitar um vídeo só por causa
+# do tamanho bruto de envio (quando ele encolheria bastante depois de
+# comprimido) seria frustrar o usuário sem necessidade. O arquivo
+# ARMAZENADO fica bem menor de qualquer forma, graças ao corte de duração
+# e à recompressão abaixo.
+TAMANHO_MAXIMO_VIDEO_BYTES = 40 * 1024 * 1024  # 40 MB de entrada
 
 # (assinatura, extensão) — a extensão salva vem da assinatura detectada,
 # nunca do nome enviado pelo usuário.
@@ -318,10 +326,18 @@ _ASSINATURAS_VIDEO = [
 # otimização demorar mais que isso (VM lenta, arquivo grande), é
 # interrompida e o vídeo original validado é salvo sem recompressão, em vez
 # de arriscar o worker ser derrubado pelo timeout do servidor de aplicação.
-_FFMPEG_TIMEOUT_SEGUNDOS = 45
+_FFMPEG_TIMEOUT_SEGUNDOS = 50
 _VIDEO_LARGURA_MAXIMA_OTIMIZADA = 1280
 _VIDEO_CRF = 28
 _VIDEO_AUDIO_BITRATE = "96k"
+# Duração MÁXIMA do vídeo já otimizado (segundos) — é um fundo de tela em
+# loop, não faz sentido guardar (nem recodificar) minutos de vídeo; cortar
+# aqui garante um arquivo final pequeno e rápido de carregar mesmo que o
+# vídeo original enviado seja mais longo. O aviso no navegador (antes do
+# envio) já orienta o usuário a preferir um clipe dentro desse tempo, mas
+# este corte no servidor é quem realmente garante o limite, mesmo se o
+# aviso do navegador não rodar por algum motivo.
+_VIDEO_DURACAO_MAXIMA_SEGUNDOS = 30
 
 
 # MP4/MOV e outros formatos da família ISO-BMFF compartilham o mesmo
@@ -426,7 +442,15 @@ def _otimizar_video_com_ffmpeg(caminho_origem: str, caminho_destino: str) -> boo
     try:
         resultado = subprocess.run(
             [
-                "ffmpeg", "-y", "-i", caminho_origem,
+                "ffmpeg", "-y",
+                # "-t" ANTES do "-i" limita quanto do arquivo de ENTRADA é
+                # lido — corta o vídeo em _VIDEO_DURACAO_MAXIMA_SEGUNDOS sem
+                # perder tempo decodificando/recodificando o restante (mais
+                # rápido do que deixar o corte só na saída), garantindo que
+                # o arquivo final nunca vire um vídeo longo pesado mesmo se
+                # o original enviado for bem mais longo que isso.
+                "-t", str(_VIDEO_DURACAO_MAXIMA_SEGUNDOS),
+                "-i", caminho_origem,
                 "-vf", f"scale='min({_VIDEO_LARGURA_MAXIMA_OTIMIZADA},iw)':-2",
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", str(_VIDEO_CRF),
                 "-c:a", "aac", "-b:a", _VIDEO_AUDIO_BITRATE,

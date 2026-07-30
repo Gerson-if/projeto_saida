@@ -128,20 +128,23 @@ class Config:
     # requisição, não um upload isolado. A tela de Configurações envia até
     # 5 campos de imagem (logo, logo_relatorio, brasao, favicon,
     # login_bg_imagem — máx. 10MB cada, ver app/uploads.py) MAIS o vídeo de
-    # fundo do login (máx. 20MB) no mesmo POST: 5×10 + 20 = 70MB no limite
-    # teórico. 90MB dá uma margem confortável sem abrir mão da defesa.
+    # fundo do login (máx. 40MB — o vídeo é sempre recomprimido e cortado
+    # automaticamente antes de salvar, então o limite de ENVIO pode ser bem
+    # maior que o do arquivo final) no mesmo POST: 5×10 + 40 = 90MB no
+    # limite teórico. 110MB dá uma margem confortável sem abrir mão da
+    # defesa.
     #
     # IMPORTANTE: se mudar este valor, mude também `client_max_body_size`
     # em deploy/nginx.conf — o Nginx rejeita a requisição ANTES dela
     # sequer chegar ao Flask se o valor de lá for menor. De propósito, o
-    # Nginx é configurado um pouco ACIMA deste valor (hoje 100M lá contra
-    # 90M aqui): assim, na prática, é quase sempre o Flask quem recusa
+    # Nginx é configurado um pouco ACIMA deste valor (hoje 120M lá contra
+    # 110M aqui): assim, na prática, é quase sempre o Flask quem recusa
     # primeiro — com uma mensagem amigável por campo — em vez do Nginx,
     # que devolveria a página genérica dele (ver
     # deploy/static-error-pages/413.html para quando isso acontece mesmo
     # assim). `flask diagnosticar` avisa se os dois ficarem dessincronizados
     # numa instalação em produção.
-    MAX_CONTENT_LENGTH: int = 90 * 1024 * 1024
+    MAX_CONTENT_LENGTH: int = 110 * 1024 * 1024
     ALLOWED_EXTENSIONS: set = {"png", "jpg", "jpeg", "gif", "webp", "ico"}
     ALLOWED_VIDEO_EXTENSIONS: set = {"mp4", "webm", "ogg"}
 

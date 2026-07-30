@@ -299,7 +299,7 @@
 
                         <input type="file" name="login_bg_video" id="file-login_bg_video" class="form-control form-control-sm"
                                accept="video/mp4,video/webm,video/ogg" onchange="validarTamanhoVideo(this)">
-                        <small class="text-muted">Formatos: MP4, WEBM ou OGG — máx. 20MB. Use um clipe bem curto (poucos segundos); o vídeo é recomprimido automaticamente para não pesar o carregamento.</small>
+                        <small class="text-muted">Formatos: MP4, WEBM ou OGG — máx. 40MB de envio, até 30 segundos. O sistema recomprime e corta automaticamente o vídeo antes de salvar, então não se preocupe em compactar antes de enviar.</small>
                     </div>
 
                     <!-- Ajustes comuns -->
@@ -373,19 +373,56 @@ function previewImagem(campo, input) {
     });
 }
 
-// Valida o tipo e o tamanho do vídeo assim que selecionado — mesmo
-// limite validado no servidor (ver TAMANHO_MAXIMO_VIDEO_BYTES em
-// app/uploads.py).
+// Valida tipo, tamanho E duração do vídeo assim que selecionado — mesmos
+// limites validados/aplicados no servidor (ver TAMANHO_MAXIMO_VIDEO_BYTES
+// e _VIDEO_DURACAO_MAXIMA_SEGUNDOS em app/uploads.py). A duração aqui é
+// só uma conveniência para avisar ANTES do envio (o servidor sempre corta
+// o vídeo no mesmo limite ao recomprimir, mesmo que esta checagem no
+// navegador não rode por algum motivo — ex.: formato que o navegador não
+// consegue pré-carregar metadados).
+const DURACAO_MAXIMA_VIDEO_SEGUNDOS = 30;
+
 function validarTamanhoVideo(input) {
     const file = input.files[0];
     if (!file) return;
     validarTipoArquivo(input, 'video', function (ok) {
         if (!ok) return; // aviso já mostrado e seleção já limpa
-        const TAMANHO_MAXIMO_VIDEO = 20 * 1024 * 1024; // 20 MB
+
+        const TAMANHO_MAXIMO_VIDEO = 40 * 1024 * 1024; // 40 MB de envio
         if (file.size > TAMANHO_MAXIMO_VIDEO) {
-            avisoSistema('O vídeo excede o tamanho máximo permitido (20 MB). Use um clipe mais curto.', 'erro');
+            avisoSistema('O vídeo excede o tamanho máximo permitido para envio (40 MB). Grave um clipe mais curto.', 'erro');
             input.value = '';
+            return;
         }
+
+        // Checagem de duração: cria um <video> temporário (fora da tela,
+        // nunca inserido no documento visível) só para ler os metadados
+        // (duração) do arquivo escolhido, sem precisar enviá-lo ao
+        // servidor primeiro.
+        const urlTemp = URL.createObjectURL(file);
+        const videoTeste = document.createElement('video');
+        videoTeste.preload = 'metadata';
+        videoTeste.onloadedmetadata = function () {
+            URL.revokeObjectURL(urlTemp);
+            const duracao = videoTeste.duration;
+            if (isFinite(duracao) && duracao > DURACAO_MAXIMA_VIDEO_SEGUNDOS) {
+                avisoSistema(
+                    'O vídeo dura ' + Math.round(duracao) + ' segundos — o máximo para o fundo do login é ' +
+                    DURACAO_MAXIMA_VIDEO_SEGUNDOS + ' segundos (é um vídeo em loop, não precisa ser longo). ' +
+                    'O sistema cortaria automaticamente ao salvar, mas selecione um trecho mais curto para ' +
+                    'ter controle sobre qual parte do vídeo aparece.',
+                    'aviso'
+                );
+                input.value = '';
+            }
+        };
+        videoTeste.onerror = function () {
+            // Não deu para ler metadados (formato incomum, arquivo
+            // corrompido, etc.) — não bloqueia por aqui: o servidor sempre
+            // confirma de verdade com ffprobe/Pillow antes de aceitar.
+            URL.revokeObjectURL(urlTemp);
+        };
+        videoTeste.src = urlTemp;
     });
 }
 
