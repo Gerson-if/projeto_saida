@@ -330,6 +330,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/upload-validacao.js') }}"></script>
 <script>
 // Sync color pickers
 document.querySelectorAll('input[type="color"]').forEach(el => {
@@ -337,38 +338,47 @@ document.querySelectorAll('input[type="color"]').forEach(el => {
     el.addEventListener('input', () => { if (hexInput) hexInput.value = el.value; });
 });
 
-// Preview de nova imagem
+// Preview de nova imagem — só depois de confirmar que o conteúdo
+// realmente é uma imagem (ver static/js/upload-validacao.js).
 function previewImagem(campo, input) {
     const file = input.files[0];
     if (!file) return;
 
-    const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
-    if (file.size > TAMANHO_MAXIMO) {
-        alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
-        input.value = '';
-        return;
-    }
+    validarTipoArquivo(input, 'imagem', function (ok) {
+        if (!ok) return; // aviso já mostrado e seleção já limpa
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        document.getElementById('img-novo-' + campo).src = e.target.result;
-        document.getElementById('preview-novo-' + campo).classList.remove('d-none');
-    };
-    reader.readAsDataURL(file);
-    // Cancelar remoção se o usuário escolheu novo arquivo
-    document.getElementById('remover_' + campo).value = '';
+        const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
+        if (file.size > TAMANHO_MAXIMO) {
+            alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
+            input.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('img-novo-' + campo).src = e.target.result;
+            document.getElementById('preview-novo-' + campo).classList.remove('d-none');
+        };
+        reader.readAsDataURL(file);
+        // Cancelar remoção se o usuário escolheu novo arquivo
+        document.getElementById('remover_' + campo).value = '';
+    });
 }
 
-// Valida o tamanho do vídeo assim que selecionado — mesmo limite validado
-// no servidor (ver TAMANHO_MAXIMO_VIDEO_BYTES em app/uploads.py).
+// Valida o tipo e o tamanho do vídeo assim que selecionado — mesmo
+// limite validado no servidor (ver TAMANHO_MAXIMO_VIDEO_BYTES em
+// app/uploads.py).
 function validarTamanhoVideo(input) {
     const file = input.files[0];
     if (!file) return;
-    const TAMANHO_MAXIMO_VIDEO = 20 * 1024 * 1024; // 20 MB
-    if (file.size > TAMANHO_MAXIMO_VIDEO) {
-        alert('O vídeo excede o tamanho máximo permitido (20 MB). Use um clipe mais curto.');
-        input.value = '';
-    }
+    validarTipoArquivo(input, 'video', function (ok) {
+        if (!ok) return; // aviso já mostrado e seleção já limpa
+        const TAMANHO_MAXIMO_VIDEO = 20 * 1024 * 1024; // 20 MB
+        if (file.size > TAMANHO_MAXIMO_VIDEO) {
+            alert('O vídeo excede o tamanho máximo permitido (20 MB). Use um clipe mais curto.');
+            input.value = '';
+        }
+    });
 }
 
 // Checagem AGREGADA antes de enviar o formulário: este formulário tem

@@ -377,37 +377,43 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/upload-validacao.js') }}"></script>
 <script>
 // ── Controle Dinâmico do Preview de Imagem ──
 function previewFoto(input) {
     if (!input.files || !input.files[0]) return;
 
-    const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
-    if (input.files[0].size > TAMANHO_MAXIMO) {
-        alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
-        input.value = '';
-        return;
-    }
+    validarTipoArquivo(input, 'imagem', function (ok) {
+        if (!ok) return; // aviso já mostrado e seleção já limpa
+        if (!input.files || !input.files[0]) return;
 
-    const reader = new FileReader();
-    reader.onload = e => {
-        const preview = document.getElementById('avatarPreview');
-        const placeholder = document.getElementById('avatarPlaceholder');
-        const box = document.getElementById('fotoPreviewBox');
-        const img = document.getElementById('fotoPreviewImg');
-        const removerInput = document.getElementById('removerFotoInput');
-        
-        preview.src = e.target.result;
-        preview.classList.remove('d-none');
-        if (placeholder) placeholder.classList.add('d-none');
-        img.src = e.target.result;
-        box.classList.remove('d-none');
-        removerInput.value = '';
-        
-        const aviso = document.getElementById('removerFotoAviso');
-        if (aviso) aviso.classList.add('d-none');
-    };
-    reader.readAsDataURL(input.files[0]);
+        const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
+        if (input.files[0].size > TAMANHO_MAXIMO) {
+            alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
+            input.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = e => {
+            const preview = document.getElementById('avatarPreview');
+            const placeholder = document.getElementById('avatarPlaceholder');
+            const box = document.getElementById('fotoPreviewBox');
+            const img = document.getElementById('fotoPreviewImg');
+            const removerInput = document.getElementById('removerFotoInput');
+
+            preview.src = e.target.result;
+            preview.classList.remove('d-none');
+            if (placeholder) placeholder.classList.add('d-none');
+            img.src = e.target.result;
+            box.classList.remove('d-none');
+            removerInput.value = '';
+
+            const aviso = document.getElementById('removerFotoAviso');
+            if (aviso) aviso.classList.add('d-none');
+        };
+        reader.readAsDataURL(input.files[0]);
+    });
 }
 
 function cancelarFoto() {

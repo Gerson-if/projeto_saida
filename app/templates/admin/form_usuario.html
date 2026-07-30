@@ -170,29 +170,34 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/upload-validacao.js') }}"></script>
 <script>
 function previewFoto(input) {
     const file = input.files[0];
     if (!file) return;
 
-    const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
-    if (file.size > TAMANHO_MAXIMO) {
-        alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
-        input.value = '';
-        return;
-    }
+    validarTipoArquivo(input, 'imagem', function (ok) {
+        if (!ok) return; // aviso já mostrado e seleção já limpa
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const img = document.getElementById('avatar-img');
-        const icon = document.getElementById('avatar-icon');
-        img.src = e.target.result;
-        img.style.display = 'block';
-        if (icon) icon.style.display = 'none';
-        // Cancelar remoção
-        document.getElementById('removerFoto').value = '';
-    };
-    reader.readAsDataURL(file);
+        const TAMANHO_MAXIMO = 10 * 1024 * 1024; // 10 MB — mesmo limite validado no servidor
+        if (file.size > TAMANHO_MAXIMO) {
+            alert('A imagem excede o tamanho máximo permitido (10 MB). Escolha um arquivo menor.');
+            input.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = document.getElementById('avatar-img');
+            const icon = document.getElementById('avatar-icon');
+            img.src = e.target.result;
+            img.style.display = 'block';
+            if (icon) icon.style.display = 'none';
+            // Cancelar remoção
+            document.getElementById('removerFoto').value = '';
+        };
+        reader.readAsDataURL(file);
+    });
 }
 
 function removerFoto() {

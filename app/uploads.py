@@ -43,20 +43,33 @@ páginas, sem exigir nenhuma ação do usuário.
 
 Upload de vídeo (fundo animado da tela de login)
 --------------------------------------------------
-Vídeo não pode ser validado com Pillow. A checagem de conteúdo aqui é:
-tamanho do arquivo + assinatura binária ("magic bytes") do formato real,
-para reduzir o risco de alguém enviar um arquivo qualquer apenas
-renomeado para .mp4/.webm.
+Vídeo não pode ser validado com Pillow. A checagem de conteúdo aqui tem
+duas camadas:
+  1. Assinatura binária ("magic bytes") do formato real, verificada
+     primeiro — pega a maioria dos casos (ex.: uma imagem enviada por
+     engano no campo de vídeo já não bate com nenhuma assinatura
+     conhecida). Isso inclui checar a "marca" (brand) de contêineres da
+     família MP4/MOV (ISO-BMFF), porque essa mesma família também é usada
+     por formatos de IMAGEM como HEIC/HEIF (padrão em fotos de iPhone) e
+     AVIF — sem essa checagem extra, uma foto HEIC passaria despercebida
+     como se fosse um vídeo MP4 válido.
+  2. Se o binário `ffprobe` (instalado junto com `ffmpeg`) estiver
+     disponível no servidor, uma segunda checagem confirma que o arquivo
+     salvo realmente contém um stream de vídeo decodificável — pega os
+     casos que só a assinatura não detectaria (arquivo corrompido/
+     truncado, ou outro formato que imita o início do contêiner).
 
-Se o binário `ffmpeg` estiver disponível no servidor, o vídeo validado é
-automaticamente recomprimido (resolução reduzida, H.264/AAC, bitrate
+Se o binário `ffmpeg` estiver disponível no servidor, o vídeo já validado
+é automaticamente recomprimido (resolução reduzida, H.264/AAC, bitrate
 controlado) antes de ser salvo — isso é o que realmente evita que um
 vídeo "cru" de várias dezenas de MB pese no servidor e no carregamento da
 tela de login. Se `ffmpeg` não estiver instalado (ou a otimização falhar
 por qualquer motivo: timeout, arquivo problemático, etc.), o vídeo
 validado é salvo do jeito que foi enviado — a aplicação NUNCA falha o
-upload por causa da etapa de otimização, ela é sempre "best effort".
-`deploy/install.sh` já instala `ffmpeg` automaticamente em produção.
+upload por causa da etapa de otimização em si, ela é sempre "best
+effort" (diferente da etapa de VALIDAÇÃO acima, que rejeita o upload).
+`deploy/install.sh` já instala `ffmpeg` (que inclui `ffprobe`)
+automaticamente em produção.
 """
 
 from __future__ import annotations
@@ -311,14 +324,87 @@ _VIDEO_CRF = 28
 _VIDEO_AUDIO_BITRATE = "96k"
 
 
+# MP4/MOV e outros formatos da família ISO-BMFF compartilham o mesmo
+# "invólucro" de contêiner (a caixa "ftyp") — inclusive formatos que NÃO
+# são vídeo, como fotos HEIC/HEIF (padrão de câmera em iPhones) e AVIF.
+# Sem checar a "marca" (brand) gravada logo depois de "ftyp", uma foto
+# HEIC enviada por engano no campo de vídeo passaria despercebida como se
+# fosse um MP4 válido. Esta lista cobre as marcas conhecidas de
+# imagem/outros que usam essa família de contêiner — qualquer marca FORA
+# dessa lista é tratada como candidata a vídeo (a validação de verdade,
+# via ffprobe quando disponível, vem a seguir).
+_MARCAS_FTYP_NAO_VIDEO = {
+    b"heic", b"heix", b"heim", b"heis", b"hevc", b"hevx",  # HEIC/HEIF (fotos)
+    b"mif1", b"msf1",                                        # HEIF genérico
+    b"avif", b"avis",                                        # AVIF (imagem)
+    b"crx ",                                                  # Canon CR3 (raw)
+}
+
+
 def _detectar_formato_video(cabecalho: bytes) -> Optional[str]:
     for assinatura, extensao in _ASSINATURAS_VIDEO:
         if cabecalho.startswith(assinatura):
             return extensao
     # MP4/MOV: caixa "ftyp" aparece a partir do byte 4, não no início do arquivo.
     if len(cabecalho) >= 12 and cabecalho[4:8] == b"ftyp":
+        marca = cabecalho[8:12].lower()
+        if marca in _MARCAS_FTYP_NAO_VIDEO:
+            return None
         return "mp4"
     return None
+
+
+def _ffprobe_disponivel() -> bool:
+    return shutil.which("ffprobe") is not None
+
+
+def _stream_de_video_valido(caminho: str) -> Optional[bool]:
+    """
+    Confirma, com `ffprobe`, que o arquivo salvo em `caminho` realmente
+    contém pelo menos um stream de vídeo decodificável — uma checagem bem
+    mais forte do que só olhar os bytes iniciais (assinatura), que um
+    arquivo "parecido" (ex.: outro contêiner da mesma família, ou um
+    arquivo corrompido/incompleto) pode enganar.
+
+    Retorna:
+      True  — ffprobe confirmou pelo menos um stream de vídeo.
+      False — ffprobe conseguiu rodar e determinou que o arquivo não é um
+              vídeo válido: ou ele nem conseguiu ser interpretado como
+              mídia (ex.: "moov atom not found", "Invalid data found" —
+              exatamente o que aparece quando o conteúdo é lixo/outro
+              tipo de arquivo disfarçado com uma assinatura parecida com
+              a de vídeo), ou foi interpretado mas não tem nenhum stream
+              de vídeo (ex.: um arquivo só de áudio).
+      None  — não foi possível RODAR a checagem em si (ffprobe ausente,
+              timeout, erro ao executar o processo) — não diz nada sobre
+              o conteúdo do arquivo, então nesse caso a checagem por
+              assinatura continua sendo a única validação disponível.
+    """
+    if not _ffprobe_disponivel():
+        return None
+    try:
+        resultado = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=codec_type",
+                "-of", "csv=p=0",
+                caminho,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    if resultado.returncode != 0:
+        # ffprobe rodou e concluiu que não conseguiu processar o arquivo
+        # como mídia válida — isso É o conteúdo sendo inválido (não um
+        # problema de ambiente), então é tratado como "não é vídeo".
+        return False
+    saida = resultado.stdout.decode("utf-8", "ignore").strip()
+    return "video" in saida
 
 
 def _ffmpeg_disponivel() -> bool:
@@ -424,6 +510,32 @@ def validar_e_salvar_video(
     except OSError:
         _remover_arquivo_silencioso(tmp_path)
         return ResultadoUpload(ok=False, erro="Não foi possível salvar o vídeo enviado. Tente novamente.")
+
+    # ── Confirmação de conteúdo real (quando ffprobe está disponível) ──
+    # A checagem por assinatura binária acima só olha os primeiros bytes —
+    # o suficiente para pegar a maioria dos casos (ex.: uma foto PNG/JPEG
+    # enviada por engano no campo de vídeo já é barrada ali, porque não
+    # bate com nenhuma assinatura conhecida). Mas um arquivo que IMITA o
+    # início de um contêiner de vídeo válido (ex.: outro formato da mesma
+    # família de contêiner, ou um arquivo corrompido/truncado) passaria
+    # despercebido só por aí. Aqui, se o servidor tiver `ffprobe`
+    # instalado (junto com `ffmpeg`), confirmamos de verdade que existe um
+    # stream de vídeo decodificável antes de aceitar o upload — em vez de
+    # só tentar otimizar e, se falhar, salvar o arquivo não confirmado
+    # mesmo assim (o que deixaria passar exatamente o tipo de arquivo
+    # errado que essa validação existe para pegar).
+    stream_valido = _stream_de_video_valido(tmp_path)
+    if stream_valido is False:
+        _remover_arquivo_silencioso(tmp_path)
+        return ResultadoUpload(
+            ok=False,
+            erro=(
+                "O arquivo enviado não contém um vídeo válido, mesmo parecendo "
+                "um no nome/formato. Confira se o arquivo certo foi selecionado "
+                "(por exemplo, uma foto ou outro tipo de arquivo escolhido por "
+                "engano no lugar do vídeo) e tente novamente."
+            ),
+        )
 
     # ── Otimização automática (best-effort) ────────────────────────────
     caminho_atual = tmp_path

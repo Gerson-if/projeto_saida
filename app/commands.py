@@ -373,6 +373,16 @@ def register_commands(app) -> None:
                 "Para instalar: sudo apt-get install -y ffmpeg"
             )
 
+        if _shutil.which("ffprobe"):
+            click.echo("ffprobe (validação de conteúdo de vídeo): instalado — uploads de vídeo são confirmados de verdade, não só pela extensão/assinatura.")
+        else:
+            click.echo(
+                "⚠️  ffprobe não encontrado — uploads de vídeo continuam sendo checados pela "
+                "assinatura binária do arquivo, mas sem a confirmação extra de que o conteúdo "
+                "é realmente um vídeo decodificável. Normalmente instalado junto com o pacote "
+                "'ffmpeg' (sudo apt-get install -y ffmpeg)."
+            )
+
         # Limite de upload do Nginx vs do Flask — best-effort: só faz
         # sentido em produção, atrás de um Nginx configurado por
         # deploy/install.sh. Sem isso, um Nginx desatualizado (ex: uma
