@@ -1477,12 +1477,15 @@ with open(site_conf, "r", encoding="utf-8") as f:
 
 # 1) Ajusta o valor do limite de upload para o mesmo do template atual —
 # ou, se a diretiva nem existir ainda (instalação muito antiga, de antes
-# dela existir no template), INSERE uma nova logo após "server_name ...;"
-# (presente em qualquer server{} funcional) em vez de desistir. Sem isso,
-# uma instalação assim nunca conseguiria se autocorrigir: toda vez que
-# rodasse 'update', cairia direto no "raise" abaixo e o Nginx continuaria
-# usando o limite padrão dele (1M) para sempre, rejeitando uploads antes
-# mesmo de chegarem ao Flask.
+# dela existir no template), INSERE uma nova logo após CADA "server_name
+# ...;" em vez de desistir. IMPORTANTE: sem contagem limitada — depois do
+# Certbot configurar HTTPS, o arquivo tem DOIS blocos server{} (um para a
+# porta 80, outro para a 443 que o Certbot cria, cada um com seu próprio
+# "server_name"), e é a porta 443 que recebe o tráfego real do navegador.
+# Corrigir só o PRIMEIRO bloco deixaria o segundo (o que realmente importa)
+# sem a diretiva, e o Nginx continuaria rejeitando uploads com o limite
+# padrão dele (1M) bem depois do administrador achar que já tinha
+# corrigido.
 if re.search(r"client_max_body_size\s+[^;]+;", conteudo):
     conteudo = re.sub(r"client_max_body_size\s+[^;]+;", f"client_max_body_size {valor};", conteudo)
 else:
@@ -1490,7 +1493,6 @@ else:
         r"(server_name\s+[^;]+;)",
         lambda m: m.group(1) + f"\n\n    client_max_body_size {valor};",
         conteudo,
-        count=1,
     )
     if n_insercao == 0:
         # Nem "server_name" foi encontrado — formato realmente fora do
@@ -1498,8 +1500,12 @@ else:
         # diferente). Não arrisca inserir em lugar arbitrário.
         raise SystemExit(1)
 
-# 2) Garante a página amigável de erro 413 (idempotente — só adiciona se
-# ainda não existir uma instalação anterior deste bloco).
+# 2) Garante a página amigável de erro 413 em CADA bloco server{} (mesmo
+# motivo do item 1 — o bloco HTTPS do Certbot também precisa da sua
+# própria diretiva "error_page 413 ..."; sem count ilimitado, só o
+# primeiro client_max_body_size encontrado ganharia o bloco de erro
+# amigável, e o outro continuaria mostrando a página crua e genérica do
+# próprio Nginx quando um upload excedesse o limite).
 if "erro-upload-grande.html" not in conteudo:
     bloco = (
         "\n    error_page 413 /erro-upload-grande.html;\n"
@@ -1512,7 +1518,6 @@ if "erro-upload-grande.html" not in conteudo:
         r"(client_max_body_size\s+[^;]+;)",
         lambda m: m.group(1) + bloco,
         conteudo,
-        count=1,
     )
     if n == 0:
         # Instalação muito antiga sem a diretiva — não arrisca inserir em
