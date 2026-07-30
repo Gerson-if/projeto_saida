@@ -766,7 +766,21 @@ SQL
     fi
 
     # ── 7. Inicializa banco + admin ────────────────────────────────────────
-    log "Inicializando tabelas e criando administrador"
+    # Cria o esquema via Alembic ('flask db upgrade'), não mais via
+    # db.create_all() direto — assim esta instalação já nasce com a tabela
+    # alembic_version marcada na revisão mais recente, e 'flask db upgrade'
+    # em atualizações futuras (deploy/install.sh --action update) funciona
+    # sem precisar de nenhum passo manual. 'flask init-db' continua sendo
+    # chamado na sequência só para popular as configurações e motivos
+    # padrão — o db.create_all() dentro dele é inofensivo (checkfirst) já
+    # que as tabelas acabaram de ser criadas pela migração.
+    log "Aplicando esquema do banco de dados (migrações)"
+    if ! run_as_app_user "flask db upgrade" > /tmp/flask_db_upgrade_install.log 2>&1; then
+        err "Falha ao criar o esquema do banco de dados:"
+        tail -n 30 /tmp/flask_db_upgrade_install.log >&2
+        die "Instalação interrompida. Log completo em /tmp/flask_db_upgrade_install.log."
+    fi
+    log "Inicializando configurações padrão e criando administrador"
     run_as_app_user "flask init-db"
     if run_as_app_user "flask create-admin '$ADMIN_NOME' '$ADMIN_CPF' '$ADMIN_SENHA'" 2>/tmp/create_admin.err; then
         ok "Administrador '$ADMIN_CPF' criado"
@@ -844,7 +858,10 @@ SQL
         setup_backup
     fi
 
-    # ── 12. Diagnóstico final ───────────────────────────────────────────────
+    # ── 12. Atalho global de conveniência ──────────────────────────────────
+    install_wrapper_command
+
+    # ── 13. Diagnóstico final ───────────────────────────────────────────────
     log "Rodando diagnóstico interno do app"
     run_as_app_user "flask diagnosticar" || warn "flask diagnosticar retornou avisos — revise acima."
 
@@ -864,8 +881,9 @@ SQL
   Serviço ............ systemctl status projeto-saida
   Logs systemd ....... journalctl -u projeto-saida -f
   Log da aplicação ... $INSTALL_DIR/instance/logs/app.log
-  Atualizar depois ... sudo bash $INSTALL_DIR/deploy/install.sh --action update
-  Backup automático .. $([ "$QUER_BACKUP" = "s" ] && echo "configurado (sudo bash deploy/install.sh --action backup para ajustar)" || echo "não configurado — rode: sudo bash deploy/install.sh --action backup")
+  Atualizar depois ... sudo projeto-saida --action update   (funciona de qualquer diretório)
+                       ou: sudo bash $INSTALL_DIR/deploy/install.sh --action update
+  Backup automático .. $([ "$QUER_BACKUP" = "s" ] && echo "configurado (sudo projeto-saida --action backup para ajustar)" || echo "não configurado — rode: sudo projeto-saida --action backup")
 
 Único passo que este script NÃO consegue automatizar: se sua VM estiver
 atrás de um firewall do provedor de nuvem (grupo de segurança AWS/GCP/
@@ -1125,6 +1143,34 @@ cmd_backup() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
+# Instala/atualiza um atalho global "projeto-saida" em /usr/local/sbin.
+#
+# Sem isso, rodar uma ação (ex: update) exige lembrar o caminho completo do
+# script E estar com $INSTALL_DIR de cor — é fácil, de outro diretório
+# (ex: a home do root), rodar "sudo bash deploy/install.sh --action update"
+# com caminho relativo e receber "No such file or directory", porque esse
+# caminho relativo não existe a partir de onde o comando foi digitado. O
+# atalho abaixo já sabe onde a aplicação está instalada e funciona de
+# qualquer diretório: "sudo projeto-saida --action update".
+# Idempotente e não é motivo de falha na instalação/atualização se der
+# errado (ex: /usr/local/sbin somente leitura) — só um recurso a mais.
+# ─────────────────────────────────────────────────────────────────────────
+install_wrapper_command() {
+    local wrapper="/usr/local/sbin/projeto-saida"
+    if ! printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        "# Atalho gerado automaticamente por $INSTALL_DIR/deploy/install.sh" \
+        "# Sempre aponta para esta instalação — funciona de qualquer diretório." \
+        "exec bash '$INSTALL_DIR/deploy/install.sh' \"\$@\"" \
+        > "$wrapper" 2>/dev/null; then
+        warn "Não consegui criar o atalho global '$wrapper' (ambiente somente leitura?) — use o caminho completo do script."
+        return 0
+    fi
+    chmod 755 "$wrapper" 2>/dev/null
+    ok "Atalho global instalado: agora dá pra rodar 'sudo projeto-saida --action <ação>' de qualquer diretório."
+}
+
+# ─────────────────────────────────────────────────────────────────────────
 # Mantém o Nginx de uma instalação já existente sincronizado com o
 # repositório em cada atualização (limite de upload + página amigável de
 # erro 413).
@@ -1353,6 +1399,21 @@ cmd_update() {
         die "Atualização revertida. Log completo em /tmp/build_static_assets_update.log."
     fi
 
+    # Instalações feitas antes desta versão do script nunca rodaram
+    # 'flask db init' — o esquema foi criado direto com db.create_all()
+    # (via 'flask init-db'), então o banco não tem a tabela alembic_version
+    # e não sabe que já está no estado da migração baseline. Sem este
+    # passo, o 'flask db upgrade' logo abaixo tentaria recriar as tabelas
+    # do zero e falharia com "table already exists". Idempotente: em
+    # instalações que já estão sob controle do Alembic, não faz nada.
+    log "Verificando controle de versão do esquema do banco (Alembic)"
+    if ! run_as_app_user "flask db-adotar-legado" > /tmp/flask_db_adotar_legado.log 2>&1; then
+        err "Falha ao preparar o controle de versão do esquema do banco:"
+        tail -n 30 /tmp/flask_db_adotar_legado.log >&2
+        rollback_update
+        die "Atualização revertida. Log completo em /tmp/flask_db_adotar_legado.log."
+    fi
+
     log "Aplicando migrações de banco pendentes (se houver)"
     if ! run_as_app_user "flask db upgrade" > /tmp/flask_db_upgrade.log 2>&1; then
         err "Falha ao aplicar migrações de banco:"
@@ -1370,6 +1431,11 @@ cmd_update() {
     # ponto) — só um aviso para o administrador revisar.
     log "Sincronizando configuração de upload do Nginx"
     sync_nginx_upload_limit
+
+    # Instalações antigas também ganham o atalho global aqui (quem instalou
+    # antes dele existir nunca passaria por cmd_install de novo).
+    log "Instalando/atualizando atalho global de conveniência"
+    install_wrapper_command
 
     log "Reiniciando serviço"
     systemctl restart projeto-saida

@@ -108,9 +108,21 @@ sudo -u projeto_saida bash /opt/projeto_saida/deploy/backup.sh
 ## 4. Atualizando o sistema — rotina segura, feita para não quebrar produção
 
 ```bash
-sudo bash deploy/install.sh --action update
-# atalho equivalente:
-sudo bash deploy/update.sh
+sudo projeto-saida --action update
+```
+
+`projeto-saida` é um atalho global instalado em `/usr/local/sbin` na
+primeira instalação (e reinstalado, se preciso, em toda atualização) — ele
+já sabe onde a aplicação está e funciona **de qualquer diretório**, sem
+precisar `cd` até a pasta da instalação nem lembrar o caminho completo do
+script. Se você digitar um caminho relativo errado (ex: `deploy/install.sh`
+estando na home do usuário em vez de dentro da instalação), o bash não acha
+o arquivo e mostra `No such file or directory` — isso é o shell não achando
+o script, não um bug do script em si. Use o atalho global para evitar esse
+problema, ou o caminho completo:
+
+```bash
+sudo bash /opt/projeto_saida/deploy/install.sh --action update
 ```
 
 Esta é a única forma recomendada de atualizar uma instalação em
@@ -135,7 +147,12 @@ produção. Nessa ordem, o script:
    houver divergência (alguém mexeu no checkout manualmente), para sem
    alterar nada em vez de criar um merge inesperado em produção.
 7. Reinstala as dependências Python e aplica migrações de banco
-   pendentes (`flask db upgrade`).
+   pendentes (`flask db upgrade`). Antes disso, roda `flask db-adotar-legado`
+   automaticamente — um passo idempotente que "adota" instalações antigas
+   (de antes deste sistema de migrações existir) sem tentar recriar
+   tabelas que já existem. Você não precisa fazer nada manualmente para
+   isso; ele só age em instalações que ainda não estão sob controle do
+   Alembic.
 8. Reinicia o serviço e confere se ele **realmente** voltou a responder
    (não só se o processo systemd subiu, mas se `http://127.0.0.1:8000/`
    responde de verdade).
@@ -154,13 +171,17 @@ anterior, sem deixar produção no ar quebrada.
 
 ## 5. Comandos do dia a dia
 
+Todos os comandos abaixo funcionam com `sudo projeto-saida ...` (atalho
+global, de qualquer diretório) ou `sudo bash /opt/projeto_saida/deploy/install.sh ...`
+(caminho completo).
+
 | Ação | Comando |
 |---|---|
-| Instalação completa / menu | `sudo bash deploy/install.sh` |
-| Atualizar com segurança | `sudo bash deploy/install.sh --action update` |
-| Emitir/trocar HTTPS | `sudo bash deploy/install.sh --action ssl` |
-| Configurar backup automático | `sudo bash deploy/install.sh --action backup` |
-| Diagnóstico de saúde | `sudo bash deploy/install.sh --action diagnostico` |
+| Instalação completa / menu | `sudo projeto-saida` |
+| Atualizar com segurança | `sudo projeto-saida --action update` |
+| Emitir/trocar HTTPS | `sudo projeto-saida --action ssl` |
+| Configurar backup automático | `sudo projeto-saida --action backup` |
+| Diagnóstico de saúde | `sudo projeto-saida --action diagnostico` |
 | Ver status do serviço | `sudo systemctl status projeto-saida` |
 | Reiniciar o serviço | `sudo systemctl restart projeto-saida` |
 | Ver logs em tempo real | `journalctl -u projeto-saida -f` |

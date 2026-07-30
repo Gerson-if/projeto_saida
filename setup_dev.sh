@@ -24,6 +24,7 @@ fi
 
 echo "🗄   Inicializando banco de dados SQLite..."
 export FLASK_ENV=development
+flask db upgrade
 flask init-db
 
 echo "🌱  Inserindo dados de exemplo..."

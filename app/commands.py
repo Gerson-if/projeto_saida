@@ -2,10 +2,13 @@
 commands.py — Comandos CLI Flask para setup e manutenção.
 
 Comandos disponíveis:
-  flask init-db          Cria tabelas e insere configurações padrão
-  flask create-admin     Cria um usuário administrador
-  flask seed             Popula o banco com dados de exemplo
-  flask atualizar-status Força atualização manual de status (útil para debug)
+  flask init-db           Cria tabelas e insere configurações padrão
+  flask create-admin      Cria um usuário administrador
+  flask seed              Popula o banco com dados de exemplo
+  flask atualizar-status  Força atualização manual de status (útil para debug)
+  flask db-adotar-legado  Migra uma instalação antiga (pré-Alembic) para o
+                           controle de versão de esquema, sem tentar recriar
+                           tabelas que já existem
 """
 
 import random
@@ -19,6 +22,15 @@ from app.models import (
     ConfigSistema, MotivoCancelamento, PostoGraduacao, Registro,
     StatusSaida, Subunidade, TipoUsuario, Usuario,
 )
+
+# Revision ID da migração baseline (a primeira, com down_revision=None) em
+# migrations/versions/. Instalações feitas ANTES deste script existir nunca
+# rodaram "flask db init" — o esquema foi criado direto via `flask init-db`
+# (db.create_all()), então elas não têm a tabela `alembic_version` e não
+# sabem que já estão, na prática, no estado da baseline. Sem esse comando,
+# a primeira vez que rodássemos `flask db upgrade` nelas, o Alembic tentaria
+# recriar todas as tabelas do zero e falharia com "table already exists".
+_BASELINE_REVISION = "e0f23250f3e7"
 
 
 def register_commands(app) -> None:
@@ -220,6 +232,50 @@ def register_commands(app) -> None:
         db.session.commit()
         click.echo(f"✅ {atualizados} registro(s) atualizado(s) de {len(pendentes)} pendentes.")
 
+    # ── db-adotar-legado ───────────────────────────────────────────────────
+
+    @app.cli.command("db-adotar-legado")
+    @with_appcontext
+    def db_adotar_legado():
+        """
+        Prepara instalações antigas (de antes do controle de versão de
+        esquema com Alembic) para usar 'flask db upgrade' com segurança.
+
+        Idempotente: seguro de rodar em toda atualização. Não faz nada se
+        o banco já estiver sob controle do Alembic (tabela alembic_version
+        presente) ou se for um banco novo, sem tabelas ainda.
+        """
+        from sqlalchemy import inspect as sa_inspect
+        from flask_migrate import stamp
+
+        inspetor = sa_inspect(db.engine)
+        tabelas_existentes = set(inspetor.get_table_names())
+
+        if "alembic_version" in tabelas_existentes:
+            click.echo("✅ Banco já está sob controle do Alembic — nada a fazer.")
+            return
+
+        # Uma tabela do esquema original (ex: 'usuarios') já existindo indica
+        # uma instalação antiga criada via db.create_all(). Sem nenhuma
+        # tabela do sistema, é um banco novo — 'flask db upgrade' cuida de
+        # criar tudo do zero normalmente, sem precisar deste comando.
+        tabelas_do_sistema = {
+            "usuarios", "registros", "subunidades", "config_sistema",
+            "motivos_cancelamento", "postos_graduacoes",
+            "solicitacoes_posto_graduacao",
+        }
+        if not (tabelas_do_sistema & tabelas_existentes):
+            click.echo("Banco vazio — nada para adotar (flask db upgrade vai criar tudo).")
+            return
+
+        click.echo(
+            "Instalação antiga detectada (tabelas existem, mas sem controle "
+            f"de versão do Alembic) — marcando esquema atual como '{_BASELINE_REVISION}' "
+            "sem recriar nenhuma tabela."
+        )
+        stamp(revision=_BASELINE_REVISION)
+        click.echo("✅ Banco adotado pelo Alembic. 'flask db upgrade' agora pode ser usado normalmente.")
+
     # ── diagnosticar ───────────────────────────────────────────────────────
 
     @app.cli.command("diagnosticar")
@@ -273,6 +329,32 @@ def register_commands(app) -> None:
             click.echo(f"  journal_mode={modo} busy_timeout={timeout}ms")
             if str(modo).lower() != "wal":
                 click.echo("  ⚠️  journal_mode não está em WAL — acessos simultâneos têm mais chance de dar 'database is locked'.")
+
+        # Controle de versão do esquema (Alembic/Flask-Migrate) — detecta o
+        # cenário que já causou incidente em produção: banco sem a tabela
+        # alembic_version (instalação antiga ou 'flask db init' nunca
+        # rodado), o que faz 'flask db upgrade' falhar na próxima atualização.
+        try:
+            from sqlalchemy import inspect as _sa_inspect
+            tabelas = set(_sa_inspect(db.engine).get_table_names())
+            if "alembic_version" not in tabelas:
+                if tabelas:
+                    click.echo(
+                        "⚠️  Banco tem tabelas mas nenhuma tabela 'alembic_version' — "
+                        "'flask db upgrade' vai falhar na próxima atualização. "
+                        "Rode 'flask db-adotar-legado' para corrigir (o 'sudo projeto-saida "
+                        "--action update' já faz isso automaticamente)."
+                    )
+                else:
+                    click.echo("Banco vazio — sem tabela alembic_version ainda (normal antes do primeiro 'flask db upgrade').")
+            else:
+                with db.engine.connect() as conn:
+                    versao_atual = conn.exec_driver_sql(
+                        "SELECT version_num FROM alembic_version"
+                    ).scalar()
+                click.echo(f"Controle de versão do esquema (Alembic): revisão atual = {versao_atual}")
+        except Exception as exc:  # pragma: no cover - diagnóstico best-effort
+            click.echo(f"  ⚠️  Não consegui verificar o controle de versão do esquema: {exc}")
 
         # Otimização de mídia (imagens/vídeos de upload)
         import shutil as _shutil
