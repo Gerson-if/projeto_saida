@@ -1475,8 +1475,28 @@ install_dir = os.environ["INSTALL_DIR"]
 with open(site_conf, "r", encoding="utf-8") as f:
     conteudo = f.read()
 
-# 1) Ajusta o valor do limite de upload para o mesmo do template atual.
-conteudo = re.sub(r"client_max_body_size\s+[^;]+;", f"client_max_body_size {valor};", conteudo)
+# 1) Ajusta o valor do limite de upload para o mesmo do template atual —
+# ou, se a diretiva nem existir ainda (instalação muito antiga, de antes
+# dela existir no template), INSERE uma nova logo após "server_name ...;"
+# (presente em qualquer server{} funcional) em vez de desistir. Sem isso,
+# uma instalação assim nunca conseguiria se autocorrigir: toda vez que
+# rodasse 'update', cairia direto no "raise" abaixo e o Nginx continuaria
+# usando o limite padrão dele (1M) para sempre, rejeitando uploads antes
+# mesmo de chegarem ao Flask.
+if re.search(r"client_max_body_size\s+[^;]+;", conteudo):
+    conteudo = re.sub(r"client_max_body_size\s+[^;]+;", f"client_max_body_size {valor};", conteudo)
+else:
+    conteudo, n_insercao = re.subn(
+        r"(server_name\s+[^;]+;)",
+        lambda m: m.group(1) + f"\n\n    client_max_body_size {valor};",
+        conteudo,
+        count=1,
+    )
+    if n_insercao == 0:
+        # Nem "server_name" foi encontrado — formato realmente fora do
+        # esperado (site configurado manualmente de um jeito muito
+        # diferente). Não arrisca inserir em lugar arbitrário.
+        raise SystemExit(1)
 
 # 2) Garante a página amigável de erro 413 (idempotente — só adiciona se
 # ainda não existir uma instalação anterior deste bloco).
